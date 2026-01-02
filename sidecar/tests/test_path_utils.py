@@ -8,13 +8,13 @@ import pytest
 from pathlib import Path
 import tempfile
 import shutil
-from utils.path_utils import (
+from sidecar.utils.path_utils import (
     validate_vault_path,
     safe_path_join,
     discover_plugins,
     validate_plugin_structure,
 )
-from exceptions import (
+from sidecar.exceptions import (
     VaultNotFoundError, 
     VaultInvalidError,
     PathTraversalError,

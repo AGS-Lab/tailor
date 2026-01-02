@@ -7,9 +7,10 @@ This module configures pytest for testing the refactored codebase.
 import sys
 from pathlib import Path
 
-# Add sidecar to path for imports
-sidecar_path = Path(__file__).parent.parent
-sys.path.insert(0, str(sidecar_path))
+# Add tailor root to path for imports (allow 'sidecar' package import)
+tailor_path = Path(__file__).resolve().parent.parent.parent
+if str(tailor_path) not in sys.path:
+    sys.path.insert(0, str(tailor_path))
 
 
 # Pytest configuration

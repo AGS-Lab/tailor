@@ -1,169 +1,366 @@
-<div class="plugin-panel llm-panel">
-    <h3>💬 LLM Chat</h3>
+<div class="llm-container">
+    <div class="chat-header">
+        <span class="status-dot"></span>
+        <span class="title">AI Assistant</span>
+        <div class="actions">
+            <button onclick="llmClear()" class="icon-btn" title="Clear Chat">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path>
+                </svg>
+            </button>
+        </div>
+    </div>
 
     <div class="conversation" id="llm-conversation">
         <div class="welcome-message">
-            Send a message to start chatting with the LLM assistant.
+            <div class="welcome-icon">🤖</div>
+            <h3>How can I help you today?</h3>
+            <p>I'm ready to assist with your tasks.</p>
         </div>
     </div>
 
     <div class="input-area">
-        <input type="text" id="llm-input" placeholder="Type your message..." class="llm-input" />
-        <button onclick="llmSend()" class="llm-send-btn">Send</button>
-        <button onclick="llmClear()" class="llm-clear-btn">Clear</button>
+        <div class="input-wrapper">
+            <input type="text" id="llm-input" placeholder="Message Tailor AI..." class="llm-input" autocomplete="off" />
+            <button onclick="llmSend()" class="send-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+            </button>
+        </div>
     </div>
 </div>
 
 <style>
-    .llm-panel {
-        background: #0f0f0f;
-        border: 1px solid #222;
-        border-radius: 3px;
-        padding: 15px;
-        margin-bottom: 15px;
+    /* Main Container - Full Height */
+    .llm-container {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        background: var(--bg-panel);
+        color: var(--text-primary);
+        font-family: var(--font-main);
     }
 
-    .llm-panel h3 {
-        margin: 0 0 12px 0;
-        font-size: 1rem;
-        color: #00d4ff;
-        border-bottom: 1px solid #222;
-        padding-bottom: 8px;
+    /* Header */
+    .chat-header {
+        display: flex;
+        align-items: center;
+        padding: 0 16px;
+        background: var(--bg-panel);
+        border-bottom: 1px solid var(--border-subtle);
+        height: 35px;
+        /* Compact */
+        flex-shrink: 0;
     }
 
+    .status-dot {
+        width: 8px;
+        height: 8px;
+        background: var(--accent-secondary);
+        /* Green for 'online' */
+        border-radius: 50%;
+        margin-right: 8px;
+        /* No shadow */
+    }
+
+    .title {
+        font-weight: 600;
+        font-size: 0.8rem;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        flex-grow: 1;
+        color: var(--text-primary);
+    }
+
+    .icon-btn {
+        background: transparent;
+        border: none;
+        color: var(--text-secondary);
+        cursor: pointer;
+        padding: 4px;
+        border-radius: 2px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .icon-btn:hover {
+        background: var(--bg-hover);
+        color: var(--text-primary);
+    }
+
+    /* Conversation Area */
     .conversation {
-        min-height: 200px;
-        max-height: 400px;
+        flex-grow: 1;
         overflow-y: auto;
-        background: #0a0a0a;
-        border: 1px solid #222;
-        border-radius: 3px;
-        padding: 10px;
-        margin-bottom: 10px;
-        font-size: 0.9rem;
+        padding: 16px;
+        /* Reduced padding */
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
     }
 
+    /* Welcome Message */
     .welcome-message {
-        color: #555;
-        font-style: italic;
         text-align: center;
-        padding: 20px;
+        color: var(--text-secondary);
+        margin-top: 40px;
     }
 
+    .welcome-icon {
+        font-size: 2rem;
+        margin-bottom: 8px;
+        opacity: 0.8;
+    }
+
+    .welcome-message h3 {
+        color: var(--text-primary);
+        margin: 0 0 4px 0;
+        font-weight: 500;
+        font-size: 1rem;
+    }
+
+    .welcome-message p {
+        font-size: 0.85rem;
+        margin: 0;
+    }
+
+    /* Messages */
     .message {
-        margin-bottom: 12px;
-        padding: 8px;
-        border-radius: 3px;
+        max-width: 90%;
+        padding: 8px 12px;
+        border-radius: 4px;
+        /* Minimal radius */
+        font-size: 0.9rem;
+        line-height: 1.5;
+        position: relative;
+        word-wrap: break-word;
+        border: 1px solid transparent;
     }
 
     .message.user {
-        background: #1a1a1a;
-        border-left: 2px solid #00d4ff;
+        align-self: flex-end;
+        background: var(--bg-card);
+        /* No gradient */
+        color: var(--text-primary);
+        border: 1px solid var(--border-subtle);
+        /* No shadow */
     }
 
     .message.assistant {
-        background: #0d2818;
-        border-left: 2px solid #00ff88;
+        align-self: flex-start;
+        background: transparent;
+        color: var(--text-primary);
+        border: 1px solid var(--border-subtle);
     }
 
     .message-role {
-        font-size: 0.8rem;
-        color: #888;
-        margin-bottom: 4px;
+        display: none;
     }
 
-    .message-content {
-        color: #e0e0e0;
-        line-height: 1.4;
-    }
-
+    /* Input Area */
     .input-area {
+        padding: 12px;
+        background: var(--bg-panel);
+        border-top: 1px solid var(--border-subtle);
+        flex-shrink: 0;
+    }
+
+    .input-wrapper {
         display: flex;
-        gap: 8px;
+        background: var(--bg-input);
+        border: 1px solid var(--border-subtle);
+        border-radius: 2px;
+        /* Square */
+        padding: 2px;
+    }
+
+    .input-wrapper:focus-within {
+        border-color: var(--accent-primary);
+        /* No shadow */
     }
 
     .llm-input {
         flex: 1;
-        padding: 8px;
-        background: #1a1a1a;
-        border: 1px solid #333;
-        border-radius: 3px;
-        color: #e0e0e0;
-        font-family: inherit;
+        background: transparent;
+        border: none;
+        color: var(--text-primary);
+        font-family: var(--font-main);
+        padding: 8px 10px;
         font-size: 0.9rem;
-    }
-
-    .llm-input:focus {
         outline: none;
-        border-color: #00d4ff;
+        min-width: 0;
     }
 
-    .llm-send-btn,
-    .llm-clear-btn {
-        padding: 8px 16px;
-        border: 1px solid #00d4ff;
-        background: #0a0a0a;
-        color: #00d4ff;
-        border-radius: 3px;
+    .llm-input::placeholder {
+        color: var(--text-disabled);
+    }
+
+    .send-btn {
+        background: transparent;
+        border: none;
+        color: var(--accent-primary);
+        padding: 4px 8px;
         cursor: pointer;
-        font-size: 0.9rem;
+        border-radius: 2px;
+        display: flex;
+        align-items: center;
+        transition: background 0.1s;
     }
 
-    .llm-send-btn:hover,
-    .llm-clear-btn:hover {
-        background: #1a1a1a;
-        box-shadow: 0 0 8px rgba(0, 212, 255, 0.3);
+    .send-btn:hover {
+        background: var(--bg-hover);
     }
 
-    .llm-clear-btn {
-        border-color: #ff4444;
-        color: #ff6666;
+    .send-btn:active {
+        transform: translateY(0);
+        /* No bounce */
     }
 
-    .llm-clear-btn:hover {
-        box-shadow: 0 0 8px rgba(255, 68, 68, 0.3);
+    /* Animations */
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @keyframes slideIn {
+        from {
+            opacity: 0;
+            transform: translateY(5px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* Minimal Typing Indicator */
+    .typing-indicator {
+        display: inline-block;
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+        animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+        0% {
+            opacity: 0.4;
+        }
+
+        50% {
+            opacity: 1;
+        }
+
+        100% {
+            opacity: 0.4;
+        }
     }
 </style>
 
 <script>
+    function addMessageToConversation(role, text) {
+        const conversation = document.getElementById('llm-conversation');
+        const msgDiv = document.createElement('div');
+        msgDiv.className = `message ${role}`;
+
+        // Remove typing indicator if it exists
+        const loading = document.getElementById('loading-msg');
+        if (loading) loading.remove();
+
+        // Safe HTML content
+        msgDiv.innerHTML = `
+            <div class="message-role">${role === 'user' ? 'You' : 'Assistant'}</div>
+            <div class="message-content">${text}</div>
+        `;
+
+        conversation.appendChild(msgDiv);
+        conversation.scrollTop = conversation.scrollHeight;
+    }
+
     async function llmSend() {
         const input = document.getElementById('llm-input');
         const message = input.value.trim();
 
         if (!message) return;
 
-        // Add user message to conversation immediately
+        // Add user message
         addMessageToConversation('user', message);
 
         // Clear input
         input.value = '';
 
+        // Add loading placeholder
+        const conversation = document.getElementById('llm-conversation');
+        const loadingDiv = document.createElement('div');
+        loadingDiv.className = 'message assistant';
+        loadingDiv.id = 'loading-msg';
+        loadingDiv.innerHTML = '<div class="message-content"><span class="typing-indicator">Thinking...</span></div>';
+        conversation.appendChild(loadingDiv);
+        conversation.scrollTop = conversation.scrollHeight;
+
         // Send to plugin
         try {
-            await req('execute_command', {
+            await request('execute_command', {
                 command: 'llm.send',
                 args: { message: message }
             });
         } catch (e) {
             console.error('LLM send error:', e);
-            log(`LLM error: ${e.message}`, 'error');
+            if (loadingDiv) {
+                loadingDiv.innerHTML = `<span style="color:var(--accent-error)">Error: ${e.message}</span>`;
+            }
         }
     }
 
     async function llmClear() {
         try {
-            await req('execute_command', {
+            await request('execute_command', {
                 command: 'llm.clear',
                 args: {}
             });
-
-            // Clear conversation UI
-            const conversation = document.getElementById('llm-conversation');
-            conversation.innerHTML = '<div class="welcome-message">Conversation cleared. Send a message to start chatting.</div>';
+            // Clear UI
+            const conv = document.getElementById('llm-conversation');
+            conv.innerHTML = `
+                <div class="welcome-message">
+                    <div class="welcome-icon">✨</div>
+                    <h3>Chat Cleared</h3>
+                </div>
+            `;
         } catch (e) {
-            console.error('LLM clear error:', e);
+            log(`Clear error: ${e.message}`, 'error');
         }
     }
+
+    // Listen for LLM Responses from Backend
+    window.addEventListener('LLM_RESPONSE', (e) => {
+        const data = e.detail;
+        if (data && data.assistant_message) {
+            addMessageToConversation('assistant', data.assistant_message);
+        }
+    });
+
+    // Add event listener for Enter key
+    document.getElementById('llm-input').addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') {
+            llmSend();
+        }
+    });
+    conversation.innerHTML = '<div class="welcome-message">Conversation cleared. Send a message to start chatting.</div>';
+} catch (e) {
+        console.error('LLM clear error:', e);
+    }
+}
 
     function addMessageToConversation(role, content) {
         const conversation = document.getElementById('llm-conversation');
@@ -176,9 +373,9 @@
         const messageEl = document.createElement('div');
         messageEl.className = `message ${role}`;
         messageEl.innerHTML = `
-        <div class="message-role">${role === 'user' ? 'You' : 'Assistant'}</div>
-        <div class="message-content">${escapeHtml(content)}</div>
-    `;
+<div class="message-role">${role === 'user' ? 'You' : 'Assistant'}</div>
+<div class="message-content">${escapeHtml(content)}</div>
+`;
 
         conversation.appendChild(messageEl);
         conversation.scrollTop = conversation.scrollHeight;

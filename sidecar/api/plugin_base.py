@@ -9,11 +9,20 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Dict, Any, Optional, TYPE_CHECKING, cast
 
-from utils.logging_config import get_plugin_logger
+from ..event_emitter import EventEmitter
+from ..utils.logging_config import get_plugin_logger
+# NOTE: imports inside if TYPE_CHECKING are string forward refs or resolved by mypy if in path.
+# But for runtime, we rely on imports being correct.
+# The previous content had `from event_emitter import ...` at line 12?
+# No, Step 1477 shows:
+# 12: from utils.logging_config import get_plugin_logger
+# 14: if TYPE_CHECKING:
+# 15:     from vault_brain import VaultBrain
+# 16:     from event_emitter import EventEmitter
 
-if TYPE_CHECKING:
-    from vault_brain import VaultBrain
-    from event_emitter import EventEmitter
+# I need to replace line 12 too.
+
+# I'll replace lines 12-16.
 
 
 class PluginBase(ABC):

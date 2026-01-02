@@ -9,7 +9,7 @@ import logging
 from pathlib import Path
 import tempfile
 import shutil
-from utils.logging_config import (
+from sidecar.utils.logging_config import (
     configure_logging,
     get_logger,
     get_plugin_logger,

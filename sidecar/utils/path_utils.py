@@ -8,14 +8,14 @@ Prevents directory traversal and validates vault structure.
 from pathlib import Path
 from typing import Optional, List
 
-from constants import (
+from ..constants import (
     VAULT_CONFIG_FILE,
     MEMORY_DIR,
     PLUGINS_DIR,
     LIB_DIR,
     PLUGIN_MAIN_FILE,
 )
-from exceptions import (
+from ..exceptions import (
     VaultNotFoundError,
     InvalidPathError,
     PathTraversalError,

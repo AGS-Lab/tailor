@@ -5,7 +5,7 @@ Tests that all enums and constants are properly defined.
 """
 
 import pytest
-from constants import (
+from sidecar.constants import (
     EventType,
     EventScope,
     Severity,

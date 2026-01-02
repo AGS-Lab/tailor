@@ -9,9 +9,9 @@ pattern for all UI interactions.
 import time
 from typing import Any, Dict, Optional, TYPE_CHECKING
 
-from utils.logging_config import get_logger
-from utils.json_rpc import build_request
-from constants import (
+from .utils.logging_config import get_logger
+from .utils.json_rpc import build_request
+from .constants import (
     EventType,
     EventScope,
     Severity,

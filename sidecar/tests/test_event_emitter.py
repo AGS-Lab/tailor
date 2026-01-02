@@ -7,8 +7,8 @@ Tests event emission, validation, and WebSocket integration.
 import pytest
 import json
 from unittest.mock import Mock, MagicMock, AsyncMock, call
-from event_emitter import EventEmitter
-from constants import EventType, EventScope, Severity
+from sidecar.event_emitter import EventEmitter
+from sidecar.constants import EventType, EventScope, Severity
 
 
 @pytest.mark.unit

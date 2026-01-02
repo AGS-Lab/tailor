@@ -5,7 +5,7 @@ Tests custom exception classes and hierarchy.
 """
 
 import pytest
-from exceptions import (
+from sidecar.exceptions import (
     TailorError,
     VaultError,
     VaultNotFoundError,

@@ -14,11 +14,12 @@ from pathlib import Path
 from typing import Dict, Any, TYPE_CHECKING, cast
 
 # Add sidecar to path
-sidecar_path = Path(__file__).parent.parent.parent.parent / "sidecar"
-if str(sidecar_path) not in sys.path:
-    sys.path.insert(0, str(sidecar_path))
+# Add tailor root to path (parent of sidecar)
+tailor_path = Path(__file__).resolve().parent.parent.parent.parent
+if str(tailor_path) not in sys.path:
+    sys.path.insert(0, str(tailor_path))
 
-from api.plugin_base import PluginBase
+from sidecar.api.plugin_base import PluginBase
 
 if TYPE_CHECKING:
     from event_emitter import EventEmitter

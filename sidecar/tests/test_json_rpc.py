@@ -5,7 +5,7 @@ Tests message building, validation, and helper functions.
 """
 
 import pytest
-from utils.json_rpc import (
+from sidecar.utils.json_rpc import (
     build_request,
     build_response,
     build_error,
@@ -17,7 +17,7 @@ from utils.json_rpc import (
     get_method,
     get_params,
 )
-from exceptions import JSONRPCError
+from sidecar.exceptions import JSONRPCError
 
 
 @pytest.mark.unit

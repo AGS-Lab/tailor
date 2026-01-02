@@ -13,11 +13,11 @@ import asyncio
 import sys
 from pathlib import Path
 
-from websocket_server import WebSocketServer
-from vault_brain import VaultBrain
-from utils.logging_config import configure_logging, get_logger
-from constants import ENV_LOG_LEVEL, DEFAULT_LOG_LEVEL
-from exceptions import TailorError, VaultNotFoundError
+from .websocket_server import WebSocketServer
+from .vault_brain import VaultBrain
+from .utils.logging_config import configure_logging, get_logger
+from .constants import ENV_LOG_LEVEL, DEFAULT_LOG_LEVEL
+from .exceptions import TailorError, VaultNotFoundError
 
 logger = get_logger(__name__)
 

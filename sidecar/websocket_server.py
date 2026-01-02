@@ -12,8 +12,8 @@ import websockets
 from websockets.server import WebSocketServerProtocol # type: ignore
 from websockets.exceptions import ConnectionClosed
 
-from utils.logging_config import get_logger
-from utils.json_rpc import (
+from .utils.logging_config import get_logger
+from .utils.json_rpc import (
     validate_jsonrpc_message,
     build_response,
     build_internal_error,
@@ -21,11 +21,11 @@ from utils.json_rpc import (
     get_method,
     get_params,
 )
-from constants import (
+from .constants import (
     DEFAULT_WEBSOCKET_HOST,
     WEBSOCKET_TIMEOUT,
 )
-from exceptions import (
+from .exceptions import (
     WebSocketError,
     WebSocketMessageError,
     JSONRPCError,

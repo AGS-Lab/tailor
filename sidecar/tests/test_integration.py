@@ -8,17 +8,17 @@ import pytest
 from constants import PLUGIN_CLASS_NAME
 
 # Add sidecar root to path to ensure imports work
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from vault_brain import VaultBrain
-from websocket_server import WebSocketServer
+from sidecar.vault_brain import VaultBrain
+from sidecar.websocket_server import WebSocketServer
 
 # ----------------------------------------------------------------------------
 # Test Plugin Content
 # ----------------------------------------------------------------------------
 
 TEST_PLUGIN_CODE = """
-from api.plugin_base import PluginBase
+from sidecar.api.plugin_base import PluginBase
 from typing import Dict, Any
 
 class Plugin(PluginBase):
@@ -81,7 +81,7 @@ class TestIntegration:
         4. Events are emitted to WebSocket.
         """
         # 1. Initialize logic
-        with patch("vault_brain.get_logger"):
+        with patch("sidecar.vault_brain.get_logger"):
             brain = VaultBrain(integration_vault, mock_ws_server)
             await brain.initialize()
         
@@ -115,17 +115,17 @@ class TestIntegration:
         
     async def test_invalid_command_handling(self, integration_vault, mock_ws_server):
         """Test system behavior when executing non-existent command."""
-        with patch("vault_brain.get_logger"):
+        with patch("sidecar.vault_brain.get_logger"):
             brain = VaultBrain(integration_vault, mock_ws_server)
             
-        from exceptions import CommandNotFoundError
+        from sidecar.exceptions import CommandNotFoundError
         
         with pytest.raises(CommandNotFoundError):
             await brain.execute_command("non.existent.command")
             
     async def test_plugin_unload(self, integration_vault, mock_ws_server):
         """Test plugin unloading."""
-        with patch("vault_brain.get_logger"):
+        with patch("sidecar.vault_brain.get_logger"):
             brain = VaultBrain(integration_vault, mock_ws_server)
             await brain.initialize()
             
@@ -142,7 +142,7 @@ class TestIntegration:
         if not real_vault_path.exists():
             pytest.skip("example-vault directory not found")
             
-        with patch("vault_brain.get_logger"):
+        with patch("sidecar.vault_brain.get_logger"):
             # We use the real path
             brain = VaultBrain(real_vault_path, mock_ws_server)
             await brain.initialize()

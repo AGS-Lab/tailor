@@ -1,0 +1,274 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+    /* Backgrounds - GitHub Dark Dimmed Palette Inspiration */
+    --bg-app: #0d1117;
+    /* Main App Background (Dark Slate) */
+    --bg-panel: #161b22;
+    /* Panel Background (Lighter Slate) */
+    --bg-header: #010409;
+    /* Header/Top Bar (Darker) */
+    --bg-input: #0d1117;
+    /* Input fields */
+    --bg-card: #21262d;
+    /* Cards/Buttons */
+    --bg-hover: #30363d;
+    /* Hover states */
+
+    /* Text */
+    --text-primary: #c9d1d9;
+    /* White-ish Grey */
+    --text-secondary: #8b949e;
+    /* Muted Grey */
+    --text-disabled: #484f58;
+    --text-link: #58a6ff;
+
+    /* Accents */
+    --accent-primary: #58a6ff;
+    /* Blue (GitHub Action Blue) */
+    --accent-secondary: #238636;
+    /* Green (Success) */
+    --accent-error: #da3633;
+    /* Red (Error) */
+    --accent-warning: #d29922;
+    /* Yellow/Orange */
+
+    /* Gradients (Removed for Flat Design) */
+    --accent-gradient: none;
+    --bg-gradient-subtle: none;
+
+    /* Borders */
+    --border-subtle: #30363d;
+    --border-active: #58a6ff;
+    --border-radius: 4px;
+    /* Reduced radius for sharper look */
+
+    /* Typography */
+    --font-main: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', Consolas, "Courier New", monospace;
+
+    /* Spacing */
+    --spacing-xs: 4px;
+    --spacing-sm: 8px;
+    --spacing-md: 16px;
+    --spacing-lg: 24px;
+}
+
+/* Custom Scrollbars (Flat) */
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #30363d;
+    /* Flat grey */
+    border: 2px solid var(--bg-app);
+    /* Gives padding effect */
+    border-radius: 0;
+    /* Square/Flat */
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #58a6ff;
+    /* Highlight on hover */
+}
+
+::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
+/* --- Global Layout Classes --- */
+
+body {
+    margin: 0;
+    padding: 0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-app);
+    color: var(--text-primary);
+    font-family: var(--font-main);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Panel Containers */
+.panel-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg-app);
+    /* Unified background */
+}
+
+.scrollable {
+    flex: 1;
+    overflow: auto;
+    padding: 0;
+    /* Full width content */
+}
+
+/* Toolbar/Inputs */
+.toolbar {
+    padding: 8px 16px;
+    background: var(--bg-panel);
+    border-top: 1px solid var(--border-subtle);
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+textarea,
+input {
+    background: var(--bg-input);
+    color: var(--text-primary);
+    border: 1px solid var(--border-subtle);
+    padding: 6px 8px;
+    font-family: var(--font-mono);
+    border-radius: 2px;
+    /* Minimal radius */
+    outline: none;
+    font-size: 0.85rem;
+}
+
+textarea:focus,
+input:focus {
+    border-color: var(--accent-primary);
+}
+
+/* App Header (Removed) */
+/* .app-header, .brand-text, .port-badger, .port-input removed */
+
+/* Buttons (Flat) */
+.btn {
+    padding: 4px 10px;
+    border-radius: 2px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 400;
+    transition: background 0.1s;
+    border: 1px solid transparent;
+}
+
+.btn-secondary {
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid transparent;
+}
+
+.btn-secondary:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.btn-primary {
+    background: var(--accent-secondary);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.btn-primary:hover {
+    background: #2ea043;
+    /* GitHub hover green */
+}
+
+/* Connecting/Disconnected Overlay - Flat */
+#conn-status.disconnected .status-badge {
+    background: var(--accent-error);
+    box-shadow: none;
+}
+
+#conn-status.connected .status-badge {
+    background: var(--accent-secondary);
+    box-shadow: none;
+}
+
+.status-badge {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+/* Log Styling */
+.log-entry {
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--border-subtle);
+    line-height: 1.4;
+}
+
+.log-entry .ts {
+    color: var(--text-disabled);
+    margin-right: 8px;
+    font-size: 0.75rem;
+}
+
+.log-entry.error {
+    color: var(--accent-error);
+}
+
+.log-entry.in {
+    color: var(--accent-secondary);
+}
+
+.log-entry.out {
+    color: var(--accent-primary);
+}
+
+.log-entry.info {
+    color: var(--text-secondary);
+}
+
+/* Golden Layout Overrides */
+.lm_header {
+    background: var(--bg-header) !important;
+}
+
+.lm_tab {
+    background: transparent !important;
+    color: var(--text-secondary) !important;
+    border: none !important;
+    margin-right: 2px !important;
+    border-radius: 4px 4px 0 0 !important;
+}
+
+.lm_tab:hover {
+    background: var(--bg-hover) !important;
+    color: var(--text-primary) !important;
+}
+
+.lm_tab.lm_active {
+    background: var(--bg-panel) !important;
+    color: var(--accent-primary) !important;
+    border-top: 2px solid var(--accent-primary) !important;
+    border-bottom: none !important;
+    box-shadow: none !important;
+}
+
+.lm_content {
+    background: var(--bg-app) !important;
+}
+
+.lm_splitter {
+    background: var(--bg-app) !important;
+    opacity: 0.5;
+}
+
+.lm_splitter:hover {
+    background: var(--accent-primary) !important;
+    opacity: 1;
+}
+
+.lm_controls {
+    display: none !important;
+    /* Hide maximize/close buttons for cleaner look if not needed */
+}

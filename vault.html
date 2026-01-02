@@ -5,314 +5,347 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vault</title>
+    <link rel="stylesheet" href="frontend/theme.css">
+
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'JetBrains Mono', 'Fira Code', monospace, system-ui, sans-serif;
-            background: #0a0a0a;
-            color: #e0e0e0;
-            padding: 15px;
-            max-width: 900px;
-            margin: 0 auto;
-            line-height: 1.4;
-        }
-
-        h1 {
-            margin-bottom: 15px;
-            font-size: 1.3rem;
-            color: #00d4ff;
-        }
-
-        .section {
-            margin-bottom: 15px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid #222;
-        }
-
-        .section:last-child {
-            border-bottom: none;
-        }
-
-        label {
-            display: block;
-            margin-bottom: 3px;
-            font-size: 0.85rem;
-            color: #888;
-        }
-
-        input,
-        textarea {
-            width: 100%;
-            padding: 6px 8px;
-            background: #1a1a1a;
-            border: 1px solid #333;
-            border-radius: 3px;
-            color: #e0e0e0;
-            font-family: inherit;
-            font-size: 0.9rem;
-        }
-
-        input:focus,
-        textarea:focus {
-            outline: none;
-            border-color: #00d4ff;
-        }
-
-        textarea {
-            min-height: 50px;
-            font-family: monospace;
-        }
-
-        button {
-            padding: 6px 14px;
-            border: 1px solid #00d4ff;
-            background: #0a0a0a;
-            color: #00d4ff;
-            border-radius: 3px;
-            cursor: pointer;
-            margin-right: 8px;
-            font-size: 0.9rem;
-        }
-
-        button:hover {
-            background: #1a1a1a;
-            box-shadow: 0 0 8px rgba(0, 212, 255, 0.3);
-        }
-
-        button:disabled {
-            opacity: 0.3;
-            cursor: not-allowed;
-            border-color: #333;
-            color: #555;
-        }
-
-        .status {
-            padding: 6px 8px;
-            background: #1a1a1a;
-            border: 1px solid #333;
-            border-radius: 3px;
-            font-size: 0.85rem;
-        }
-
-        .status.connected {
-            background: #0d2818;
-            border-color: #00d4ff;
-            color: #00ff88;
-        }
-
-        .status.error {
-            background: #2a0d0d;
-            border-color: #ff4444;
-            color: #ff6666;
-        }
-
-        #log {
-            font-family: monospace;
-            font-size: 0.8rem;
-            max-height: 350px;
-            overflow-y: auto;
-            background: #0f0f0f;
-            padding: 8px;
-            border: 1px solid #222;
-            border-radius: 3px;
-        }
-
-        .log-entry {
-            padding: 1px 0;
-            border-bottom: 1px solid #151515;
-        }
-
-        .timestamp {
-            color: #555;
-        }
+        /* Minimal override for non-theme critical stuff if needed, otherwise empty */
     </style>
 </head>
 
 <body>
-    <h1>Vault</h1>
+    <!-- Layout Root -->
+    <div id="layout-root" style="flex:1; width:100%; overflow:hidden;"></div>
 
-    <div class="section">
-        <label>Port</label>
-        <input type="number" id="port" value="9001">
-        <button onclick="connect()" id="connBtn">Connect</button>
-        <button onclick="disconnect()" id="discBtn">Disconnect</button>
-        <div class="status" id="status">Disconnected</div>
-    </div>
+    <script type="module">
+        import { GoldenLayout } from 'golden-layout';
+        import 'golden-layout/dist/css/goldenlayout-base.css';
+        import 'golden-layout/dist/css/themes/goldenlayout-dark-theme.css';
 
-    <!-- Plugin UIs -->
-    <div id="plugin-container"></div>
+        // --- Layout Config ---
+        const config = {
+            header: {
+                popout: false
+            },
+            content: [{
+                type: 'row',
+                content: [
+                    {
+                        type: 'component',
+                        componentName: 'stage',
+                        title: 'Stage',
+                        width: 65
+                    },
+                    {
+                        type: 'column',
+                        width: 35,
+                        content: [
+                            {
+                                type: 'stack',
+                                height: 40,
+                                content: [
+                                    {
+                                        type: 'component',
+                                        componentName: 'chat',
+                                        title: 'LLM Chat'
+                                    },
+                                    {
+                                        type: 'component',
+                                        componentName: 'log',
+                                        title: 'System Log'
+                                    }
+                                ]
+                            },
+                            {
+                                type: 'component',
+                                componentName: 'controls',
+                                title: 'Inspector',
+                                height: 20
+                            }
+                        ]
+                    }
+                ]
+            }]
+        };
 
-    <div class="section">
-        <label>Message</label>
-        <input type="text" id="msg" placeholder="Type message...">
-        <button onclick="send()" id="sendBtn" disabled>Send</button>
-    </div>
+        const myLayout = new GoldenLayout(config, document.getElementById('layout-root'));
 
-    <div class="section">
-        <label>Command</label>
-        <input type="text" id="cmd" placeholder="e.g. demo_plugin.greet">
-        <label>Args (JSON)</label>
-        <textarea id="args">{}</textarea>
-        <button onclick="exec()" id="execBtn" disabled>Execute</button>
-    </div>
-
-    <div class="section">
-        <button onclick="list()" id="listBtn" disabled>List Commands</button>
-        <button onclick="info()" id="infoBtn" disabled>Vault Info</button>
-        <button onclick="clear()">Clear Log</button>
-    </div>
-
-    <div class="section">
-        <label>Log</label>
-        <div id="log"></div>
-    </div>
-
-    <script>
-        let ws = null;
-        let id = 0;
-        const pending = new Map();
-
-        function log(msg, type = '') {
-            const el = document.createElement('div');
-            el.className = 'log-entry';
-            const timestamp = document.createElement('span');
-            timestamp.className = 'timestamp';
-            timestamp.textContent = `[${new Date().toLocaleTimeString()}] `;
-            el.appendChild(timestamp);
-
-            const content = document.createTextNode(msg);
-            el.appendChild(content);
-
-            document.getElementById('log').appendChild(el);
-            document.getElementById('log').scrollTop = document.getElementById('log').scrollHeight;
-        }
-
-        function clear() {
-            document.getElementById('log').innerHTML = '';
-        }
-
-        function updateUI(connected) {
-            const status = document.getElementById('status');
-            status.textContent = connected ? `Connected (${document.getElementById('port').value})` : 'Disconnected';
-            status.className = connected ? 'status connected' : 'status';
-            ['sendBtn', 'execBtn', 'listBtn', 'infoBtn'].forEach(id => {
-                document.getElementById(id).disabled = !connected;
-            });
-        }
-
-        function connect() {
-            const port = document.getElementById('port').value;
-            if (ws && ws.readyState === WebSocket.OPEN) return;
-
-            ws = new WebSocket(`ws://localhost:${port}`);
-            ws.onopen = () => { log('Connected'); updateUI(true); };
-            ws.onmessage = (e) => {
-                const data = JSON.parse(e.data);
-                log(`← ${JSON.stringify(data)}`);
-                if (data.id && pending.has(data.id)) {
-                    pending.get(data.id)(data);
-                    pending.delete(data.id);
-                }
-            };
-            ws.onerror = () => log('Error', 'error');
-            ws.onclose = () => { log('Disconnected'); updateUI(false); ws = null; };
-        }
-
-        function disconnect() {
-            if (ws) ws.close();
-        }
-
-        function req(method, params = {}) {
-            if (!ws || ws.readyState !== WebSocket.OPEN) return;
-            const msg = { jsonrpc: "2.0", id: ++id, method, params };
-            log(`→ ${JSON.stringify(msg)}`);
-            ws.send(JSON.stringify(msg));
-            return new Promise(resolve => pending.set(id, resolve));
-        }
-
-        function send() {
-            req('chat.send_message', { message: document.getElementById('msg').value });
-        }
-
-        function exec() {
-            const args = JSON.parse(document.getElementById('args').value || '{}');
-            req('execute_command', { command: document.getElementById('cmd').value, args });
-        }
-
-        function list() {
-            req('list_commands');
-        }
-
-        function info() {
-            req('get_vault_info');
-        }
-
-        document.getElementById('msg').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter' && !document.getElementById('sendBtn').disabled) send();
+        // --- Component Registration ---
+        myLayout.registerComponent('stage', function (container, state) {
+            container.element.innerHTML = `
+                <div class="panel-container">
+                    <div class="scrollable" id="plugin-area">
+                        <!-- Default Plugin Area -->
+                        <div style="color:var(--text-disabled); text-align:center; margin-top:50px;">
+                            Stage Area
+                        </div>
+                    </div>
+                </div>
+            `;
         });
 
-        // Auto-connect when vault window opens
-        (async () => {
-            try {
-                const { invoke } = await import('@tauri-apps/api/core');
-                // Query vault info from Tauri
-                const vaultInfo = await invoke('get_current_vault_info');
-                log(`Vault: ${vaultInfo.vault_path}`);
-                document.getElementById('port').value = vaultInfo.ws_port;
-                setTimeout(() => connect(), 500); // Small delay for sidecar startup
-            } catch (e) {
-                // Running outside Tauri (e.g., in browser for testing)
-                log('Running in standalone mode. Enter port and click Connect.');
+        myLayout.registerComponent('chat', function (container, state) {
+            container.element.innerHTML = `
+                <div class="panel-container">
+                    <div class="scrollable" id="chat-area">
+                        <div style="color:var(--text-disabled); text-align:center; padding-top:20px;">
+                            Waiting for LLM...
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
+        myLayout.registerComponent('log', function (container, state) {
+            container.element.innerHTML = `
+                <div class="panel-container">
+                    <div class="scrollable" id="log-output"></div>
+                    <div class="toolbar" style="justify-content: space-between;">
+                        <span style="font-size:0.75rem; color:var(--text-disabled); font-weight:500; font-family:var(--font-main);">SYSTEM OUTPUT</span>
+                        <button id="clearLog" class="icon-btn" title="Clear Log" style="color:var(--text-secondary);">
+                            Clear
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            // Bind Clear Log
+            const clearBtn = container.element.querySelector('#clearLog');
+            if (clearBtn) {
+                clearBtn.onclick = () => {
+                    const out = document.getElementById('log-output');
+                    if (out) out.innerHTML = '';
+                };
             }
-        })();
+        });
 
-        // Load plugin UIs
-        async function loadPluginUIs() {
-            try {
-                // Get list of commands to find plugins with UI
-                const result = await req('list_commands');
-                log('Loading plugin UIs...');
+        myLayout.registerComponent('controls', function (container, state) {
+            container.element.innerHTML = `
+                <div class="panel-container">
+                    <div class="scrollable">
+                        <label style="font-size:0.75rem; color:var(--text-secondary); display:block; margin-bottom:4px; font-weight:600;">COMMAND INPUT</label>
+                        <textarea id="cmd-input" rows="3" placeholder="demo.hello"></textarea>
+                        
+                        <label style="font-size:0.75rem; color:var(--text-secondary); display:block; margin:8px 0 4px 0; font-weight:600;">ARGUMENTS (JSON)</label>
+                        <input id="arg-input" placeholder='{"name": "User"}'>
+                        
+                        <button id="execBtn" class="btn btn-primary" style="width:100%; margin-top:12px;">Execute Command</button>
+                    </div>
+                </div>
+            `;
 
-                // Look for plugins with UI
-                const pluginsWithUI = ['llm']; // Hardcoded for now
-
-                for (const pluginName of pluginsWithUI) {
+            // Bind Execute
+            const execBtn = container.element.querySelector('#execBtn');
+            if (execBtn) {
+                execBtn.onclick = async () => {
+                    const cmd = document.getElementById('cmd-input').value;
+                    let args = {};
                     try {
-                        const uiResult = await req('execute_command', {
-                            command: `${pluginName}.get_ui`,
-                            args: {}
-                        });
-
-                        if (uiResult && uiResult.result && uiResult.result.html) {
-                            const container = document.getElementById('plugin-container');
-                            const section = document.createElement('div');
-                            section.className = 'section';
-                            section.innerHTML = uiResult.result.html;
-                            container.appendChild(section);
-                            log(`Loaded ${pluginName} UI`);
-                        }
+                        args = JSON.parse(document.getElementById('arg-input').value || '{}');
                     } catch (e) {
-                        log(`Failed to load ${pluginName} UI: ${e.message}`);
+                        log('Invalid JSON args', 'error');
+                        return;
+                    }
+
+                    try {
+                        const res = await request('execute_command', { command: cmd, ...args });
+                        log(JSON.stringify(res.result, null, 2));
+                    } catch (e) {
+                        log(`Exec failed: ${e}`, 'error');
+                    }
+                };
+            }
+        });
+
+        myLayout.init();
+
+        window.myLayout = myLayout; // Expose for debugging/resizing
+
+        // Handle Resize
+        window.addEventListener('resize', () => {
+            if (myLayout.isInitialised) myLayout.updateSize();
+        });
+
+
+        // --- Logic Implementation ---
+
+        let ws = null;
+        let rpcId = 0;
+        const pending = new Map();
+
+        // Logging
+        function log(msg, type = 'info') {
+            const out = document.getElementById('log-output');
+            if (!out) return;
+
+            const div = document.createElement('div');
+            div.className = `log-entry ${type}`;
+            const time = new Date().toLocaleTimeString().split(' ')[0];
+            div.innerHTML = `<span class="ts">${time}</span>${msg}`;
+            out.appendChild(div);
+            out.scrollTop = out.scrollHeight;
+        }
+        window.log = log; // Expose for plugins
+
+
+
+        // Connection
+        function setConnected(isConnected) {
+            const indicator = document.getElementById('conn-status');
+
+            if (isConnected) {
+                indicator.className = 'connected';
+                log('Connected to Sidecar', 'in');
+
+                // Auto-load stuff
+                loadPlugins();
+            } else {
+                indicator.className = 'disconnected';
+                log('Disconnected', 'error');
+            }
+        }
+
+        function connect(explicitPort) {
+            // Priority: Explicit Arg > URL param > Default 9002
+            let port = explicitPort;
+            if (!port) {
+                const params = new URLSearchParams(window.location.search);
+                port = params.get('port') || '9002';
+            }
+
+            log(`Connecting to ws://127.0.0.1:${port}...`);
+
+            ws = new WebSocket(`ws://127.0.0.1:${port}`);
+
+            ws.onopen = () => setConnected(true);
+            ws.onclose = () => setConnected(false);
+            ws.onerror = (e) => log('WebSocket Error', 'error');
+
+
+            ws.onmessage = (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    if (data.method === 'trigger_event') {
+                        handleEvent(data.params);
+                    } else if (data.id && pending.has(data.id)) {
+                        pending.get(data.id)(data);
+                        pending.delete(data.id);
+                    }
+                    // Log incoming responses if needed
+                    // log(`< ${JSON.stringify(data).slice(0, 100)}`, 'in');
+                } catch (err) {
+                    log(`Parse Error: ${err}`, 'error');
+                }
+            };
+        }
+
+        // RPC
+        function request(method, params = {}) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                log('Not connected', 'error');
+                return Promise.reject('Not connected');
+            }
+            return new Promise((resolve) => {
+                const id = ++rpcId;
+                const msg = { jsonrpc: '2.0', id, method, params };
+                pending.set(id, resolve);
+                ws.send(JSON.stringify(msg));
+                log(`> ${method}`, 'out');
+            });
+        }
+        window.request = request; // Expose for plugins
+
+        // Plugin Loading
+        async function loadPlugins() {
+            try {
+                // 1. List Commands
+                const res = await request('list_commands');
+                const commands = res.result.commands || {};
+
+                // 2. Check for UI commands (convention: *.get_ui)
+                const hasLLM = Object.keys(commands).includes('llm.get_ui');
+
+                if (hasLLM) {
+                    const uiRes = await request('execute_command', {
+                        command: 'llm.get_ui',
+                        args: {} // API expects "args" or spread? 
+                        // VaultBrain.execute_command accepts **kwargs. 
+                        // JSON-RPC sends params. 
+                        // Sidecar maps params to kwargs.
+                    });
+
+                    // Unwrap execute_command result structure: { result: { html: ... }, status: 'success' }
+                    const cmdResult = uiRes.result ? uiRes.result.result : null;
+
+                    if (cmdResult && cmdResult.html) {
+                        const stage = document.getElementById('chat-area'); // Target the new chat pane
+                        if (!stage) {
+                            log('Chat pane not found', 'error');
+                            return;
+                        }
+                        // Use createContextualFragment to ensure scripts execute
+                        const range = document.createRange();
+                        range.selectNode(stage);
+                        const fragment = range.createContextualFragment(`<div class="panel-container" style="padding:10px;">${cmdResult.html}</div>`);
+                        stage.innerHTML = ''; // Clear previous content
+                        stage.appendChild(fragment);
+                        log('Loaded LLM UI into Chat Pane', 'in');
                     }
                 }
             } catch (e) {
-                log(`Plugin UI load error: ${e.message}`);
+                log(`Plugin Load Error: ${e}`, 'error');
             }
         }
 
-        // Load plugin UIs after successful connection
-        const originalUpdateUI = updateUI;
-        updateUI = function (connected) {
-            originalUpdateUI(connected);
-            if (connected) {
-                setTimeout(() => loadPluginUIs(), 1000);
+        function handleEvent(evt) {
+            log(`Event: ${evt.event_type}`, 'in');
+
+            // Dispatch to window (plugins can listen)
+            const eventType = evt.event_type; // e.g., 'LLM_RESPONSE'
+            const detail = evt.data || {};
+
+            const customEvent = new CustomEvent(eventType, { detail });
+            window.dispatchEvent(customEvent);
+        }
+
+        // UI Binding
+        const connBtn = document.getElementById('connectBtn');
+        if (connBtn) connBtn.onclick = connect;
+
+        // --- Auto-Connect Logic ---
+        (async () => {
+            let autoPort = null;
+
+            // 1. Check URL Params (Robustness for new windows)
+            const params = new URLSearchParams(window.location.search);
+            if (params.has('port')) {
+                autoPort = params.get('port');
+                log(`Found port in URL: ${autoPort}`);
             }
-        };
+
+            // 2. Try Tauri IPC (If launched via Tauri)
+            if (!autoPort) {
+                try {
+                    const { invoke } = await import('@tauri-apps/api/core');
+                    const vaultInfo = await invoke('get_current_vault_info');
+                    if (vaultInfo && vaultInfo.ws_port) {
+                        autoPort = vaultInfo.ws_port;
+                        log(`Found port via Tauri: ${autoPort}`);
+                    }
+                } catch (e) {
+                    // Not in Tauri or API failed
+                }
+            }
+
+            if (autoPort) {
+                // Delay slightly to ensure network is ready
+                setTimeout(() => connect(autoPort), 300);
+            } else {
+                log('No auto-connect port found. Connection will use default (9002).');
+                // Optional: Auto-connect to default if desired, or just wait
+                setTimeout(() => connect('9002'), 300);
+            }
+        })();
+
     </script>
 </body>
 

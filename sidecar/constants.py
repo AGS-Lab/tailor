@@ -103,7 +103,7 @@ class Severity(str, Enum):
 # WebSocket Constants
 # ============================================================================
 
-DEFAULT_WEBSOCKET_HOST: Final[str] = "localhost"
+DEFAULT_WEBSOCKET_HOST: Final[str] = "127.0.0.1"
 """Default WebSocket host."""
 
 MIN_WEBSOCKET_PORT: Final[int] = 9000

@@ -10,23 +10,23 @@ import importlib.util
 from pathlib import Path
 from typing import Dict, Any, Optional, Callable, Awaitable, cast
 
-from event_emitter import EventEmitter
-from utils.logging_config import get_logger, get_plugin_logger
-from utils.path_utils import (
+from .event_emitter import EventEmitter
+from .utils.logging_config import get_logger, get_plugin_logger
+from .utils.path_utils import (
     validate_vault_path,
     get_vault_config_path,
     get_memory_dir,
     discover_plugins,
     validate_plugin_structure,
 )
-from constants import (
+from .constants import (
     DEFAULT_VAULT_CONFIG,
     DEFAULT_TICK_INTERVAL,
     PLUGIN_CLASS_NAME,
     PLUGIN_TICK_METHOD,
     CHAT_COMMAND_PREFIX,
 )
-from exceptions import (
+from .exceptions import (
     VaultConfigError,
     PluginLoadError,
     PluginExecutionError,

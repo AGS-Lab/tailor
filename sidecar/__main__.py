@@ -6,5 +6,5 @@ It can be run as: python -m sidecar
 """
 
 if __name__ == "__main__":
-    from main import main
+    from .main import main
     main()

@@ -41,26 +41,27 @@ impl SidecarManager {
         // Get Python executable path
         let python_exe = self.get_python_executable()?;
         
-        // Path to sidecar main.py - go up from src-tauri to project root
-        let sidecar_path = std::env::current_dir()?
+        // Get project root (parent of src-tauri) to set as CWD
+        let project_root = std::env::current_dir()?
             .parent()
             .context("Failed to get parent directory")?
-            .join("sidecar")
-            .join("main.py");
+            .to_path_buf();
 
         println!("Spawning sidecar for window '{}': vault={}, port={}", 
                  window_label, vault_path, ws_port);
         println!("Python executable: {}", python_exe);
-        println!("Sidecar path: {}", sidecar_path.display());
+        println!("Project root: {}", project_root.display());
 
         // Spawn Python process with unbuffered output
         let mut child = Command::new(&python_exe)
             .arg("-u")  // Unbuffered output
-            .arg(&sidecar_path)
+            .arg("-m")
+            .arg("sidecar")
             .arg("--vault")
             .arg(&vault_path)
             .arg("--ws-port")
             .arg(ws_port.to_string())
+            .current_dir(&project_root)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()

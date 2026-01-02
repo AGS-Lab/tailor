@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Optional
 from logging.handlers import RotatingFileHandler
 
-from constants import (
+from ..constants import (
     LOG_FORMAT,
     LOG_DATE_FORMAT,
     DEFAULT_LOG_LEVEL,

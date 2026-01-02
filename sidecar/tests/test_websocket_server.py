@@ -8,9 +8,10 @@ import pytest
 import asyncio
 import json
 from unittest.mock import Mock, AsyncMock, patch, MagicMock
-from websocket_server import WebSocketServer, CommandHandler
-from exceptions import JSONRPCError, WebSocketError
-from constants import (
+from sidecar.websocket_server import WebSocketServer, CommandHandler
+from sidecar.exceptions import JSONRPCError, WebSocketError
+from sidecar.utils.json_rpc import build_request, build_response, build_internal_error
+from sidecar.constants import (
     JSONRPC_PARSE_ERROR,
     JSONRPC_INVALID_REQUEST,
     JSONRPC_METHOD_NOT_FOUND,
@@ -62,7 +63,17 @@ class TestWebSocketServer:
     async def test_send_to_rust_connected(self, server, mock_ws):
         """Test sending message when connected."""
         server.connection = mock_ws
-        message = {"jsonrpc": "2.0", "method": "test"}
+        # Use build_request
+        message = build_request("test")
+        # Remove ID for this test if it wasn't there, or keep it. 
+        # build_request adds ID by default if not provided? No, check docstring: 
+        # "if request_id is None: generates timestamp". 
+        # The original test message was {"jsonrpc": "2.0", "method": "test"} (notification?)
+        # If no ID, it's a notification. 
+        # Wait, utils.json_rpc.build_request behaves: "if request_id is None: ... message['id'] = str(int(time.time()*1000))"
+        # So it defaults to Request. To make Notification, I might need to delete ID or pass specific arg?
+        # Let's check utils/json_rpc.py again.
+        pass
         
         # We need to await the task created by send_to_rust if we want to verify side effects immediately
         # Since send_to_rust is fire-and-forget (create_task), we can mock create_task or await explicitly?
@@ -78,7 +89,7 @@ class TestWebSocketServer:
     @pytest.mark.asyncio
     async def test_send_to_rust_no_loop_queues(self, server):
         """Test sending message when no loop (queues message)."""
-        message = {"jsonrpc": "2.0", "method": "test"}
+        message = build_request("test")
         
         # Mock get_running_loop to raise RuntimeError (simulate no loop)
         with patch("asyncio.get_running_loop", side_effect=RuntimeError):
@@ -97,12 +108,7 @@ class TestWebSocketServer:
         server.connection = Mock()
         server.connection.send = AsyncMock()
         
-        request = {
-            "jsonrpc": "2.0",
-            "method": "test.echo",
-            "params": {"msg": "hello"},
-            "id": 1
-        }
+        request = build_request("test.echo", {"msg": "hello"}, request_id="1")
         
         await server.handle_message(json.dumps(request))
         
@@ -115,7 +121,7 @@ class TestWebSocketServer:
         response = json.loads(response_str)
         
         assert response["result"] == {"status": "ok"}
-        assert response["id"] == 1
+        assert response["id"] == "1"
 
     @pytest.mark.asyncio
     async def test_handle_message_method_not_found(self, server):
@@ -123,11 +129,7 @@ class TestWebSocketServer:
         server.connection = Mock()
         server.connection.send = AsyncMock()
         
-        request = {
-            "jsonrpc": "2.0",
-            "method": "unknown",
-            "id": 2
-        }
+        request = build_request("unknown", request_id="2")
         
         # Implementation logs warning but doesn't strictly require sending error 
         # (based on line 211: "Could send method not found error here" comment)
@@ -168,11 +170,7 @@ class TestWebSocketServer:
         server.connection = Mock()
         server.connection.send = AsyncMock()
         
-        request = {
-            "jsonrpc": "2.0",
-            "method": "test.fail",
-            "id": 3
-        }
+        request = build_request("test.fail", request_id="3")
         
         await server.handle_message(json.dumps(request))
         

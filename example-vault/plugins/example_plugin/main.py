@@ -8,10 +8,19 @@ This plugin shows how to:
 """
 
 import asyncio
+import sys
+from pathlib import Path
 from datetime import datetime
 
+# Add tailor root to path (parent of sidecar)
+tailor_path = Path(__file__).resolve().parent.parent.parent.parent
+if str(tailor_path) not in sys.path:
+    sys.path.insert(0, str(tailor_path))
 
-class Plugin:
+from sidecar.api.plugin_base import PluginBase
+
+
+class Plugin(PluginBase):
     """Example plugin that demonstrates command registration and execution."""
     
     def __init__(self, emitter, brain, plugin_dir, vault_path):

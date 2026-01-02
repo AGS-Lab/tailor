@@ -9,9 +9,9 @@ from unittest.mock import Mock, patch, MagicMock, AsyncMock
 from pathlib import Path
 import sys
 
-from vault_brain import VaultBrain
-from exceptions import VaultNotFoundError, VaultConfigError, PluginLoadError
-from constants import DEFAULT_TICK_INTERVAL
+from sidecar.vault_brain import VaultBrain
+from sidecar.exceptions import VaultNotFoundError, VaultConfigError, PluginLoadError
+from sidecar.constants import DEFAULT_TICK_INTERVAL
 
 @pytest.mark.unit
 class TestVaultBrain:
@@ -33,7 +33,7 @@ class TestVaultBrain:
     def test_init_valid_vault(self, valid_vault, mock_ws_server):
         """Test initialization with a valid vault."""
         # Mock logging config to avoid real file operations or console noise
-        with patch("vault_brain.get_logger"):
+        with patch("sidecar.vault_brain.get_logger"):
             
             brain = VaultBrain(valid_vault, mock_ws_server)
             
@@ -63,10 +63,10 @@ class TestVaultBrain:
         with pytest.raises(VaultConfigError):
             VaultBrain(valid_vault, mock_ws_server)
 
-    @patch("vault_brain.validate_plugin_structure")
-    @patch("vault_brain.discover_plugins")
-    @patch("vault_brain.importlib.util.spec_from_file_location")
-    @patch("vault_brain.importlib.util.module_from_spec")
+    @patch("sidecar.vault_brain.validate_plugin_structure")
+    @patch("sidecar.vault_brain.discover_plugins")
+    @patch("sidecar.vault_brain.importlib.util.spec_from_file_location")
+    @patch("sidecar.vault_brain.importlib.util.module_from_spec")
     def test_load_plugins(self, mock_module, mock_spec, mock_discover, mock_validate, valid_vault, mock_ws_server):
         """Test loading plugins."""
         # Mock discovered plugin path
