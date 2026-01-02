@@ -3,6 +3,7 @@
         <span class="status-dot"></span>
         <span class="title">AI Assistant</span>
         <div class="actions">
+            <!-- Used shared .icon-btn from theme.css -->
             <button onclick="llmClear()" class="icon-btn" title="Clear Chat">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path>
@@ -22,7 +23,7 @@
     <div class="input-area">
         <div class="input-wrapper">
             <input type="text" id="llm-input" placeholder="Message Tailor AI..." class="llm-input" autocomplete="off" />
-            <button onclick="llmSend()" class="send-btn">
+            <button onclick="llmSend()" class="icon-btn" title="Send">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round" stroke-linejoin="round">
                     <line x1="22" y1="2" x2="11" y2="13"></line>
@@ -72,23 +73,6 @@
         letter-spacing: 0.5px;
         text-transform: uppercase;
         flex-grow: 1;
-        color: var(--text-primary);
-    }
-
-    .icon-btn {
-        background: transparent;
-        border: none;
-        color: var(--text-secondary);
-        cursor: pointer;
-        padding: 4px;
-        border-radius: 2px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .icon-btn:hover {
-        background: var(--bg-hover);
         color: var(--text-primary);
     }
 
@@ -199,27 +183,6 @@
         color: var(--text-disabled);
     }
 
-    .send-btn {
-        background: transparent;
-        border: none;
-        color: var(--accent-primary);
-        padding: 4px 8px;
-        cursor: pointer;
-        border-radius: 2px;
-        display: flex;
-        align-items: center;
-        transition: background 0.1s;
-    }
-
-    .send-btn:hover {
-        background: var(--bg-hover);
-    }
-
-    .send-btn:active {
-        transform: translateY(0);
-        /* No bounce */
-    }
-
     /* Animations */
     @keyframes fadeIn {
         from {
@@ -269,6 +232,16 @@
 </style>
 
 <script>
+    function escapeHtml(text) {
+        if (!text) return '';
+        return text
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
     function addMessageToConversation(role, text) {
         const conversation = document.getElementById('llm-conversation');
         const msgDiv = document.createElement('div');
@@ -281,7 +254,7 @@
         // Safe HTML content
         msgDiv.innerHTML = `
             <div class="message-role">${role === 'user' ? 'You' : 'Assistant'}</div>
-            <div class="message-content">${text}</div>
+            <div class="message-content">${escapeHtml(text)}</div>
         `;
 
         conversation.appendChild(msgDiv);
@@ -355,50 +328,5 @@
         if (e.key === 'Enter') {
             llmSend();
         }
-    });
-    conversation.innerHTML = '<div class="welcome-message">Conversation cleared. Send a message to start chatting.</div>';
-} catch (e) {
-        console.error('LLM clear error:', e);
-    }
-}
-
-    function addMessageToConversation(role, content) {
-        const conversation = document.getElementById('llm-conversation');
-
-        // Remove welcome message if present
-        const welcome = conversation.querySelector('.welcome-message');
-        if (welcome) welcome.remove();
-
-        // Create message element
-        const messageEl = document.createElement('div');
-        messageEl.className = `message ${role}`;
-        messageEl.innerHTML = `
-<div class="message-role">${role === 'user' ? 'You' : 'Assistant'}</div>
-<div class="message-content">${escapeHtml(content)}</div>
-`;
-
-        conversation.appendChild(messageEl);
-        conversation.scrollTop = conversation.scrollHeight;
-    }
-
-    function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
-    // Listen for LLM response events
-    if (typeof window.addEventListener !== 'undefined') {
-        window.addEventListener('message', (event) => {
-            if (event.data && event.data.type === 'LLM_RESPONSE') {
-                const { assistant_message } = event.data.payload;
-                addMessageToConversation('assistant', assistant_message);
-            }
-        });
-    }
-
-    // Allow Enter to send
-    document.getElementById('llm-input')?.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') llmSend();
     });
 </script>

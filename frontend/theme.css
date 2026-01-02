@@ -272,3 +272,159 @@ input:focus {
     display: none !important;
     /* Hide maximize/close buttons for cleaner look if not needed */
 }
+
+/* --- Shared Utilities --- */
+
+/* Icon Button (Migrated from panel.html) */
+.icon-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.1s, color 0.1s;
+}
+
+.icon-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+/* Text Utilities */
+.text-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.text-mono {
+    font-family: var(--font-mono);
+}
+
+.w-full {
+    width: 100%;
+}
+
+.flex-between {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* --- VS Code-style Layout --- */
+
+/* App Container (Flex Row) */
+.app-container {
+    display: flex;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* 1. Activity Bar (Far Left) */
+.activity-bar {
+    width: 48px;
+    background: var(--bg-header);
+    border-right: 1px solid var(--border-subtle);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 10px;
+    flex-shrink: 0;
+    z-index: 10;
+}
+
+.activity-action {
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--text-secondary);
+    opacity: 0.7;
+    transition: opacity 0.2s, color 0.2s;
+    border-left: 2px solid transparent;
+    /* Indicator */
+}
+
+.activity-action:hover {
+    opacity: 1;
+    color: var(--text-primary);
+}
+
+.activity-action.active {
+    opacity: 1;
+    color: var(--text-primary);
+    border-left-color: var(--accent-primary);
+}
+
+.activity-action svg {
+    width: 24px;
+    height: 24px;
+}
+
+/* 2. Side Panel (Drawer) */
+.side-panel {
+    width: 0;
+    /* Hidden by default */
+    background: var(--bg-panel);
+    border-right: 1px solid var(--border-subtle);
+    display: flex;
+    flex-direction: column;
+    transition: width 0.1s ease-in-out;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.side-panel.open {
+    width: 250px;
+    /* Default Expanded Width */
+}
+
+/* Resize Handle */
+.side-panel-resize {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 4px;
+    height: 100%;
+    cursor: ew-resize;
+    background: transparent;
+    z-index: 100;
+}
+
+.side-panel-resize:hover,
+.side-panel-resize.resizing {
+    background: var(--accent-primary);
+}
+
+.side-panel-header {
+    height: 35px;
+    padding: 0 16px;
+    display: flex;
+    align-items: center;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    background: var(--bg-panel);
+}
+
+.side-panel-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+}
+
+/* 3. Main Editor Area (Rest of space) */
+.main-editor {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+    background: var(--bg-app);
+}

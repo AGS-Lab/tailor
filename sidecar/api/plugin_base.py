@@ -9,20 +9,13 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Dict, Any, Optional, TYPE_CHECKING, cast
 
-from ..event_emitter import EventEmitter
-from ..utils.logging_config import get_plugin_logger
-# NOTE: imports inside if TYPE_CHECKING are string forward refs or resolved by mypy if in path.
-# But for runtime, we rely on imports being correct.
-# The previous content had `from event_emitter import ...` at line 12?
-# No, Step 1477 shows:
-# 12: from utils.logging_config import get_plugin_logger
-# 14: if TYPE_CHECKING:
-# 15:     from vault_brain import VaultBrain
-# 16:     from event_emitter import EventEmitter
-
-# I need to replace line 12 too.
-
-# I'll replace lines 12-16.
+# Handle imports for both package context (tests) and standalone context (plugins)
+try:
+    from sidecar.event_emitter import EventEmitter, EventScope
+    from sidecar.utils.logging_config import get_plugin_logger
+except ImportError:
+    from event_emitter import EventEmitter, EventScope
+    from utils.logging_config import get_plugin_logger
 
 
 class PluginBase(ABC):
@@ -219,6 +212,66 @@ class PluginBase(ABC):
         except Exception as e:
             self.logger.error(f"Failed to save settings: {e}")
             return False
+
+    # UI Helper Methods
+
+    async def register_sidebar_view(
+        self,
+        identifier: str,
+        icon_svg: str,
+        title: str
+    ) -> None:
+        """
+        Register a sidebar view (activity bar item).
+
+        Args:
+            identifier: Unique ID for the view (e.g. 'my_plugin.explorer')
+            icon_svg: SVG string for the icon
+            title: Title to display in the header
+        """
+        # We emit a special 'UI_COMMAND' event that vault.html listens for.
+        # This requires the event_emitter to support a generic 'emit' or we overload an existing one.
+        # We'll use 'emit' method from EventEmitter with a custom type.
+        
+        # EventScope is imported at module level
+        
+        print(f"[PluginBase] register_sidebar_view called: id={identifier}, icon={icon_svg}, title={title}")
+        self.logger.info(f"Registering sidebar view: {identifier}")
+        
+        self.emitter.emit(
+            event_type="UI_COMMAND",
+            data={
+                "action": "register_sidebar",
+                "id": identifier,
+                "icon": icon_svg,
+                "title": title
+            },
+            scope=EventScope.WINDOW
+        )
+
+    async def set_sidebar_content(
+        self,
+        identifier: str,
+        html_content: str
+    ) -> None:
+        """
+        Set the HTML content for a sidebar view.
+
+        Args:
+            identifier: ID of the view to update
+            html_content: HTML string to render
+        """
+        # EventScope is imported at module level
+        
+        self.emitter.emit(
+            event_type="UI_COMMAND",
+            data={
+                "action": "set_sidebar",
+                "id": identifier,
+                "html": html_content
+            },
+            scope=EventScope.WINDOW
+        )
     
     @property
     def is_loaded(self) -> bool:

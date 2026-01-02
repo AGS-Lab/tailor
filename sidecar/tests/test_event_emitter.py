@@ -8,7 +8,7 @@ import pytest
 import json
 from unittest.mock import Mock, MagicMock, AsyncMock, call
 from sidecar.event_emitter import EventEmitter
-from sidecar.constants import EventType, EventScope, Severity
+from sidecar.constants import EventType, EventScope, Severity, CORE_PLUGIN_NAME, UI_COMMAND_PREFIX
 
 
 @pytest.mark.unit
@@ -278,3 +278,108 @@ class TestEdgeCases:
         # Should be string values, not enum objects
         assert isinstance(params["event_type"], str)
         assert isinstance(params["scope"], str)
+
+
+@pytest.mark.unit
+class TestCommandRegistration:
+    """Test automatic registration of UI commands."""
+    
+    def test_register_ui_commands(self):
+        """Test that UI commands are registered with the brain."""
+        ws_server = Mock()
+        brain = Mock()
+        
+        # Initialize with brain to trigger registration
+        emitter = EventEmitter(ws_server, brain)
+        
+        # Verify 4 core commands were registered
+        assert brain.register_command.call_count == 4
+        
+        # Check specific commands
+        calls = brain.register_command.call_args_list
+        registered_ids = [call[0][0] for call in calls]
+        
+        assert f"{UI_COMMAND_PREFIX}notify" in registered_ids
+        assert f"{UI_COMMAND_PREFIX}progress" in registered_ids
+        assert f"{UI_COMMAND_PREFIX}updateState" in registered_ids
+        assert f"{UI_COMMAND_PREFIX}emit" in registered_ids
+        
+        # Verify plugin attribution
+        for call_args in calls:
+            assert call_args[0][2] == CORE_PLUGIN_NAME
+
+
+@pytest.mark.unit
+class TestCommandHandlers:
+    """Test the internal command handlers wrapped by register_command."""
+    
+    @pytest.mark.asyncio
+    async def test_cmd_notify(self):
+        """Test notification command handler."""
+        ws_server = Mock()
+        emitter = EventEmitter(ws_server)
+        
+        result = await emitter._cmd_notify(message="Hello", severity="warning")
+        
+        # Check return value
+        assert result["sent"] is True
+        assert result["type"] == "notify"
+        
+        # Check side effect (emission)
+        call_args = ws_server.send_to_rust.call_args[0][0]["params"]
+        assert call_args["event_type"] == EventType.NOTIFY.value
+        assert call_args["data"]["message"] == "Hello"
+        assert call_args["data"]["severity"] == "warning"
+
+    @pytest.mark.asyncio
+    async def test_cmd_progress(self):
+        """Test progress command handler."""
+        ws_server = Mock()
+        emitter = EventEmitter(ws_server)
+        
+        result = await emitter._cmd_progress(percent=50, status="Loading")
+        
+        assert result["sent"] is True
+        assert result["type"] == "progress"
+        
+        call_args = ws_server.send_to_rust.call_args[0][0]["params"]
+        assert call_args["event_type"] == EventType.PROGRESS.value
+        assert call_args["data"]["percent"] == 50
+        assert call_args["data"]["message"] == "Loading"
+
+    @pytest.mark.asyncio
+    async def test_cmd_update_state(self):
+        """Test state update command handler."""
+        ws_server = Mock()
+        emitter = EventEmitter(ws_server)
+        
+        result = await emitter._cmd_update_state(key="foo", value="bar")
+        
+        assert result["sent"] is True
+        assert result["key"] == "foo"
+        
+        call_args = ws_server.send_to_rust.call_args[0][0]["params"]
+        assert call_args["event_type"] == EventType.UPDATE_STATE.value
+        assert call_args["data"]["key"] == "foo"
+        assert call_args["data"]["value"] == "bar"
+
+    @pytest.mark.asyncio
+    async def test_cmd_emit(self):
+        """Test generic emit command handler."""
+        ws_server = Mock()
+        emitter = EventEmitter(ws_server)
+        
+        data = {"some": "data"}
+        result = await emitter._cmd_emit(
+            event_type="CUSTOM", 
+            data=data, 
+            scope=EventScope.VAULT
+        )
+        
+        assert result["sent"] is True
+        assert result["event_type"] == "CUSTOM"
+        
+        call_args = ws_server.send_to_rust.call_args[0][0]["params"]
+        assert call_args["event_type"] == "CUSTOM"
+        assert call_args["data"] == data
+        assert call_args["scope"] == EventScope.VAULT.value

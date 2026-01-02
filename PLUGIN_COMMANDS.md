@@ -31,16 +31,24 @@ class Plugin:
 
 #### **From UI** (via WebSocket)
 ```javascript
-// Frontend sends execute_command
-await invoke('send_to_sidecar', {
-  command: {
-    method: "execute_command",
-    params: {
-      command: "myPlugin.doSomething",
-      args: { foo: "bar" }
-    }
-  }
+// Using the request() helper from vault.html
+await request('execute_command', {
+  command: "myPlugin.doSomething",
+  args: { foo: "bar" }
 });
+```
+
+**Raw JSON-RPC Message:**
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "execute_command",
+  "params": {
+    "command": "myPlugin.doSomething",
+    "args": { "foo": "bar" }
+  },
+  "id": 1
+}
 ```
 
 #### **From Other Plugins** (plugin-to-plugin)

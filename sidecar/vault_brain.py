@@ -7,6 +7,7 @@ Manages plugins, memory, and LangGraph execution for a single vault.
 import asyncio
 import json
 import importlib.util
+import sys
 from pathlib import Path
 from typing import Dict, Any, Optional, Callable, Awaitable, cast
 
@@ -94,6 +95,13 @@ class VaultBrain:
         
         # Initialize components
         self._init_memory()
+        
+        # Add sidecar directory to sys.path so plugins can import from api.plugin_base
+        sidecar_dir = Path(__file__).parent
+        if str(sidecar_dir) not in sys.path:
+            sys.path.insert(0, str(sidecar_dir))
+            logger.info(f"Added sidecar to PYTHONPATH: {sidecar_dir}")
+        
         self._load_plugins()
         self._build_langgraph()
         self._register_commands()
@@ -106,15 +114,20 @@ class VaultBrain:
     async def initialize(self) -> None:
         """
         Perform async initialization.
-        
-        Calls on_load() for all loaded plugins.
         """
-        logger.info("Running async initialization for plugins...")
+        # We delay plugin.on_load() until client connects to ensure UI events are received.
+        logger.info("VaultBrain initialized. Waiting for client to connect...")
+
+    async def _init_plugins(self):
+        """Run on_load for all plugins."""
+        logger.info("Initializing plugins (calling on_load)...")
         for plugin_name, plugin in self.plugins.items():
             try:
-                await plugin.on_load()
+                if not plugin.is_loaded:
+                    await plugin.on_load()
             except Exception as e:
                 logger.error(f"Error calling on_load for plugin '{plugin_name}': {e}", exc_info=True)
+
     
     def _load_config(self) -> Dict[str, Any]:
         """
@@ -299,11 +312,18 @@ class VaultBrain:
                 "status": "success"
             }
         
+        async def handle_client_ready(params: Dict[str, Any]) -> Dict[str, Any]:
+            """Handle client ready signal."""
+            logger.info("Client ready signal received. Initializing plugins.")
+            await self._init_plugins()
+            return {"status": "success"}
+
         # Register handlers with WebSocket server
         self.ws_server.register_handler(f"{CHAT_COMMAND_PREFIX}send_message", handle_chat)
         self.ws_server.register_handler("execute_command", handle_execute)
         self.ws_server.register_handler("list_commands", handle_list_commands)
         self.ws_server.register_handler("get_vault_info", handle_get_vault_info)
+        self.ws_server.register_handler("system.client_ready", handle_client_ready)
         
         logger.debug("Registered 4 core WebSocket commands")
     

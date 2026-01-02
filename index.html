@@ -5,12 +5,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tailor</title>
+    <link rel="stylesheet" href="frontend/theme.css">
     <style>
         body {
             margin: 0;
-            font-family: 'JetBrains Mono', 'Fira Code', monospace, system-ui, sans-serif;
+            font-family: var(--font-mono);
             background: #0a0a0a;
-            color: #e0e0e0;
+            /* Fallback */
+            background: var(--bg-app);
+            color: var(--text-primary);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -25,34 +28,37 @@
         h1 {
             margin: 0 0 1.5rem;
             font-size: 1.8rem;
-            color: #00d4ff;
+            color: var(--accent-primary);
         }
 
         button {
-            background: #0a0a0a;
-            color: #00d4ff;
-            border: 1px solid #00d4ff;
+            background: var(--bg-app);
+            color: var(--accent-primary);
+            border: 1px solid var(--accent-primary);
             padding: 10px 24px;
             font-size: 0.95rem;
             border-radius: 3px;
             cursor: pointer;
             margin: 0.5rem;
             font-family: inherit;
+            transition: all 0.2s;
         }
 
         button:hover {
-            background: #1a1a1a;
-            box-shadow: 0 0 8px rgba(0, 212, 255, 0.3);
+            background: var(--bg-card);
+            box-shadow: 0 0 8px rgba(88, 166, 255, 0.3);
+            /* Blue glow matching accent-primary */
         }
 
         #status {
             margin-top: 1.5rem;
             padding: 12px;
-            background: #1a1a1a;
-            border: 1px solid #333;
+            background: var(--bg-panel);
+            border: 1px solid var(--border-subtle);
             border-radius: 3px;
             min-height: 3rem;
             font-size: 0.9rem;
+            color: var(--text-secondary);
         }
     </style>
 </head>

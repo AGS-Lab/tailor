@@ -10,7 +10,14 @@ from pathlib import Path
 import sys
 
 from sidecar.vault_brain import VaultBrain
-from sidecar.exceptions import VaultNotFoundError, VaultConfigError, PluginLoadError
+from sidecar.exceptions import (
+    VaultNotFoundError, 
+    VaultConfigError, 
+    PluginLoadError,
+    CommandRegistrationError,
+    CommandNotFoundError,
+    CommandExecutionError
+)
 from sidecar.constants import DEFAULT_TICK_INTERVAL
 
 @pytest.mark.unit
@@ -139,3 +146,96 @@ class TestVaultBrain:
         await brain._on_tick()
         
         mock_plugin.on_tick.assert_called_once()
+
+
+@pytest.mark.unit
+class TestCommandRegistry:
+    """Test command registry functionality."""
+    
+    @pytest.fixture
+    def brain(self, tmp_path):
+        """Create a VaultBrain instance with mocks."""
+        vault_path = tmp_path / "test_vault"
+        vault_path.mkdir()
+        (vault_path / ".vault.json").write_text("{}")
+        
+        ws_server = Mock()
+        # Mock logging to clean up output
+        with patch("sidecar.vault_brain.get_logger"):
+            return VaultBrain(vault_path, ws_server)
+
+    def test_register_command_valid(self, brain):
+        """Test registering a valid async command."""
+        async def my_command():
+            return "success"
+            
+        brain.register_command("test.cmd", my_command)
+        
+        assert "test.cmd" in brain.commands
+        assert brain.commands["test.cmd"]["handler"] == my_command
+        
+    def test_register_command_invalid_sync(self, brain):
+        """Test that registering a sync function raises error."""
+        def sync_command():
+            pass
+            
+        with pytest.raises(CommandRegistrationError):
+            brain.register_command("test.sync", sync_command)
+
+    @pytest.mark.asyncio
+    async def test_execute_command_success(self, brain):
+        """Test executing a registered command."""
+        async def my_command():
+            return "executed"
+            
+        brain.register_command("test.cmd", my_command)
+        
+        result = await brain.execute_command("test.cmd")
+        assert result == "executed"
+
+    @pytest.mark.asyncio
+    async def test_execute_command_with_args(self, brain):
+        """Test executing a registered command with arguments."""
+        async def add(a, b):
+            return a + b
+            
+        brain.register_command("calc.add", add)
+        
+        # Test with named args (kwargs)
+        result = await brain.execute_command("calc.add", a=5, b=3)
+        assert result == 8
+
+    @pytest.mark.asyncio
+    async def test_execute_command_not_found(self, brain):
+        """Test executing a non-existent command."""
+        with pytest.raises(CommandNotFoundError):
+            await brain.execute_command("non.existent")
+
+    @pytest.mark.asyncio
+    async def test_execute_command_execution_error(self, brain):
+        """Test handling of execution errors."""
+        async def failing_command():
+            raise ValueError("Something went wrong")
+            
+        brain.register_command("test.fail", failing_command)
+        
+        with pytest.raises(CommandExecutionError) as exc_info:
+            await brain.execute_command("test.fail")
+        
+        # Check that original error is preserved/referenced
+        assert "Something went wrong" in str(exc_info.value)
+
+    def test_get_commands(self, brain):
+        """Test listing commands."""
+        async def cmd1(): pass
+        async def cmd2(): pass
+        
+        brain.register_command("cmd1", cmd1, "plugin1")
+        brain.register_command("cmd2", cmd2, "plugin2")
+        
+        cmds = brain.get_commands()
+        
+        assert len(cmds) >= 2 + 4 # 2 custom + 4 core commands
+        assert cmds["cmd1"]["plugin"] == "plugin1"
+        assert cmds["cmd2"]["plugin"] == "plugin2"
+

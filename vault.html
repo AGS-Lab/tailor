@@ -6,20 +6,207 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vault</title>
     <link rel="stylesheet" href="frontend/theme.css">
-
+    <!-- Icon Library -->
+    <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         /* Minimal override for non-theme critical stuff if needed, otherwise empty */
     </style>
 </head>
 
 <body>
-    <!-- Layout Root -->
-    <div id="layout-root" style="flex:1; width:100%; overflow:hidden;"></div>
+    <!-- App Container -->
+    <div class="app-container">
+        <!-- 1. Activity Bar -->
+        <div id="activity-bar" class="activity-bar">
+            <!-- Icons injected here -->
+        </div>
+
+        <!-- 2. Side Panel -->
+        <div id="side-panel" class="side-panel" style="position:relative;">
+            <div class="side-panel-header">
+                <span id="side-panel-title">EXPLORER</span>
+            </div>
+            <div id="side-panel-content" class="side-panel-content">
+                <!-- Content injected here -->
+            </div>
+            <div id="side-panel-resize" class="side-panel-resize"></div>
+        </div>
+
+        <!-- 3. Main Editor (GoldenLayout) -->
+        <div class="main-editor">
+            <div id="layout-root" style="width:100%; height:100%;"></div>
+        </div>
+    </div>
 
     <script type="module">
         import { GoldenLayout } from 'golden-layout';
         import 'golden-layout/dist/css/goldenlayout-base.css';
         import 'golden-layout/dist/css/themes/goldenlayout-dark-theme.css';
+
+        // --- Sidebar Manager ---
+        class SidebarManager {
+            constructor() {
+                this.views = new Map(); // id -> { icon, title, content }
+                this.activeViewId = null;
+
+                this.barEl = document.getElementById('activity-bar');
+                this.panelEl = document.getElementById('side-panel');
+                this.titleEl = document.getElementById('side-panel-title');
+                this.contentEl = document.getElementById('side-panel-content');
+            }
+
+            registerView(id, iconData, title) {
+                console.log(`[SidebarManager] Registering view: ${id}, icon: ${iconData}, title: ${title}`);
+
+                if (this.views.has(id)) {
+                    console.log(`[SidebarManager] View ${id} already registered, skipping`);
+                    return;
+                }
+
+                this.views.set(id, { icon: iconData, title: title, content: '' });
+
+                // Create Icon Button
+                const btn = document.createElement('div');
+                btn.className = 'activity-action';
+                btn.title = title;
+                btn.onclick = () => this.toggle(id);
+                btn.dataset.id = id;
+
+                // Check if iconData looks like an SVG string, otherwise assume it's a Lucide name
+                if (iconData.trim().startsWith('<')) {
+                    btn.innerHTML = iconData;
+                    console.log(`[SidebarManager] Using raw SVG for ${id}`);
+                } else {
+                    // Lucide Icon name
+                    btn.innerHTML = `<i data-lucide="${iconData}"></i>`;
+                    console.log(`[SidebarManager] Using Lucide icon "${iconData}" for ${id}`);
+                }
+
+                this.barEl.appendChild(btn);
+                console.log(`[SidebarManager] Button appended to activity bar`);
+
+                // Initialize icons if Lucide is available
+                if (window.lucide) {
+                    window.lucide.createIcons();
+                    console.log(`[SidebarManager] Lucide icons initialized`);
+                } else {
+                    console.warn(`[SidebarManager] Lucide not available!`);
+                }
+            }
+
+            setContent(id, html) {
+                if (this.views.has(id)) {
+                    this.views.get(id).content = html;
+                    // Update if active
+                    if (this.activeViewId === id) {
+                        this.contentEl.innerHTML = html;
+                    }
+                }
+            }
+
+            toggle(id) {
+                if (this.activeViewId === id) {
+                    // Close
+                    this.activeViewId = null;
+                    this.panelEl.classList.remove('open');
+                    this._updateIcons();
+                } else {
+                    // Open
+                    this.activeViewId = id;
+                    const view = this.views.get(id);
+                    this.titleEl.textContent = view.title;
+                    this.contentEl.innerHTML = view.content || '<div style="padding:20px; text-align:center; color:var(--text-disabled)">Loading...</div>';
+                    this.panelEl.classList.add('open');
+                    this._updateIcons();
+
+                    // Request content update from plugin if empty
+                    if (!view.content) {
+                        // Optional: Emit event to plugin to load data
+                        // window.request('execute_command', { command: `${id}.get_sidebar` });
+                    }
+                }
+
+                // Resize GoldenLayout after transition
+                setTimeout(() => {
+                    if (window.myLayout) window.myLayout.updateSize();
+                }, 150);
+            }
+
+            _updateIcons() {
+                const btns = this.barEl.querySelectorAll('.activity-action');
+                btns.forEach(btn => {
+                    if (btn.dataset.id === this.activeViewId) {
+                        btn.classList.add('active');
+                    } else {
+                        btn.classList.remove('active');
+                    }
+                });
+            }
+        }
+
+        const sidebar = new SidebarManager();
+
+        // Public API for Plugins
+        window.ui = {
+            registerSidebarView: (id, icon, title) => sidebar.registerView(id, icon, title),
+            setSidebarContent: (id, html) => sidebar.setContent(id, html),
+            toggleSidebar: (id) => sidebar.toggle(id)
+        };
+
+        // Sidebar views are registered dynamically by plugins via UI_COMMAND events
+
+        // --- Resize Logic ---
+        (function initResize() {
+            const panel = document.getElementById('side-panel');
+            const handle = document.getElementById('side-panel-resize');
+            const mainEditor = document.querySelector('.main-editor');
+            let isResizing = false;
+            let startX = 0;
+            let startWidth = 0;
+
+            handle.addEventListener('mousedown', (e) => {
+                if (!panel.classList.contains('open')) return;
+                isResizing = true;
+                startX = e.clientX;
+                startWidth = panel.offsetWidth;
+                handle.classList.add('resizing');
+                document.body.style.cursor = 'ew-resize';
+                document.body.style.userSelect = 'none';
+
+                // Prevent iframes from capturing mouse events during resize
+                mainEditor.style.pointerEvents = 'none';
+
+                e.preventDefault();
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!isResizing) return;
+                const delta = e.clientX - startX;
+                const newWidth = Math.max(150, Math.min(500, startWidth + delta));
+                panel.style.width = newWidth + 'px';
+
+                // Update GoldenLayout during resize for smoother experience
+                if (window.myLayout) window.myLayout.updateSize();
+            });
+
+            document.addEventListener('mouseup', () => {
+                if (isResizing) {
+                    isResizing = false;
+                    handle.classList.remove('resizing');
+                    document.body.style.cursor = '';
+                    document.body.style.userSelect = '';
+
+                    // Re-enable pointer events on main editor
+                    mainEditor.style.pointerEvents = '';
+
+                    // Final GoldenLayout resize
+                    if (window.myLayout) {
+                        window.myLayout.updateSize();
+                    }
+                }
+            });
+        })();
+
 
         // --- Layout Config ---
         const config = {
@@ -99,9 +286,9 @@
             container.element.innerHTML = `
                 <div class="panel-container">
                     <div class="scrollable" id="log-output"></div>
-                    <div class="toolbar" style="justify-content: space-between;">
-                        <span style="font-size:0.75rem; color:var(--text-disabled); font-weight:500; font-family:var(--font-main);">SYSTEM OUTPUT</span>
-                        <button id="clearLog" class="icon-btn" title="Clear Log" style="color:var(--text-secondary);">
+                    <div class="toolbar flex-between">
+                        <span class="text-label" style="font-family:var(--font-main);">SYSTEM OUTPUT</span>
+                        <button id="clearLog" class="icon-btn" title="Clear Log">
                             Clear
                         </button>
                     </div>
@@ -122,10 +309,10 @@
             container.element.innerHTML = `
                 <div class="panel-container">
                     <div class="scrollable">
-                        <label style="font-size:0.75rem; color:var(--text-secondary); display:block; margin-bottom:4px; font-weight:600;">COMMAND INPUT</label>
+                        <label class="text-label" style="display:block; margin-bottom:4px; font-weight:600;">COMMAND INPUT</label>
                         <textarea id="cmd-input" rows="3" placeholder="demo.hello"></textarea>
                         
-                        <label style="font-size:0.75rem; color:var(--text-secondary); display:block; margin:8px 0 4px 0; font-weight:600;">ARGUMENTS (JSON)</label>
+                        <label class="text-label" style="display:block; margin:8px 0 4px 0; font-weight:600;">ARGUMENTS (JSON)</label>
                         <input id="arg-input" placeholder='{"name": "User"}'>
                         
                         <button id="execBtn" class="btn btn-primary" style="width:100%; margin-top:12px;">Execute Command</button>
@@ -147,7 +334,7 @@
                     }
 
                     try {
-                        const res = await request('execute_command', { command: cmd, ...args });
+                        const res = await request('execute_command', { command: cmd, args: args });
                         log(JSON.stringify(res.result, null, 2));
                     } catch (e) {
                         log(`Exec failed: ${e}`, 'error');
@@ -193,13 +380,13 @@
             const indicator = document.getElementById('conn-status');
 
             if (isConnected) {
-                indicator.className = 'connected';
+                // indicator.className = 'connected'; // Removed overlay, maybe show in activity bar later?
                 log('Connected to Sidecar', 'in');
 
                 // Auto-load stuff
                 loadPlugins();
             } else {
-                indicator.className = 'disconnected';
+                // indicator.className = 'disconnected';
                 log('Disconnected', 'error');
             }
         }
@@ -257,6 +444,12 @@
         // Plugin Loading
         async function loadPlugins() {
             try {
+                // 0. Notify Backend Client is Ready (Triggers Plugin UI Registration)
+                log('Notifying backend: system.client_ready', 'out');
+                // Call directly as an RPC method, corresponding to ws_server.register_handler("system.client_ready")
+                request('system.client_ready', {})
+                    .catch(e => console.warn('system.client_ready failed', e));
+
                 // 1. List Commands
                 const res = await request('list_commands');
                 const commands = res.result.commands || {};
@@ -267,10 +460,7 @@
                 if (hasLLM) {
                     const uiRes = await request('execute_command', {
                         command: 'llm.get_ui',
-                        args: {} // API expects "args" or spread? 
-                        // VaultBrain.execute_command accepts **kwargs. 
-                        // JSON-RPC sends params. 
-                        // Sidecar maps params to kwargs.
+                        args: {}
                     });
 
                     // Unwrap execute_command result structure: { result: { html: ... }, status: 'success' }
@@ -291,6 +481,12 @@
                         log('Loaded LLM UI into Chat Pane', 'in');
                     }
                 }
+
+                // 3. NEW: Load Sidebar Plugins (Check for *.get_sidebar)
+                // For now, we will simulate this or let plugins register themselves via events if they were smarter.
+                // But since our plugins are passive until called, we might need a "startup" hook or iterate plugins.
+                // Since this is just a demo, we'll manually register the explorer if consistent.
+
             } catch (e) {
                 log(`Plugin Load Error: ${e}`, 'error');
             }
@@ -305,11 +501,21 @@
 
             const customEvent = new CustomEvent(eventType, { detail });
             window.dispatchEvent(customEvent);
-        }
 
-        // UI Binding
-        const connBtn = document.getElementById('connectBtn');
-        if (connBtn) connBtn.onclick = connect;
+            // Handle UI Commands from Backend
+            if (eventType === 'UI_COMMAND') {
+                console.log('[handleEvent] UI_COMMAND received:', evt.data);
+                // Plugin requested UI action: { action: 'register_sidebar', id: '..', ... }
+                const data = evt.data;
+                if (data.action === 'register_sidebar') {
+                    console.log('[handleEvent] Registering sidebar:', data.id, data.icon, data.title);
+                    window.ui.registerSidebarView(data.id, data.icon, data.title);
+                } else if (data.action === 'set_sidebar') {
+                    console.log('[handleEvent] Setting sidebar content:', data.id);
+                    window.ui.setSidebarContent(data.id, data.html);
+                }
+            }
+        }
 
         // --- Auto-Connect Logic ---
         (async () => {
