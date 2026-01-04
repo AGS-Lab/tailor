@@ -8,7 +8,7 @@ if str(tailor_path) not in sys.path:
     sys.path.insert(0, str(tailor_path))
 
 from sidecar.api.plugin_base import PluginBase
-from sidecar.api.events import CoreEvents
+from sidecar.constants import CoreEvents
 
 class Plugin(PluginBase):
     """
@@ -41,7 +41,7 @@ class Plugin(PluginBase):
         # Publish an event on load
         await self.publish(CoreEvents.PLUGIN_LOADED, plugin_name=self.name)
         
-    async def on_tick(self, brain) -> None:
+    async def on_tick(self) -> None:
         # Periodically publish a ping event
         import time
         if int(time.time()) % 10 == 0:

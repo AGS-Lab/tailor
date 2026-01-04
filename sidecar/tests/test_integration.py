@@ -83,9 +83,9 @@ class TestIntegration:
         4. Events are emitted to WebSocket.
         """
         # 1. Initialize logic
-        with patch("sidecar.vault_brain.get_logger"):
-            brain = VaultBrain(integration_vault, mock_ws_server)
-            await brain.initialize()
+        # 1. Initialize logic
+        brain = VaultBrain(integration_vault, mock_ws_server)
+        await brain.initialize()
         
         # Verify plugin loaded
         assert "integration_test_plugin" in brain.plugins
@@ -117,17 +117,15 @@ class TestIntegration:
         
     async def test_invalid_command_handling(self, integration_vault, mock_ws_server):
         """Test system behavior when executing non-existent command."""
-        with patch("sidecar.vault_brain.get_logger"):
-            brain = VaultBrain(integration_vault, mock_ws_server)
+        brain = VaultBrain(integration_vault, mock_ws_server)
             
         with pytest.raises(exceptions.CommandNotFoundError):
             await brain.execute_command("non.existent.command")
             
     async def test_plugin_unload(self, integration_vault, mock_ws_server):
         """Test plugin unloading."""
-        with patch("sidecar.vault_brain.get_logger"):
-            brain = VaultBrain(integration_vault, mock_ws_server)
-            await brain.initialize()
+        brain = VaultBrain(integration_vault, mock_ws_server)
+        await brain.initialize()
             
         plugin = brain.plugins["integration_test_plugin"]
         await plugin.on_unload()
@@ -139,13 +137,9 @@ class TestIntegration:
         # This assumes example-vault is at ../example-vault relative to sidecar
         real_vault_path = Path(__file__).parent.parent.parent / "example-vault"
         
-        if not real_vault_path.exists():
-            pytest.skip("example-vault directory not found")
-            
-        with patch("sidecar.vault_brain.get_logger"):
-            # We use the real path
-            brain = VaultBrain(real_vault_path, mock_ws_server)
-            await brain.initialize()
+        # We use the real path
+        brain = VaultBrain(real_vault_path, mock_ws_server)
+        await brain.initialize()
             
         # Check if demo_plugin loaded
         assert "demo_plugin" in brain.plugins
@@ -163,9 +157,8 @@ class TestIntegration:
         Verify the execute_command JSON-RPC handler correctly unpacks 'args'.
         This ensures the frontend-backend contract is respected.
         """
-        with patch("sidecar.vault_brain.get_logger"):
-            brain = VaultBrain(integration_vault, mock_ws_server)
-            await brain.initialize()
+        brain = VaultBrain(integration_vault, mock_ws_server)
+        await brain.initialize()
 
         # Capture the registered handler for 'execute_command'
         # VaultBrain registers it in _register_commands via:

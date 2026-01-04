@@ -178,12 +178,13 @@ class Plugin(PluginBase):
         """Called after plugin is loaded."""
         await super().on_load()
         
-        self.notify(
-            f"LLM plugin loaded (model: {self.model_name})",
-            severity="success"
-        )
+        if self.is_client_connected:
+            self.notify(
+                f"LLM plugin loaded (model: {self.model_name})",
+                severity="success"
+            )
     
-    async def on_tick(self, brain) -> None:
+    async def on_tick(self) -> None:
         """Periodic tick."""
         # Log message count periodically (only if non-zero)
         if len(self.conversation_history) > 0:

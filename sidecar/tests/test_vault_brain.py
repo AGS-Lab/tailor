@@ -40,16 +40,14 @@ class TestVaultBrain:
     @pytest.mark.asyncio
     async def test_init_valid_vault(self, valid_vault, mock_ws_server):
         """Test initialization with a valid vault."""
-        # Mock logging config to avoid real file operations or console noise
-        with patch("sidecar.utils.get_logger"):
-            
-            brain = VaultBrain(valid_vault, mock_ws_server)
-            await brain.initialize()
-            
-            assert brain.vault_path == valid_vault.resolve()
-            assert brain.ws_server == mock_ws_server
-            # Core commands are registered in initialize
-            assert len(brain.commands) >= 3
+        
+        brain = VaultBrain(valid_vault, mock_ws_server)
+        await brain.initialize()
+        
+        assert brain.vault_path == valid_vault.resolve()
+        assert brain.ws_server == mock_ws_server
+        # Core commands are registered in initialize
+        assert len(brain.commands) >= 3
 
     def test_init_nonexistent_vault(self, mock_ws_server):
         """Test initialization with nonexistent vault."""
@@ -150,13 +148,9 @@ class TestVaultBrain:
         mock_plugin.on_tick = AsyncMock() # Async tick
         brain.plugins["test_plugin"] = mock_plugin
         
-        # Check if _on_tick exists or public method
-        if hasattr(brain, "_on_tick"):
-            await brain._on_tick()
-            mock_plugin.on_tick.assert_called_once()
-        else:
-            # Fallback if method renamed or logic changed
-            pass
+        # Call the tick method
+        await brain._tick_plugins()
+        mock_plugin.on_tick.assert_called_once()
 
 
 @pytest.mark.unit
@@ -178,11 +172,9 @@ class TestCommandRegistry:
         (vault_path / ".vault.json").write_text("{}")
         
         ws_server = Mock()
-        # Mock logging to clean up output
-        with patch("sidecar.utils.get_logger"):
-            brain = VaultBrain(vault_path, ws_server)
-            # We don't necessarily need full initialize for registry unit tests if we just use register_command directly
-            return brain
+        brain = VaultBrain(vault_path, ws_server)
+        # We don't necessarily need full initialize for registry unit tests if we just use register_command directly
+        return brain
 
     def test_register_command_valid(self, brain):
         """Test registering a valid async command."""

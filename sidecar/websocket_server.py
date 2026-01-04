@@ -12,6 +12,8 @@ import websockets
 from websockets.server import WebSocketServerProtocol # type: ignore
 from websockets.exceptions import ConnectionClosed
 
+from loguru import logger
+
 from . import utils
 from . import constants
 from . import exceptions
@@ -20,7 +22,7 @@ from . import exceptions
 # Type alias for command handlers
 CommandHandler = Callable[[Dict[str, Any]], Awaitable[Dict[str, Any]]]
 
-logger = utils.get_logger(__name__)
+logger = logger.bind(name=__name__)
 
 
 class WebSocketServer:
@@ -126,7 +128,7 @@ class WebSocketServer:
             logger.info(f"Client disconnected: {e.code} - {e.reason}")
         
         except Exception as e:
-            logger.error(f"WebSocket error: {e}", exc_info=True)
+            logger.exception(f"WebSocket error: {e}")
         
         finally:
             self.connection = None
@@ -182,7 +184,7 @@ class WebSocketServer:
                     logger.debug(f"Command '{method}' executed successfully")
                 
                 except Exception as e:
-                    logger.error(f"Handler error for '{method}': {e}", exc_info=True)
+                    logger.exception(f"Handler error for '{method}': {e}")
                     
                     # Send error response
                     error_response = utils.build_internal_error(
@@ -206,7 +208,7 @@ class WebSocketServer:
             logger.error(f"JSON-RPC error: {e.message}")
        
         except Exception as e:
-            logger.error(f"Unexpected error handling message: {e}", exc_info=True)
+            logger.exception(f"Unexpected error handling message: {e}")
     
     async def send(self, data: Dict[str, Any]) -> None:
         """
@@ -221,7 +223,7 @@ class WebSocketServer:
                 await self.connection.send(message)
                 logger.debug(f"Sent message: {data.get('method', 'response')}")
             except Exception as e:
-                logger.error(f"Send error: {e}", exc_info=True)
+                logger.exception(f"Send error: {e}")
         else:
             logger.warning("No active connection, cannot send message")
     

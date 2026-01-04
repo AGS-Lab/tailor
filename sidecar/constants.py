@@ -69,6 +69,9 @@ class EventType(str, Enum):
     LLM_CLEARED = "LLM_CLEARED"
     """LLM conversation cleared event."""
 
+    UI_COMMAND = "UI_COMMAND"
+    """UI command event."""
+
 
 class EventScope(str, Enum):
     """Event routing scopes."""
@@ -143,16 +146,6 @@ PLUGIN_SETTINGS_FILE: Final[str] = "settings.json"
 PLUGIN_CLASS_NAME: Final[str] = "Plugin"
 """Required plugin class name."""
 
-PLUGIN_TICK_METHOD: Final[str] = "on_tick"
-"""Plugin tick method name."""
-
-PLUGIN_LOAD_METHOD: Final[str] = "on_load"
-"""Plugin load method name."""
-
-PLUGIN_UNLOAD_METHOD: Final[str] = "on_unload"
-"""Plugin unload method name."""
-
-
 # ============================================================================
 # Command Registry Constants
 # ============================================================================
@@ -212,3 +205,38 @@ ENV_WS_PORT: Final[str] = "TAILOR_WS_PORT"
 
 ENV_TICK_INTERVAL: Final[str] = "TAILOR_TICK_INTERVAL"
 """Environment variable for tick interval."""
+
+
+# ============================================================================
+# Core Events
+# ============================================================================
+
+class CoreEvents(str, Enum):
+    """
+    Standard event names for core system activities.
+    """
+    
+    # System Lifecycle
+    SYSTEM_STARTUP = "system:startup"
+    SYSTEM_SHUTDOWN = "system:shutdown"
+    PLUGIN_LOADED = "plugin:loaded"
+    ALL_PLUGINS_LOADED = "system:ready"
+    
+    # File Operations
+    FILE_SAVED = "file:saved"
+    FILE_OPENED = "file:opened"
+    FILE_CREATED = "file:created"
+    FILE_DELETED = "file:deleted"
+    FILE_MODIFIED = "file:modified"
+    
+    # Editor/UI Interactions
+    EDITOR_CHANGED = "editor:changed"
+    COMMAND_EXECUTED = "command:executed"
+    
+    # AI/LLM
+    LLM_REQUEST = "llm:request"
+    LLM_RESPONSE = "llm:response"
+    LLM_ERROR = "llm:error"
+    
+    def __str__(self) -> str:
+        return self.value

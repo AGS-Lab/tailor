@@ -9,18 +9,15 @@ Includes:
 - ID Generation
 """
 
-import logging
+from typing import Any, Dict, Optional, List
+from pathlib import Path
+import os
 import sys
 import time
 import json
 import uuid
 import random
 import string
-from pathlib import Path
-from typing import Dict, Any, Optional, Union, List, cast
-from logging.handlers import RotatingFileHandler
-import os
-
 from . import constants
 from . import exceptions
 
@@ -28,10 +25,7 @@ from . import exceptions
 # Logging Configuration
 # =============================================================================
 
-# Module-level logger cache
-_loggers: dict[str, logging.Logger] = {}
-_configured: bool = False
-
+from loguru import logger
 
 def configure_logging(
     level: Optional[str] = None,
@@ -39,11 +33,10 @@ def configure_logging(
     verbose: bool = False,
 ) -> None:
     """
-    Configure logging for the entire application.
-    
-    Should be called once at application startup.
+    Configure logging using Loguru.
     """
-    global _configured
+    # Remove default handler
+    logger.remove()
     
     # Determine log level
     if verbose:
@@ -53,30 +46,21 @@ def configure_logging(
     else:
         log_level = os.getenv(constants.ENV_LOG_LEVEL, constants.DEFAULT_LOG_LEVEL).upper()
     
-    # Convert string level to logging constant
-    numeric_level = getattr(logging, log_level, logging.INFO)
-    
-    # Create formatters
-    if verbose:
-        # More detailed format for debugging
-        format_str = "%(asctime)s [%(levelname)-8s] [%(name)-20s] [%(filename)s:%(lineno)d] %(message)s"
-    else:
-        format_str = constants.LOG_FORMAT
-    
-    formatter = logging.Formatter(format_str, datefmt=constants.LOG_DATE_FORMAT)
-    
-    # Configure root logger
-    root_logger = logging.getLogger()
-    root_logger.setLevel(numeric_level)
-    
-    # Remove existing handlers
-    root_logger.handlers.clear()
+    # Define detailed format
+    format_str = (
+        "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | "
+        "<level>{level: <8}</level> | "
+        "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - "
+        "<level>{message}</level>"
+    )
     
     # Console handler
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(numeric_level)
-    console_handler.setFormatter(formatter)
-    root_logger.addHandler(console_handler)
+    logger.add(
+        sys.stdout,
+        level=log_level,
+        format=format_str,
+        colorize=True
+    )
     
     # File handler (if requested)
     if log_file:
@@ -84,58 +68,21 @@ def configure_logging(
             # Ensure parent directory exists
             log_file.parent.mkdir(parents=True, exist_ok=True)
             
-            # Rotating file handler (max 10MB, keep 5 backups)
-            file_handler = RotatingFileHandler(
-                log_file,
-                maxBytes=10 * 1024 * 1024,  # 10MB
-                backupCount=5,
-                encoding='utf-8'
+            logger.add(
+                str(log_file),
+                rotation="10 MB",
+                retention="5 files",
+                level=log_level,
+                format=format_str,
+                encoding="utf-8"
             )
-            file_handler.setLevel(numeric_level)
-            file_handler.setFormatter(formatter)
-            root_logger.addHandler(file_handler)
             
-            root_logger.info(f"Logging to file: {log_file}")
+            logger.info(f"Logging to file: {log_file}")
         except Exception as e:
-            root_logger.warning(f"Failed to configure file logging: {e}")
-    
-    _configured = True
-    root_logger.info(f"Logging configured at {log_level} level")
-
-
-def get_logger(name: str) -> logging.Logger:
-    """Get a logger instance for a specific module or component."""
-    if name not in _loggers:
-        logger = logging.getLogger(name)
-        _loggers[name] = logger
-    
-    return _loggers[name]
-
-
-def get_plugin_logger(plugin_name: str) -> logging.Logger:
-    """
-    Get a logger specifically for a plugin.
-    Plugin loggers are prefixed with 'plugin:' for easy identification.
-    """
-    return get_logger(f"plugin:{plugin_name}")
-
-
-def set_log_level(level: str) -> None:
-    """Dynamically change the log level for all loggers."""
-    numeric_level = getattr(logging, level.upper(), logging.INFO)
-    
-    root_logger = logging.getLogger()
-    root_logger.setLevel(numeric_level)
-    
-    for handler in root_logger.handlers:
-        handler.setLevel(numeric_level)
-    
-    root_logger.info(f"Log level changed to {level.upper()}")
-
-
-def is_configured() -> bool:
-    """Check if logging has been configured."""
-    return _configured
+            # Using sys.stderr directly to avoid recursive logging issues if logger is broken
+            print(f"Failed to configure file logging: {e}", file=sys.stderr)
+            
+    logger.info(f"Logging configured at {log_level} level")
 
 
 def setup_dev_logging() -> None:

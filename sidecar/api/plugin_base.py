@@ -13,7 +13,7 @@ from typing import Dict, Any, Optional, TYPE_CHECKING, cast, Callable, Awaitable
 try:
     from sidecar import utils
     from sidecar import constants
-    from sidecar.api.events import CoreEvents
+    from sidecar.constants import CoreEvents
 except ImportError:
     import utils
     import constants
@@ -59,7 +59,8 @@ class PluginBase(ABC):
         
         # Plugin metadata
         self.name = plugin_dir.name
-        self.logger = utils.get_plugin_logger(self.name)
+        from loguru import logger
+        self.logger = logger.bind(name=f"plugin:{self.name}")
         
         # Plugin state
         self._loaded = False
@@ -93,13 +94,14 @@ class PluginBase(ABC):
     
     async def on_load(self) -> None:
         """
-        Called after all plugins have been registered.
+        Called while the plugin is being loaded.
+
         Safe to communicate with other plugins here.
         """
         self._loaded = True
         self.logger.debug(f"Plugin '{self.name}' loaded (Active)")
     
-    async def on_tick(self, brain: 'VaultBrain') -> None:
+    async def on_tick(self) -> None:
         """
         Called periodically.
         Refactored to receive 'brain' instead of 'emitter'.
@@ -121,11 +123,26 @@ class PluginBase(ABC):
     
     # Helper methods for common operations
     
-    def get_config_path(self, filename: str = "settings.json") -> Path:
+    def notify(self, message: str, severity: str = "info") -> None:
+        """Send a notification to the frontend."""
+        self.brain.notify_frontend(message, severity)
+
+    def progress(self, percentage: int, message: str = "") -> None:
+        """Report progress to the frontend."""
+        self.brain.emit_to_frontend(
+            constants.EventType.PROGRESS,
+            {"percentage": percentage, "message": message}
+        )
+
+    def update_state(self, key: str, value: Any) -> None:
+        """Update a key in the Frontend global/vault state."""
+        self.brain.update_state(key, value)
+
+    def get_config_path(self, filename: str = constants.PLUGIN_SETTINGS_FILE) -> Path:
         """Get path to a config file."""
         return self.plugin_dir / filename
     
-    def load_settings(self, filename: str = "settings.json") -> Dict[str, Any]:
+    def load_settings(self, filename: str = constants.PLUGIN_SETTINGS_FILE) -> Dict[str, Any]:
         """Load plugin settings from JSON file."""
         import json
         settings_file = self.get_config_path(filename)
@@ -141,7 +158,7 @@ class PluginBase(ABC):
     def save_settings(
         self,
         settings: Dict[str, Any],
-        filename: str = "settings.json"
+        filename: str = constants.PLUGIN_SETTINGS_FILE
     ) -> bool:
         """Save plugin settings to JSON file."""
         import json
@@ -153,37 +170,14 @@ class PluginBase(ABC):
         except Exception as e:
             self.logger.error(f"Failed to save settings: {e}")
             return False
-
-    # Event / Notification Helpers (Redirect to Brain)
-    
-    def notify(self, message: str, severity: str = "info") -> None:
-        """Send notification to Frontend."""
-        self.brain.notify_frontend(message, severity)
-
-    def progress(self, percentage: int, message: str = "") -> None:
-        """
-        Send progress update to Frontend.
-        
-        Args:
-            percentage: 0-100
-            message: Status message
-        """
-        self.brain.emit_to_frontend(
-            constants.EventType.PROGRESS,
-            {"percentage": percentage, "message": message}
-        )
-
-    def update_state(self, key: str, value: Any) -> None:
-        """Update a key in the Frontend global/vault state."""
-        self.brain.update_state(key, value)
-
-    def subscribe(self, event_name: str, handler: Callable[..., Awaitable[None]]) -> None:
-        """Subscribe to internal event."""
-        self.brain.subscribe_internal(event_name, handler)
         
     async def publish(self, event_name: str, **kwargs: Any) -> None:
         """Publish internal event."""
         await self.brain.publish(event_name, **kwargs)
+
+    def subscribe(self, event_name: str, handler: Callable[..., Awaitable[None]]) -> None:
+        """Subscribe to internal event."""
+        self.brain.subscribe(event_name, handler)
 
     # UI Helpers
 
@@ -195,7 +189,7 @@ class PluginBase(ABC):
     ) -> None:
         """Register a sidebar view."""
         self.brain.emit_to_frontend(
-            event_type="UI_COMMAND",
+            event_type=constants.EventType.UI_COMMAND,
             data={
                 "action": "register_sidebar",
                 "id": identifier,
@@ -212,7 +206,7 @@ class PluginBase(ABC):
     ) -> None:
         """Set sidebar content."""
         self.brain.emit_to_frontend(
-            event_type="UI_COMMAND",
+            event_type=constants.EventType.UI_COMMAND,
             data={
                 "action": "set_sidebar",
                 "id": identifier,
@@ -225,6 +219,11 @@ class PluginBase(ABC):
     def is_loaded(self) -> bool:
         """Check if plugin has been loaded."""
         return self._loaded
+    
+    @property
+    def is_client_connected(self) -> bool:
+        """Check if frontend client is connected."""
+        return self.brain.is_client_connected
     
     def __repr__(self) -> str:
         """String representation of plugin."""

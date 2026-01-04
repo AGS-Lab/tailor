@@ -122,12 +122,13 @@ class Plugin(PluginBase):
         """Called after plugin is loaded."""
         await super().on_load()
         
-        self.notify(
-            f"Demo plugin loaded (counter: {self.counter})",
-            severity="success"
-        )
+        if self.is_client_connected:
+            self.notify(
+                f"Demo plugin loaded (counter: {self.counter})",
+                severity="success"
+            )
     
-    async def on_tick(self, brain) -> None:
+    async def on_tick(self) -> None:
         """
         Periodic tick - demonstrates background processing.
         

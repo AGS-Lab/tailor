@@ -18,7 +18,9 @@ from .vault_brain import VaultBrain
 from . import utils
 from . import exceptions
 
-logger = utils.get_logger(__name__)
+from loguru import logger
+
+logger = logger.bind(name=__name__)
 
 
 async def run_servers(ws_server: WebSocketServer, brain: VaultBrain) -> None:
@@ -156,7 +158,7 @@ def main() -> None:
         sys.exit(0)
     
     except Exception as e:
-        logger.critical(f"Fatal error: {e}", exc_info=True)
+        logger.exception(f"Fatal error: {e}")
         logger.critical("Sidecar crashed unexpectedly")
         sys.exit(1)
 

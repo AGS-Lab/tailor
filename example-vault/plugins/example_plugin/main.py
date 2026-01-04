@@ -47,10 +47,11 @@ class Plugin(PluginBase):
     async def on_load(self) -> None:
         """Called after plugin is loaded."""
         await super().on_load()
-        self.notify(
-            f"Plugin '{self.name}' loaded successfully!",
-            severity="success"
-        )
+        if self.is_client_connected:
+            self.notify(
+                f"Plugin '{self.name}' loaded successfully!",
+                severity="success"
+            )
     
     def _load_config(self):
         """Load plugin configuration from settings.json in plugin directory."""
@@ -67,7 +68,7 @@ class Plugin(PluginBase):
             "enabled": True
         }
     
-    async def on_tick(self, brain):
+    async def on_tick(self):
         """
         Called every 5 seconds by VaultBrain.
         """
@@ -79,14 +80,16 @@ class Plugin(PluginBase):
         # Every N ticks (configurable), send a notification
         heartbeat_interval = self.config.get("heartbeat_interval", 3)
         if self.tick_count % heartbeat_interval == 0:
-            self.notify(
-                f"Heartbeat #{self.tick_count // heartbeat_interval} from {self.name}",
-                severity="info"
-            )
+            if self.is_client_connected:
+                self.notify(
+                    f"Heartbeat #{self.tick_count // heartbeat_interval} from {self.name}",
+                    severity="info"
+                )
         
         # Update state
-        self.update_state("tick_count", self.tick_count)
-        self.update_state("last_tick", current_time)
+        if self.is_client_connected:
+            self.brain.update_state("tick_count", self.tick_count)
+            self.brain.update_state("last_tick", current_time)
     
     async def custom_action(self, **kwargs):
         """
@@ -147,4 +150,3 @@ class Plugin(PluginBase):
                 severity="error"
             )
             return {"error": str(e)}
-```

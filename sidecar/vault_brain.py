@@ -21,7 +21,9 @@ from . import exceptions
 # Local import avoids circular dependency in type checking if used carefully
 # from .api.plugin_base import PluginBase
 
-logger = utils.get_logger(__name__)
+from loguru import logger
+
+logger = logger.bind(name=__name__)
 
 # Type aliases
 CommandHandler = Callable[..., Awaitable[Any]]
@@ -59,15 +61,15 @@ class VaultBrain:
         Note: Heavy initialization happens in self.initialize()
         """
         # Prevent re-initialization if already initialized
-        if self._initialized:
+        if getattr(self, "_initialized", False):
             return
             
         self.vault_path = utils.validate_vault_path(vault_path)
-        self.ws_server = ws_server
         
         self.plugins: Dict[str, Any] = {}
         self.commands: Dict[str, Dict[str, Any]] = {}
         self._subscribers: Dict[str, List[EventHandler]] = defaultdict(list)
+        self.ws_server = ws_server
         
         self.memory: Optional[Dict[str, Any]] = None
         self.config: Dict[str, Any] = {}
@@ -136,7 +138,7 @@ class VaultBrain:
         
         for plugin_dir in plugin_dirs:
             plugin_name = plugin_dir.name
-            plugin_logger = utils.get_plugin_logger(plugin_name)
+            plugin_logger = logger.bind(name=f"plugin:{plugin_name}")
             
             try:
                 utils.validate_plugin_structure(plugin_dir)
@@ -170,7 +172,7 @@ class VaultBrain:
                 plugin_logger.info(f"Plugin registered successfully")
             
             except Exception as e:
-                logger.error(f"Failed to load plugin '{plugin_name}': {e}", exc_info=True)
+                logger.exception(f"Failed to load plugin '{plugin_name}': {e}")
 
     async def _activate_plugins(self):
         """
@@ -180,10 +182,9 @@ class VaultBrain:
         logger.info("Activating plugins (calling on_load)...")
         for plugin_name, plugin in self.plugins.items():
             try:
-                if hasattr(plugin, "on_load"):
-                    await plugin.on_load()
+                await plugin.on_load()
             except Exception as e:
-                logger.error(f"Error activating plugin '{plugin_name}': {e}", exc_info=True)
+                logger.exception(f"Error activating plugin '{plugin_name}': {e}")
 
     # =========================================================================
     # Command Registry
@@ -219,7 +220,7 @@ class VaultBrain:
         try:
             return await handler(**kwargs)
         except Exception as e:
-            logger.error(f"Command '{command_id}' failed: {e}", exc_info=True)
+            logger.exception(f"Command '{command_id}' failed: {e}")
             raise exceptions.CommandExecutionError(command_id, e)
 
     def _register_core_commands(self) -> None:
@@ -255,28 +256,43 @@ class VaultBrain:
         self.register_command("system.info", get_info, constants.CORE_PLUGIN_NAME)
 
         # Connect WebSocket handlers
-        self.ws_server.register_handler(f"{constants.CHAT_COMMAND_PREFIX}send_message", 
-            lambda p: handle_chat(p.get("message", "")))
+        
+        async def chat_handler(p: Dict[str, Any]) -> Dict[str, Any]:
+            return await handle_chat(str(p.get("message", "")))
             
-        self.ws_server.register_handler("execute_command", 
-            lambda p: self.execute_command(p.get("command"), **p.get("args", {})))
+        async def execute_handler(p: Dict[str, Any]) -> Any:
+            return await self.execute_command(str(p.get("command")), **p.get("args", {}))
             
-        self.ws_server.register_handler("list_commands", lambda p: list_commands())
-        self.ws_server.register_handler("get_vault_info", lambda p: get_info())
+        async def list_handler(p: Dict[str, Any]) -> Dict[str, Any]:
+            return await list_commands()
+            
+        async def info_handler(p: Dict[str, Any]) -> Dict[str, Any]:
+            return await get_info()
+
+        self.ws_server.register_handler(f"{constants.CHAT_COMMAND_PREFIX}send_message", chat_handler)
+        self.ws_server.register_handler("execute_command", execute_handler)
+        self.ws_server.register_handler("list_commands", list_handler)
+        self.ws_server.register_handler("get_vault_info", info_handler)
         
         # Client Ready Signal
         async def client_ready(p: Dict[str, Any]):
             logger.info("Client ready signal received. Triggering plugin hooks...")
             # Trigger on_client_connected for all plugins
             for name, plugin in self.plugins.items():
-                if hasattr(plugin, "on_client_connected"):
-                    try:
-                        await plugin.on_client_connected()
-                    except Exception as e:
-                        logger.error(f"Error in {name}.on_client_connected: {e}")
+                try:
+                    await plugin.on_client_connected()
+                except Exception as e:
+                    logger.error(f"Error in {name}.on_client_connected: {e}")
             
             return {"status": "ok"}
         self.ws_server.register_handler("system.client_ready", client_ready)
+
+    @property
+    def is_client_connected(self) -> bool:
+        """Check if frontend client is connected."""
+        if not self.ws_server:
+            return False
+        return self.ws_server.is_connected()
 
     # =========================================================================
     # Event System (Frontend Notification + Pub/Sub)
@@ -313,6 +329,7 @@ class VaultBrain:
             logger.warning(f"Cannot emit '{event_type}': No WebSocket server")
             return
 
+
         # Construct JSON-RPC notification
         msg = utils.build_request(
             method="trigger_event",
@@ -328,7 +345,7 @@ class VaultBrain:
 
     # Internal Pub/Sub (Use sparingly!)
     
-    def subscribe_internal(self, event: str, handler: EventHandler) -> None:
+    def subscribe(self, event: str, handler: EventHandler) -> None:
         """Subscribe to an internal Python event."""
         if not asyncio.iscoroutinefunction(handler):
             raise ValueError("Handler must be async")
@@ -351,7 +368,7 @@ class VaultBrain:
         try:
             await h(**kwargs)
         except Exception as e:
-            logger.error(f"Event handler failed for '{evt}': {e}", exc_info=True)
+            logger.exception(f"Event handler failed for '{evt}': {e}")
 
     # =========================================================================
     # Config & Utils
@@ -377,17 +394,16 @@ class VaultBrain:
         memory_dir = utils.get_memory_dir(self.vault_path, create=True)
         self.memory = {"path": memory_dir}
 
-    async def _on_tick(self) -> None:
-        """Tick plugins."""
-        for name, plugin in self.plugins.items():
-            if hasattr(plugin, constants.PLUGIN_TICK_METHOD):
-                try:
-                    await getattr(plugin, constants.PLUGIN_TICK_METHOD)(self)
-                except Exception as e:
-                    logger.error(f"Tick error in {name}: {e}")
-
     async def tick_loop(self) -> None:
         logger.info("Starting tick loop...")
         while True:
             await asyncio.sleep(constants.DEFAULT_TICK_INTERVAL)
-            await self._on_tick()
+            await self._tick_plugins()
+
+    async def _tick_plugins(self) -> None:
+        """Run one tick cycle for all plugins."""
+        for name, plugin in self.plugins.items():
+            try:
+                await plugin.on_tick()
+            except Exception as e:
+                logger.error(f"Tick error in {name}: {e}")
