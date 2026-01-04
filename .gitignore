@@ -38,3 +38,8 @@ build-log.txt
 build-errors.txt
 build-check.ps1
 
+
+# Coverage
+htmlcov/
+.coverage
+.coverage.*

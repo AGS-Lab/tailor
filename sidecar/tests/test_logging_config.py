@@ -9,11 +9,7 @@ import logging
 from pathlib import Path
 import tempfile
 import shutil
-from sidecar.utils.logging_config import (
-    configure_logging,
-    get_logger,
-    get_plugin_logger,
-)
+from sidecar import utils
 
 
 @pytest.mark.unit
@@ -24,7 +20,7 @@ class TestConfigureLogging:
         """Test basic logging configuration."""
         log_file = tmp_path / "logs" / "tailor.log"
         
-        configure_logging(log_file=log_file)
+        utils.configure_logging(log_file=log_file)
         
         # Check log directory was created
         assert log_file.parent.exists()
@@ -34,19 +30,19 @@ class TestConfigureLogging:
         """Test configuration with specific log level."""
         log_file = tmp_path / "logs" / "tailor.log"
         
-        configure_logging(log_file=log_file, level="DEBUG")
+        utils.configure_logging(log_file=log_file, level="DEBUG")
         
-        logger = get_logger("test")
+        logger = utils.get_logger("test")
         assert logger.level <= logging.DEBUG
     
     def test_creates_log_file(self, tmp_path):
         """Test that log file is created."""
         log_file = tmp_path / "logs" / "tailor.log"
         
-        configure_logging(log_file=log_file)
+        utils.configure_logging(log_file=log_file)
         
         # Get a logger and log something
-        logger = get_logger("test")
+        logger = utils.get_logger("test")
         logger.info("Test message")
         
         # Check log file exists
@@ -56,9 +52,9 @@ class TestConfigureLogging:
         """Test verbose mode enables more detailed logging."""
         log_file = tmp_path / "logs" / "tailor.log"
         
-        configure_logging(log_file=log_file, verbose=True)
+        utils.configure_logging(log_file=log_file, verbose=True)
         
-        logger = get_logger("test")
+        logger = utils.get_logger("test")
         # In verbose mode, logger should accept DEBUG messages
         assert logger.isEnabledFor(logging.DEBUG)
 
@@ -70,9 +66,9 @@ class TestGetLogger:
     def test_get_logger_basic(self, tmp_path):
         """Test getting a basic logger."""
         log_file = tmp_path / "logs" / "tailor.log"
-        configure_logging(log_file=log_file)
+        utils.configure_logging(log_file=log_file)
         
-        logger = get_logger("my_module")
+        logger = utils.get_logger("my_module")
         
         assert logger is not None
         assert isinstance(logger, logging.Logger)
@@ -80,29 +76,29 @@ class TestGetLogger:
     def test_get_logger_same_name_returns_same_instance(self, tmp_path):
         """Test that same name returns same logger instance."""
         log_file = tmp_path / "logs" / "tailor.log"
-        configure_logging(log_file=log_file)
+        utils.configure_logging(log_file=log_file)
         
-        logger1 = get_logger("module1")
-        logger2 = get_logger("module1")
+        logger1 = utils.get_logger("module1")
+        logger2 = utils.get_logger("module1")
         
         assert logger1 is logger2
     
     def test_get_logger_different_names(self, tmp_path):
         """Test that different names return different loggers."""
         log_file = tmp_path / "logs" / "tailor.log"
-        configure_logging(log_file=log_file)
+        utils.configure_logging(log_file=log_file)
         
-        logger1 = get_logger("module1")
-        logger2 = get_logger("module2")
+        logger1 = utils.get_logger("module1")
+        logger2 = utils.get_logger("module2")
         
         assert logger1 is not logger2
     
     def test_logger_can_log_messages(self, tmp_path):
         """Test that logger can actually log messages."""
         log_file = tmp_path / "logs" / "tailor.log"
-        configure_logging(log_file=log_file)
+        utils.configure_logging(log_file=log_file)
         
-        logger = get_logger("test_module")
+        logger = utils.get_logger("test_module")
         
         # Should not raise
         logger.debug("Debug message")
@@ -118,9 +114,9 @@ class TestGetPluginLogger:
     def test_get_plugin_logger_basic(self, tmp_path):
         """Test getting a plugin-specific logger."""
         log_file = tmp_path / "logs" / "tailor.log"
-        configure_logging(log_file=log_file)
+        utils.configure_logging(log_file=log_file)
         
-        logger = get_plugin_logger("my_plugin")
+        logger = utils.get_plugin_logger("my_plugin")
         
         assert logger is not None
         assert isinstance(logger, logging.Logger)
@@ -128,9 +124,9 @@ class TestGetPluginLogger:
     def test_plugin_logger_has_plugin_prefix(self, tmp_path):
         """Test that plugin loggers have appropriate naming."""
         log_file = tmp_path / "logs" / "tailor.log"
-        configure_logging(log_file=log_file)
+        utils.configure_logging(log_file=log_file)
         
-        logger = get_plugin_logger("test_plugin")
+        logger = utils.get_plugin_logger("test_plugin")
         
         # Logger name should include plugin identifier
         assert "plugin" in logger.name.lower() or "test_plugin" in logger.name
@@ -138,10 +134,10 @@ class TestGetPluginLogger:
     def test_different_plugins_get_different_loggers(self, tmp_path):
         """Test that different plugins get separate loggers."""
         log_file = tmp_path / "logs" / "tailor.log"
-        configure_logging(log_file=log_file)
+        utils.configure_logging(log_file=log_file)
         
-        logger1 = get_plugin_logger("plugin1")
-        logger2 = get_plugin_logger("plugin2")
+        logger1 = utils.get_plugin_logger("plugin1")
+        logger2 = utils.get_plugin_logger("plugin2")
         
         assert logger1 is not logger2 # Corrected from assert logger1 is not logger2
 
@@ -149,10 +145,10 @@ class TestGetPluginLogger:
     def test_same_plugin_gets_same_logger(self, tmp_path):
         """Test that same plugin name returns same logger."""
         log_file = tmp_path / "logs" / "tailor.log"
-        configure_logging(log_file=log_file)
+        utils.configure_logging(log_file=log_file)
         
-        logger1 = get_plugin_logger("my_plugin")
-        logger2 = get_plugin_logger("my_plugin")
+        logger1 = utils.get_plugin_logger("my_plugin")
+        logger2 = utils.get_plugin_logger("my_plugin")
         
         assert logger1 is logger2
 
@@ -164,11 +160,11 @@ class TestLoggingIntegration:
     def test_multiple_loggers_write_to_same_file(self, tmp_path):
         """Test that multiple loggers can write to same log file."""
         log_file = tmp_path / "logs" / "tailor.log"
-        configure_logging(log_file=log_file)
+        utils.configure_logging(log_file=log_file)
         
-        logger1 = get_logger("module1")
-        logger2 = get_logger("module2")
-        plugin_logger = get_plugin_logger("test_plugin")
+        logger1 = utils.get_logger("module1")
+        logger2 = utils.get_logger("module2")
+        plugin_logger = utils.get_plugin_logger("test_plugin")
         
         # All should be able to log
         logger1.info("Message from module1")
@@ -186,9 +182,9 @@ class TestLoggingIntegration:
         log_file = tmp_path / "logs" / "tailor.log"
         
         # Configure with INFO level
-        configure_logging(log_file=log_file, level="INFO")
+        utils.configure_logging(log_file=log_file, level="INFO")
         
-        logger = get_logger("test")
+        logger = utils.get_logger("test")
         
         # INFO and above should be enabled
         assert logger.isEnabledFor(logging.INFO)

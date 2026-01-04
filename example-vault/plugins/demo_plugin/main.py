@@ -13,7 +13,6 @@ import sys
 from pathlib import Path
 from typing import Dict, Any, TYPE_CHECKING, cast
 
-# Add sidecar to path
 # Add tailor root to path (parent of sidecar)
 tailor_path = Path(__file__).resolve().parent.parent.parent.parent
 if str(tailor_path) not in sys.path:
@@ -22,8 +21,10 @@ if str(tailor_path) not in sys.path:
 from sidecar.api.plugin_base import PluginBase
 
 if TYPE_CHECKING:
-    from event_emitter import EventEmitter
-    from vault_brain import VaultBrain
+    # Use TYPE_CHECKING to avoid runtime ImportError since we deleted event_emitter.py
+    # But actually PluginBase handles types nicely now. 
+    # We can perform local imports if needed, but not needed here.
+    pass
 
 
 class Plugin(PluginBase):
@@ -35,13 +36,11 @@ class Plugin(PluginBase):
     
     def __init__(
         self,
-        emitter: 'EventEmitter',
-        brain: 'VaultBrain',
         plugin_dir: Path,
         vault_path: Path
     ):
         """Initialize demo plugin."""
-        super().__init__(emitter, brain, plugin_dir, vault_path)
+        super().__init__(plugin_dir, vault_path)
         
         # Plugin-specific state
         self.counter = 0
@@ -78,19 +77,11 @@ class Plugin(PluginBase):
         self.logger.debug("Registered 3 demo commands")
     
     async def handle_hello(self, name: str = "World", **kwargs: Any) -> Dict[str, Any]:
-        """
-        Simple hello command.
-        
-        Args:
-            name: Name to greet
-        
-        Returns:
-            Greeting message
-        """
+        """Simple hello command."""
         message = f"Hello, {name}!"
         
         # Emit notification to UI
-        self.emitter.notify(message, severity="info")
+        self.notify(message, severity="info")
         
         return {
             "status": "success",
@@ -98,15 +89,7 @@ class Plugin(PluginBase):
         }
     
     async def handle_increment(self, amount: int = 1, **kwargs: Any) -> Dict[str, Any]:
-        """
-        Increment the counter.
-        
-        Args:
-            amount: Amount to increment by
-        
-        Returns:
-            New counter value
-        """
+        """Increment the counter."""
         self.counter += amount
         
         # Save to settings
@@ -116,8 +99,8 @@ class Plugin(PluginBase):
         
         self.logger.info(f"Counter incremented to {self.counter}")
         
-        # Emit progress update
-        self.emitter.progress(
+        # Emit progress update (Uses helper)
+        self.progress(
             min(100, self.counter),
             f"Counter: {self.counter}"
         )
@@ -139,12 +122,12 @@ class Plugin(PluginBase):
         """Called after plugin is loaded."""
         await super().on_load()
         
-        self.emitter.notify(
+        self.notify(
             f"Demo plugin loaded (counter: {self.counter})",
             severity="success"
         )
     
-    async def on_tick(self, emitter: 'EventEmitter') -> None:
+    async def on_tick(self, brain) -> None:
         """
         Periodic tick - demonstrates background processing.
         

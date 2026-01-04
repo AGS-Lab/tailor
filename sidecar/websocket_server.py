@@ -12,30 +12,15 @@ import websockets
 from websockets.server import WebSocketServerProtocol # type: ignore
 from websockets.exceptions import ConnectionClosed
 
-from .utils.logging_config import get_logger
-from .utils.json_rpc import (
-    validate_jsonrpc_message,
-    build_response,
-    build_internal_error,
-    get_request_id,
-    get_method,
-    get_params,
-)
-from .constants import (
-    DEFAULT_WEBSOCKET_HOST,
-    WEBSOCKET_TIMEOUT,
-)
-from .exceptions import (
-    WebSocketError,
-    WebSocketMessageError,
-    JSONRPCError,
-)
+from . import utils
+from . import constants
+from . import exceptions
 
 
 # Type alias for command handlers
 CommandHandler = Callable[[Dict[str, Any]], Awaitable[Dict[str, Any]]]
 
-logger = get_logger(__name__)
+logger = utils.get_logger(__name__)
 
 
 class WebSocketServer:
@@ -52,7 +37,7 @@ class WebSocketServer:
         >>> await server.start()
     """
     
-    def __init__(self, port: int, host: str = DEFAULT_WEBSOCKET_HOST):
+    def __init__(self, port: int, host: str = constants.DEFAULT_WEBSOCKET_HOST):
         """
         Initialize WebSocket server.
         
@@ -165,19 +150,19 @@ class WebSocketServer:
                 data = json.loads(message)
             except json.JSONDecodeError as e:
                 logger.error(f"Invalid JSON: {message[:100]}")
-                raise WebSocketMessageError(message, f"JSON parse error: {e}")
+                raise exceptions.WebSocketMessageError(message, f"JSON parse error: {e}")
             
             # Validate JSON-RPC structure
             try:
-                validate_jsonrpc_message(data)
-            except JSONRPCError as e:
+                utils.validate_jsonrpc_message(data)
+            except exceptions.JSONRPCError as e:
                 logger.error(f"Invalid JSON-RPC message: {e.message}")
                 raise
             
             # Extract message components
-            request_id = get_request_id(data)
-            method = get_method(data)
-            params = get_params(data)
+            request_id = utils.get_request_id(data)
+            method = utils.get_method(data)
+            params = utils.get_params(data)
             
             if not method:
                 logger.error(f"Message missing method: {data}")
@@ -191,7 +176,7 @@ class WebSocketServer:
                     result = await self.command_handlers[method](params)
                     
                     # Send success response
-                    response = build_response(result, request_id=request_id)
+                    response = utils.build_response(result, request_id=request_id)
                     await self.send(response)
                     
                     logger.debug(f"Command '{method}' executed successfully")
@@ -200,7 +185,7 @@ class WebSocketServer:
                     logger.error(f"Handler error for '{method}': {e}", exc_info=True)
                     
                     # Send error response
-                    error_response = build_internal_error(
+                    error_response = utils.build_internal_error(
                         message=str(e),
                         details={
                             "method": method,
@@ -214,10 +199,10 @@ class WebSocketServer:
                 logger.warning(f"No handler registered for method: {method}")
                 # Could send method not found error here
         
-        except WebSocketMessageError as e:
+        except exceptions.WebSocketMessageError as e:
             logger.error(f"Message handling error: {e.message}")
         
-        except JSONRPCError as e:
+        except exceptions.JSONRPCError as e:
             logger.error(f"JSON-RPC error: {e.message}")
        
         except Exception as e:

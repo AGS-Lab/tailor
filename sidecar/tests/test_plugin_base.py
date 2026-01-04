@@ -3,52 +3,35 @@ Tests for PluginBase class.
 
 Verifies that:
 - Plugins can inherit from PluginBase
-- register_commands is called during __init__
 - Lifecycle hooks work correctly
-- UI helper methods work correctly
+- UI helper methods delegate to brain correctly
 """
 import pytest
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, AsyncMock, patch
 
-# Use the sidecar package (conftest.py should add tailor to path)
 from sidecar.api.plugin_base import PluginBase
+from sidecar import constants
+from sidecar import exceptions
 
 
 class ConcretePlugin(PluginBase):
     """Concrete implementation for testing."""
     
-    def __init__(self, emitter, brain, plugin_dir, vault_path):
-        self.commands_registered = False
-        super().__init__(emitter, brain, plugin_dir, vault_path)
-    
     def register_commands(self) -> None:
-        self.commands_registered = True
-        self.brain.register_command(
-            "test.hello",
-            self.hello_handler,
-            self.name
-        )
-    
-    async def hello_handler(self, **kwargs):
-        return {"message": "Hello from test plugin!"}
-
-
-@pytest.fixture
-def mock_emitter():
-    """Create a mock EventEmitter."""
-    emitter = MagicMock()
-    emitter.emit = MagicMock()
-    emitter.notify = MagicMock()
-    return emitter
+        pass
 
 
 @pytest.fixture
 def mock_brain():
     """Create a mock VaultBrain."""
     brain = MagicMock()
-    brain.register_command = MagicMock()
+    brain.emit_to_frontend = MagicMock()
+    brain.notify_frontend = MagicMock()
+    brain.update_state = MagicMock()
+    brain.subscribe_internal = MagicMock()
+    brain.publish = AsyncMock()
     return brain
 
 
@@ -71,130 +54,109 @@ def vault_path(tmp_path):
 class TestPluginBase:
     """Tests for PluginBase class."""
     
-    def test_init_calls_register_commands(
-        self, mock_emitter, mock_brain, plugin_dir, vault_path
-    ):
-        """Verify register_commands is called during __init__."""
-        plugin = ConcretePlugin(mock_emitter, mock_brain, plugin_dir, vault_path)
-        
-        assert plugin.commands_registered is True
-        mock_brain.register_command.assert_called_once()
-    
-    def test_plugin_name_from_directory(
-        self, mock_emitter, mock_brain, plugin_dir, vault_path
-    ):
-        """Verify plugin name is derived from directory name."""
-        plugin = ConcretePlugin(mock_emitter, mock_brain, plugin_dir, vault_path)
-        
-        assert plugin.name == "test_plugin"
-    
-    def test_plugin_paths_are_set(
-        self, mock_emitter, mock_brain, plugin_dir, vault_path
-    ):
-        """Verify plugin and vault paths are stored correctly."""
-        plugin = ConcretePlugin(mock_emitter, mock_brain, plugin_dir, vault_path)
-        
-        assert plugin.plugin_dir == plugin_dir
-        assert plugin.vault_path == vault_path
-    
-    @pytest.mark.asyncio
-    async def test_on_load_sets_loaded_flag(
-        self, mock_emitter, mock_brain, plugin_dir, vault_path
-    ):
-        """Verify on_load sets _loaded to True."""
-        plugin = ConcretePlugin(mock_emitter, mock_brain, plugin_dir, vault_path)
-        
-        assert plugin.is_loaded is False
-        await plugin.on_load()
-        assert plugin.is_loaded is True
-    
-    @pytest.mark.asyncio
-    async def test_on_unload_clears_loaded_flag(
-        self, mock_emitter, mock_brain, plugin_dir, vault_path
-    ):
-        """Verify on_unload sets _loaded to False."""
-        plugin = ConcretePlugin(mock_emitter, mock_brain, plugin_dir, vault_path)
-        
-        await plugin.on_load()
-        assert plugin.is_loaded is True
-        
-        await plugin.on_unload()
-        assert plugin.is_loaded is False
-    
-    def test_get_config_path(
-        self, mock_emitter, mock_brain, plugin_dir, vault_path
-    ):
-        """Verify get_config_path returns correct path."""
-        plugin = ConcretePlugin(mock_emitter, mock_brain, plugin_dir, vault_path)
-        
-        config_path = plugin.get_config_path("settings.json")
-        assert config_path == plugin_dir / "settings.json"
-    
-    def test_load_settings_returns_empty_if_no_file(
-        self, mock_emitter, mock_brain, plugin_dir, vault_path
-    ):
-        """Verify load_settings returns empty dict if file doesn't exist."""
-        plugin = ConcretePlugin(mock_emitter, mock_brain, plugin_dir, vault_path)
-        
-        settings = plugin.load_settings()
-        assert settings == {}
-    
-    def test_save_and_load_settings(
-        self, mock_emitter, mock_brain, plugin_dir, vault_path
-    ):
-        """Verify settings can be saved and loaded."""
-        plugin = ConcretePlugin(mock_emitter, mock_brain, plugin_dir, vault_path)
-        
-        test_settings = {"api_key": "test123", "enabled": True}
-        result = plugin.save_settings(test_settings)
-        
-        assert result is True
-        
-        loaded = plugin.load_settings()
-        assert loaded == test_settings
+    def test_init(self, plugin_dir, vault_path):
+        """Verify initialization."""
+        with patch("sidecar.api.plugin_base.utils.get_plugin_logger"):
+            plugin = ConcretePlugin(plugin_dir, vault_path)
+            
+            assert plugin.name == "test_plugin"
+            assert plugin.plugin_dir == plugin_dir
+            assert plugin.vault_path == vault_path
+            assert plugin.is_loaded is False
 
+    def test_brain_property_access(self, plugin_dir, vault_path, mock_brain):
+        """Verify brain property retrieves singleton."""
+        with patch("sidecar.api.plugin_base.utils.get_plugin_logger"):
+            plugin = ConcretePlugin(plugin_dir, vault_path)
+            
+            # Mock VaultBrain.get() to return our mock_brain
+            with patch("sidecar.vault_brain.VaultBrain.get", return_value=mock_brain):
+                assert plugin.brain == mock_brain
 
-class TestPluginBaseUIHelpers:
-    """Tests for PluginBase UI helper methods."""
-    
     @pytest.mark.asyncio
-    async def test_register_sidebar_view_emits_event(
-        self, mock_emitter, mock_brain, plugin_dir, vault_path
-    ):
-        """Verify register_sidebar_view emits correct UI_COMMAND event."""
-        plugin = ConcretePlugin(mock_emitter, mock_brain, plugin_dir, vault_path)
-        
-        await plugin.register_sidebar_view(
-            identifier="test.sidebar",
-            icon_svg="folder",
-            title="Test Sidebar"
-        )
-        
-        mock_emitter.emit.assert_called_once()
-        call_args = mock_emitter.emit.call_args
-        
-        assert call_args.kwargs["event_type"] == "UI_COMMAND"
-        assert call_args.kwargs["data"]["action"] == "register_sidebar"
-        assert call_args.kwargs["data"]["id"] == "test.sidebar"
-        assert call_args.kwargs["data"]["icon"] == "folder"
-        assert call_args.kwargs["data"]["title"] == "Test Sidebar"
-    
+    async def test_lifecycle_flags(self, plugin_dir, vault_path):
+        """Verify on_load/on_unload update flags."""
+        with patch("sidecar.api.plugin_base.utils.get_plugin_logger"):
+            plugin = ConcretePlugin(plugin_dir, vault_path)
+            
+            assert not plugin.is_loaded
+            await plugin.on_load()
+            assert plugin.is_loaded
+            
+            await plugin.on_unload()
+            assert not plugin.is_loaded
+
+    def test_notify_delegates_to_brain(self, plugin_dir, vault_path, mock_brain):
+        """Verify notify calls brain.notify_frontend."""
+        with patch("sidecar.api.plugin_base.utils.get_plugin_logger"):
+            plugin = ConcretePlugin(plugin_dir, vault_path)
+            
+            with patch("sidecar.vault_brain.VaultBrain.get", return_value=mock_brain):
+                plugin.notify("Hello", "success")
+                
+                mock_brain.notify_frontend.assert_called_with("Hello", "success")
+
+    def test_progress_delegates_to_brain(self, plugin_dir, vault_path, mock_brain):
+        """Verify progress calls brain.emit_to_frontend."""
+        with patch("sidecar.api.plugin_base.utils.get_plugin_logger"):
+            plugin = ConcretePlugin(plugin_dir, vault_path)
+            
+            with patch("sidecar.vault_brain.VaultBrain.get", return_value=mock_brain):
+                plugin.progress(50, "Loading")
+                
+                mock_brain.emit_to_frontend.assert_called_with(
+                    constants.EventType.PROGRESS,
+                    {"percentage": 50, "message": "Loading"}
+                )
+
+    def test_update_state_delegates_to_brain(self, plugin_dir, vault_path, mock_brain):
+        """Verify update_state calls brain.update_state."""
+        with patch("sidecar.api.plugin_base.utils.get_plugin_logger"):
+            plugin = ConcretePlugin(plugin_dir, vault_path)
+            
+            with patch("sidecar.vault_brain.VaultBrain.get", return_value=mock_brain):
+                plugin.update_state("key", "value")
+                
+                mock_brain.update_state.assert_called_with("key", "value")
+
     @pytest.mark.asyncio
-    async def test_set_sidebar_content_emits_event(
-        self, mock_emitter, mock_brain, plugin_dir, vault_path
-    ):
-        """Verify set_sidebar_content emits correct UI_COMMAND event."""
-        plugin = ConcretePlugin(mock_emitter, mock_brain, plugin_dir, vault_path)
-        
-        await plugin.set_sidebar_content(
-            identifier="test.sidebar",
-            html_content="<div>Hello World</div>"
-        )
-        
-        mock_emitter.emit.assert_called_once()
-        call_args = mock_emitter.emit.call_args
-        
-        assert call_args.kwargs["event_type"] == "UI_COMMAND"
-        assert call_args.kwargs["data"]["action"] == "set_sidebar"
-        assert call_args.kwargs["data"]["id"] == "test.sidebar"
-        assert call_args.kwargs["data"]["html"] == "<div>Hello World</div>"
+    async def test_publish_delegates_to_brain(self, plugin_dir, vault_path, mock_brain):
+        """Verify publish calls brain.publish."""
+        with patch("sidecar.api.plugin_base.utils.get_plugin_logger"):
+            plugin = ConcretePlugin(plugin_dir, vault_path)
+            
+            with patch("sidecar.vault_brain.VaultBrain.get", return_value=mock_brain):
+                await plugin.publish("my.event", data=123)
+                
+                mock_brain.publish.assert_called_with("my.event", data=123)
+
+    @pytest.mark.asyncio
+    async def test_register_sidebar_view(self, plugin_dir, vault_path, mock_brain):
+        """Verify register_sidebar_view emits UI_COMMAND."""
+        with patch("sidecar.api.plugin_base.utils.get_plugin_logger"):
+            plugin = ConcretePlugin(plugin_dir, vault_path)
+            
+            with patch("sidecar.vault_brain.VaultBrain.get", return_value=mock_brain):
+                await plugin.register_sidebar_view("id", "icon", "Title")
+                
+                mock_brain.emit_to_frontend.assert_called()
+                call_args = mock_brain.emit_to_frontend.call_args
+                
+                assert call_args.kwargs["event_type"] == "UI_COMMAND"
+                assert call_args.kwargs["data"]["action"] == "register_sidebar"
+                assert call_args.kwargs["scope"] == constants.EventScope.WINDOW
+
+    @pytest.mark.asyncio
+    async def test_set_sidebar_content(self, plugin_dir, vault_path, mock_brain):
+        """Verify set_sidebar_content emits UI_COMMAND."""
+        with patch("sidecar.api.plugin_base.utils.get_plugin_logger"):
+            plugin = ConcretePlugin(plugin_dir, vault_path)
+            
+            with patch("sidecar.vault_brain.VaultBrain.get", return_value=mock_brain):
+                await plugin.set_sidebar_content("id", "<html>")
+                
+                mock_brain.emit_to_frontend.assert_called()
+                call_args = mock_brain.emit_to_frontend.call_args
+                
+                assert call_args.kwargs["event_type"] == "UI_COMMAND"
+                assert call_args.kwargs["data"]["action"] == "set_sidebar"

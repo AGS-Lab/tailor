@@ -15,11 +15,10 @@ from pathlib import Path
 
 from .websocket_server import WebSocketServer
 from .vault_brain import VaultBrain
-from .utils.logging_config import configure_logging, get_logger
-from .constants import ENV_LOG_LEVEL, DEFAULT_LOG_LEVEL
-from .exceptions import TailorError, VaultNotFoundError
+from . import utils
+from . import exceptions
 
-logger = get_logger(__name__)
+logger = utils.get_logger(__name__)
 
 
 async def run_servers(ws_server: WebSocketServer, brain: VaultBrain) -> None:
@@ -97,7 +96,7 @@ def main() -> None:
     vault_path = Path(args.vault)
     
     # Configure logging first
-    configure_logging(
+    utils.configure_logging(
         level=args.log_level,
         log_file=args.log_file,
         verbose=args.verbose,
@@ -139,12 +138,12 @@ def main() -> None:
         # Run both servers
         asyncio.run(run_servers(ws_server, brain))
         
-    except VaultNotFoundError as e:
+    except exceptions.VaultNotFoundError as e:
         logger.error(f"Vault error: {e.message}")
         logger.error("Please check that the vault path is correct")
         sys.exit(1)
     
-    except TailorError as e:
+    except exceptions.TailorError as e:
         logger.error(f"Tailor error: {e.message}")
         if e.details:
             logger.error(f"Details: {e.details}")

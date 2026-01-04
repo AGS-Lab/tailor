@@ -5,7 +5,8 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from sidecar.constants import PLUGIN_CLASS_NAME
+from sidecar import constants
+from sidecar import exceptions
 
 # Add sidecar root to path to ensure imports work
 # sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -31,7 +32,8 @@ class Plugin(PluginBase):
         return {"echo": message}
 
     async def handle_emit(self, event_type: str, data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        self.emitter.emit(event_type, data)
+        # Use brain.emit_to_frontend directly or helper methods
+        self.brain.emit_to_frontend(event_type, data)
         return {"emitted": True}
 """
 
@@ -118,9 +120,7 @@ class TestIntegration:
         with patch("sidecar.vault_brain.get_logger"):
             brain = VaultBrain(integration_vault, mock_ws_server)
             
-        from sidecar.exceptions import CommandNotFoundError
-        
-        with pytest.raises(CommandNotFoundError):
+        with pytest.raises(exceptions.CommandNotFoundError):
             await brain.execute_command("non.existent.command")
             
     async def test_plugin_unload(self, integration_vault, mock_ws_server):

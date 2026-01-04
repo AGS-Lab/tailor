@@ -20,10 +20,10 @@ if str(tailor_path) not in sys.path:
     sys.path.insert(0, str(tailor_path))
 
 from sidecar.api.plugin_base import PluginBase
+from sidecar.constants import EventType, EventScope
 
 if TYPE_CHECKING:
-    from event_emitter import EventEmitter
-    from vault_brain import VaultBrain
+    pass
 
 
 class Plugin(PluginBase):
@@ -35,13 +35,11 @@ class Plugin(PluginBase):
     
     def __init__(
         self,
-        emitter: 'EventEmitter',
-        brain: 'VaultBrain',
         plugin_dir: Path,
         vault_path: Path
     ):
         """Initialize LLM plugin."""
-        super().__init__(emitter, brain, plugin_dir, vault_path)
+        super().__init__(plugin_dir, vault_path)
         
         # Plugin state
         self.conversation_history: List[Dict[str, str]] = []
@@ -76,16 +74,7 @@ class Plugin(PluginBase):
         self.logger.debug("Registered 3 LLM commands")
     
     async def _handle_send(self, message: str = "", **kwargs: Any) -> Dict[str, Any]:
-        """
-        Handle sending a message to the LLM.
-        
-        Args:
-            message: User's message
-            **kwargs: Additional parameters
-        
-        Returns:
-            Response dict with status and assistant message
-        """
+        """Handle sending a message to the LLM."""
         if not message:
             return {"status": "error", "error": "Message cannot be empty"}
         
@@ -107,14 +96,14 @@ class Plugin(PluginBase):
         })
         
         # Emit event to update UI
-        self.emitter.emit(
-            "LLM_RESPONSE",
+        self.brain.emit_to_frontend(
+            EventType.LLM_RESPONSE,
             {
                 "user_message": message,
                 "assistant_message": response,
                 "history": self.conversation_history
             },
-            scope="window"
+            scope=EventScope.WINDOW
         )
         
         self.logger.debug("Response generated and emitted")
@@ -133,7 +122,7 @@ class Plugin(PluginBase):
         self.logger.info(f"Cleared {previous_count} messages from history")
         
         # Notify UI
-        self.emitter.emit("LLM_CLEARED", {}, scope="window")
+        self.brain.emit_to_frontend(EventType.LLM_CLEARED, {}, scope=EventScope.WINDOW)
         
         return {
             "status": "success",
@@ -142,12 +131,7 @@ class Plugin(PluginBase):
         }
     
     async def _handle_get_ui(self, **kwargs: Any) -> Dict[str, Any]:
-        """
-        Return HTML for the LLM chat UI.
-        
-        Returns:
-            Dict with HTML content
-        """
+        """Return HTML for the LLM chat UI."""
         ui_file = self.plugin_dir / "ui" / "panel.html"
         
         if ui_file.exists():
@@ -175,17 +159,7 @@ class Plugin(PluginBase):
             }
     
     async def _generate_response(self, message: str) -> str:
-        """
-        Generate LLM response.
-        
-        TODO: Integrate actual LLM (OpenAI, Anthropic, local model, etc.)
-        
-        Args:
-            message: User's message
-        
-        Returns:
-            Assistant's response
-        """
+        """Generate LLM response."""
         # Placeholder implementation
         if not message:
             return "Please send a message."
@@ -201,21 +175,16 @@ class Plugin(PluginBase):
         return f"I received your message ({word_count} words). In a real implementation, I would process this with an LLM API and provide a meaningful response."
     
     async def on_load(self) -> None:
-        """Called after plugin is fully loaded."""
+        """Called after plugin is loaded."""
         await super().on_load()
         
-        self.emitter.notify(
+        self.notify(
             f"LLM plugin loaded (model: {self.model_name})",
             severity="success"
         )
     
-    async def on_tick(self, emitter: 'EventEmitter') -> None:
-        """
-        Periodic tick - could be used for:
-        - Checking for model updates
-        - Auto-saving conversation
-        - Background processing
-        """
+    async def on_tick(self, brain) -> None:
+        """Periodic tick."""
         # Log message count periodically (only if non-zero)
         if len(self.conversation_history) > 0:
             self.logger.debug(f"Conversation has {len(self.conversation_history)} messages")

@@ -328,8 +328,11 @@
                     let args = {};
                     try {
                         args = JSON.parse(document.getElementById('arg-input').value || '{}');
+                        if (typeof args !== 'object' || args === null || Array.isArray(args)) {
+                            throw new Error("Arguments must be a JSON object (e.g. {\"key\": \"value\"})");
+                        }
                     } catch (e) {
-                        log('Invalid JSON args', 'error');
+                        log(`Invalid JSON args: ${e.message}`, 'error');
                         return;
                     }
 
