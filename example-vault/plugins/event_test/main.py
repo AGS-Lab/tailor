@@ -20,8 +20,14 @@ class Plugin(PluginBase):
     3. Receiving and handling data via **kwargs
     """
     
-    def __init__(self, plugin_dir: Path, vault_path: Path):
-        super().__init__(plugin_dir, vault_path)
+    
+    def __init__(
+        self,
+        plugin_dir: Path,
+        vault_path: Path,
+        config: Dict[str, Any] = None
+    ):
+        super().__init__(plugin_dir, vault_path, config)
         
         # 1. Subscribe to a Core Event
         self.subscribe(CoreEvents.PLUGIN_LOADED, self.on_plugin_loaded)

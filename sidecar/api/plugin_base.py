@@ -13,11 +13,9 @@ from typing import Dict, Any, Optional, TYPE_CHECKING, cast, Callable, Awaitable
 try:
     from sidecar import utils
     from sidecar import constants
-    from sidecar.constants import CoreEvents
 except ImportError:
     import utils
     import constants
-    from api.events import CoreEvents
 
 if TYPE_CHECKING:
     from sidecar.vault_brain import VaultBrain
@@ -45,7 +43,8 @@ class PluginBase(ABC):
     def __init__(
         self,
         plugin_dir: Path,
-        vault_path: Path
+        vault_path: Path,
+        config: Dict[str, Any] = None
     ):
         """
         Initialize plugin.
@@ -53,9 +52,11 @@ class PluginBase(ABC):
         Args:
             plugin_dir: Path to this plugin's directory
             vault_path: Path to the vault root directory
+            config: Resolved configuration dictionary (Defaults + Overrides)
         """
         self.plugin_dir = plugin_dir
         self.vault_path = vault_path
+        self.config = config or {}
         
         # Plugin metadata
         self.name = plugin_dir.name
@@ -137,6 +138,17 @@ class PluginBase(ABC):
     def update_state(self, key: str, value: Any) -> None:
         """Update a key in the Frontend global/vault state."""
         self.brain.update_state(key, value)
+    
+    def emit(self, event_type: str, data: Dict[str, Any], scope: str = constants.EventScope.WINDOW) -> None:
+        """
+        Emit a generic event to the frontend.
+        
+        Args:
+            event_type: Type/Name of event (e.g. "llm.response")
+            data: Payload dictionary
+            scope: Event scope (window/global)
+        """
+        self.brain.emit_to_frontend(event_type, data, scope)
 
     def get_config_path(self, filename: str = constants.PLUGIN_SETTINGS_FILE) -> Path:
         """Get path to a config file."""

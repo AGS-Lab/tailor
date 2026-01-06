@@ -24,13 +24,18 @@ class Plugin(PluginBase):
     Inherits from PluginBase for standardized lifecycle management.
     """
     
-    def __init__(self, plugin_dir: Path, vault_path: Path):
+    def __init__(
+        self,
+        plugin_dir: Path,
+        vault_path: Path,
+        config: Dict[str, Any] = None
+    ):
         # Store UI path before super().__init__ calls register_commands
         self._plugin_dir = Path(plugin_dir)
         self.ui_path = self._plugin_dir / "ui" / "panel.html"
         self.icon = "folder-open"
         
-        super().__init__(plugin_dir, vault_path)
+        super().__init__(plugin_dir, vault_path, config)
         
     def register_commands(self) -> None:
         """Register plugin commands."""

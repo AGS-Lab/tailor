@@ -61,7 +61,15 @@ class TestPluginBase:
         assert plugin.name == "test_plugin"
         assert plugin.plugin_dir == plugin_dir
         assert plugin.vault_path == vault_path
+        assert plugin.config == {}
         assert plugin.is_loaded is False
+    
+    def test_init_with_config(self, plugin_dir, vault_path):
+        """Verify initialization with config."""
+        config = {"enabled": True, "foo": "bar"}
+        plugin = ConcretePlugin(plugin_dir, vault_path, config=config)
+        
+        assert plugin.config == config
 
     def test_brain_property_access(self, plugin_dir, vault_path, mock_brain):
         """Verify brain property retrieves singleton."""

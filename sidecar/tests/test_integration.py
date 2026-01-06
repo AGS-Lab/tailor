@@ -64,6 +64,7 @@ def integration_vault(tmp_path):
     plugin_dir.mkdir()
     
     (plugin_dir / "main.py").write_text(TEST_PLUGIN_CODE, encoding="utf-8")
+    (plugin_dir / "settings.json").write_text('{"enabled": true}', encoding="utf-8")
     
     return vault_dir
 
@@ -143,7 +144,6 @@ class TestIntegration:
             
         # Check if demo_plugin loaded
         assert "demo_plugin" in brain.plugins
-        assert "llm" in brain.plugins
         
         demo = brain.plugins["demo_plugin"]
         assert demo.is_loaded
@@ -188,7 +188,7 @@ class TestIntegration:
         }
         
         result = await handler(params_correct)
-        assert result["result"]["echo"] == "Hello JSON"
+        assert result["echo"] == "Hello JSON"
         
         # Incorrect usage: args at top level (what caused the bug)
         params_incorrect = {

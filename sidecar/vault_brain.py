@@ -61,14 +61,15 @@ class VaultBrain:
         Note: Heavy initialization happens in self.initialize()
         """
         # Prevent re-initialization if already initialized
-        if getattr(self, "_initialized", False):
+        self._initialized: bool = False
+        if self._initialized:
             return
             
         self.vault_path = utils.validate_vault_path(vault_path)
         
         self.plugins: Dict[str, Any] = {}
         self.commands: Dict[str, Dict[str, Any]] = {}
-        self._subscribers: Dict[str, List[EventHandler]] = defaultdict(list)
+        self.subscribers: Dict[str, List[EventHandler]] = defaultdict(list)
         self.ws_server = ws_server
         
         self.memory: Optional[Dict[str, Any]] = None
@@ -90,23 +91,24 @@ class VaultBrain:
         5. Loading & Activating Plugins
         """
         logger.info("Starting VaultBrain initialization...")
+        await self.publish(constants.CoreEvents.SYSTEM_STARTUP)
         
-        # 1. Load Config
+        # Load Config
         self.config = self._load_config()
         
-        # 2. Initialize Memory
+        # Initialize Memory
         self._init_memory()
         
-        # 3. Setup Sidecar Path
-        sidecar_dir = Path(__file__).parent
-        if str(sidecar_dir) not in sys.path:
-            sys.path.insert(0, str(sidecar_dir))
-            logger.info(f"Added sidecar to PYTHONPATH: {sidecar_dir}")
-        
-        # 4. Register Core Commands
+        # Register Core Commands
         self._register_core_commands()
 
-        # 5. Load Plugins (Phase 1: Discovery & Registration)
+        # TODO: Implement file system watcher (watchdog) to emit:
+        # - CoreEvents.FILE_SAVED
+        # - CoreEvents.FILE_CREATED 
+        # - CoreEvents.FILE_MODIFIED
+        # - CoreEvents.FILE_DELETED
+
+        # Load Plugins (Phase 1: Discovery & Registration)
         self._load_plugins()
         
         logger.info(
@@ -114,10 +116,29 @@ class VaultBrain:
             f"{len(self.commands)} commands"
         )
         
-        # 6. Activate Plugins (Phase 2: on_load)
+        # Activate Plugins (Phase 2: on_load)
         await self._activate_plugins()
         
+        await self.publish(constants.CoreEvents.ALL_PLUGINS_LOADED)
         logger.info("VaultBrain fully initialized and ready.")
+        
+    async def shutdown(self) -> None:
+        """
+        Perform graceful shutdown.
+        """
+        logger.info("Shutting down VaultBrain...")
+        
+        # Announce shutdown
+        await self.publish(constants.CoreEvents.SYSTEM_SHUTDOWN)
+        
+        # Unload plugins (reverse order)
+        for name, plugin in list(self.plugins.items())[::-1]:
+            try:
+                await plugin.on_unload()
+            except Exception as e:
+                logger.error(f"Error unloading plugin {name}: {e}")
+                
+        logger.info("VaultBrain shutdown complete.")
 
     # =========================================================================
     # Plugin Lifecycle
@@ -134,11 +155,42 @@ class VaultBrain:
             logger.info("No plugins found in vault")
             return
         
-        logger.info(f"Discovered {len(plugin_dirs)} plugin(s)")
+        # NOTE: logic updated to respect settings.json as the single source for enablement
+        
+        loaded_count = 0
         
         for plugin_dir in plugin_dirs:
             plugin_name = plugin_dir.name
-            plugin_logger = logger.bind(name=f"plugin:{plugin_name}")
+            # 1. Load defaults from settings.json (if exists)
+            defaults = {}
+            settings_path = plugin_dir / "settings.json"
+            if settings_path.exists():
+                try:
+                    defaults = json.loads(settings_path.read_text(encoding="utf-8"))
+                except Exception as e:
+                    plugin_logger.error(f"Failed to load settings.json: {e}")
+            
+            # 2. Get Overrides from .vault.json (Global Config)
+            # Structure: { "plugins": { "plugin_name": { "enabled": true, "param": 123 } } }
+            vault_apps_config = self.config.get("plugins", {})
+            # Handle both "plugins.plugin_name" direct object OR "plugins.enabled" list style legacy
+            # We assume dictionary structure for overrides: "plugins": { "explorer": {...} }
+            
+            overrides = vault_apps_config.get(plugin_name, {})
+            if not isinstance(overrides, dict):
+                # Fallback if config is malformed or just a list
+                overrides = {}
+
+            # 3. Merge Configs (Override > Default)
+            final_config = defaults.copy()
+            final_config.update(overrides)
+            
+            # 4. Check Enablement (Default to False if not present in either)
+            is_enabled = final_config.get("enabled", False)
+            
+            if not is_enabled:
+                # plugin_logger.debug("Plugin disabled")
+                continue
             
             try:
                 utils.validate_plugin_structure(plugin_dir)
@@ -158,18 +210,18 @@ class VaultBrain:
                 # Instantiate (Fresh Init, no args passed mostly)
                 plugin_class = getattr(module, constants.PLUGIN_CLASS_NAME)
                 
-                # We do NOT pass brain/emitter anymore. Plugin uses Singleton.
+                # Pass resolved config to plugin
                 plugin = plugin_class(
                     plugin_dir=plugin_dir,
-                    vault_path=self.vault_path
+                    vault_path=self.vault_path,
+                    config=final_config
                 )
                 
                 # Phase 1: Register
-                if hasattr(plugin, "register_commands"):
-                    plugin.register_commands()
+                plugin.register_commands()
                 
                 self.plugins[plugin_name] = plugin
-                plugin_logger.info(f"Plugin registered successfully")
+                plugin_logger.info(f"Plugin loaded. Config: {final_config}")
             
             except Exception as e:
                 logger.exception(f"Failed to load plugin '{plugin_name}': {e}")
@@ -183,6 +235,8 @@ class VaultBrain:
         for plugin_name, plugin in self.plugins.items():
             try:
                 await plugin.on_load()
+                # Announce plugin loaded
+                await self.publish(constants.CoreEvents.PLUGIN_LOADED, plugin_name=plugin_name)
             except Exception as e:
                 logger.exception(f"Error activating plugin '{plugin_name}': {e}")
 
@@ -218,7 +272,15 @@ class VaultBrain:
         handler = info["handler"]
         
         try:
-            return await handler(**kwargs)
+            result = await handler(**kwargs)
+            # Emit command executed event (fire and forget)
+            asyncio.create_task(self.publish(
+                constants.CoreEvents.COMMAND_EXECUTED,
+                command_id=command_id,
+                args=kwargs,
+                result_status="success"
+            ))
+            return result
         except Exception as e:
             logger.exception(f"Command '{command_id}' failed: {e}")
             raise exceptions.CommandExecutionError(command_id, e)
@@ -226,18 +288,18 @@ class VaultBrain:
     def _register_core_commands(self) -> None:
         """Register system-level commands (chat, list, etc)."""
         
-        # 1. Chat (Placeholder)
+        # Chat (Placeholder)
         async def handle_chat(message: str = "") -> Dict[str, Any]:
             return {"response": f"Echo: {message}", "status": "success"}
             
-        # 2. List Commands
+        # List Commands
         async def list_commands() -> Dict[str, Any]:
             return {
                 "commands": {k: v["plugin"] for k, v in self.commands.items()},
                 "count": len(self.commands)
             }
             
-        # 3. Get Info
+        # Get Info
         async def get_info() -> Dict[str, Any]:
             return {
                 "vault": self.config.get("name"),
@@ -349,12 +411,12 @@ class VaultBrain:
         """Subscribe to an internal Python event."""
         if not asyncio.iscoroutinefunction(handler):
             raise ValueError("Handler must be async")
-        self._subscribers[event].append(handler)
+        self.subscribers[event].append(handler)
         logger.debug(f"Subscribed to internal: {event}")
 
     async def publish(self, event: str, **kwargs: Any) -> None:
         """Publish an internal Python event."""
-        handlers = self._subscribers.get(event, [])
+        handlers = self.subscribers.get(event, [])
         if not handlers:
             return
             

@@ -115,6 +115,12 @@ def main() -> None:
         logger.error(f"Vault path does not exist: {vault_path}")
         sys.exit(1)
     
+    # Add sidecar to Python path (so plugins can import sidecar.* modules)
+    sidecar_dir = Path(__file__).parent.parent
+    if str(sidecar_dir) not in sys.path:
+        sys.path.insert(0, str(sidecar_dir))
+        logger.info(f"Added sidecar root to PYTHONPATH: {sidecar_dir}")
+
     # Add vault's lib directory to Python path for isolated dependencies
     lib_path = vault_path / "lib"
     if lib_path.exists():
@@ -155,6 +161,14 @@ def main() -> None:
         logger.info("")
         logger.info("Received shutdown signal (Ctrl+C)")
         logger.info("Sidecar shutting down gracefully...")
+        
+        # Graceful shutdown
+        try:
+            brain = VaultBrain.get()
+            asyncio.run(brain.shutdown())
+        except Exception as e:
+            logger.error(f"Error during shutdown: {e}")
+            
         sys.exit(0)
     
     except Exception as e:

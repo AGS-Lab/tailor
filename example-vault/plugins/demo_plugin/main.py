@@ -37,17 +37,17 @@ class Plugin(PluginBase):
     def __init__(
         self,
         plugin_dir: Path,
-        vault_path: Path
+        vault_path: Path,
+        config: Dict[str, Any] = None
     ):
         """Initialize demo plugin."""
-        super().__init__(plugin_dir, vault_path)
+        super().__init__(plugin_dir, vault_path, config)
         
         # Plugin-specific state
         self.counter = 0
         
-        # Load settings
-        settings = self.load_settings()
-        self.counter = cast(int, settings.get("counter", 0))
+        # Use injected config
+        self.counter = cast(int, self.config.get("counter", 0))
         
         self.logger.info("Demo plugin initialized")
     

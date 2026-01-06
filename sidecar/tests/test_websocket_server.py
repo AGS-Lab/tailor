@@ -35,7 +35,7 @@ class TestWebSocketServer:
     def test_init(self, server):
         """Test server initialization."""
         assert server.port == 9000
-        assert server.host == "localhost"  # Default
+        assert server.host == "127.0.0.1"  # Default
         assert server.connection is None
         assert server.command_handlers == {}
 

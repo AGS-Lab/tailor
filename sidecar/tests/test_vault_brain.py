@@ -107,6 +107,11 @@ class TestVaultBrain:
         mock_spec_obj.loader.exec_module = Mock()
         mock_spec.return_value = mock_spec_obj
         
+        # Connect paths
+        plugin_path.mkdir(parents=True, exist_ok=True)
+        # Create settings.json to enable plugin
+        (plugin_path / "settings.json").write_text('{"enabled": true, "key": "value"}')
+
         brain = VaultBrain(valid_vault, mock_ws_server)
         await brain.initialize()
         
@@ -114,8 +119,10 @@ class TestVaultBrain:
         assert "test_plugin" in brain.plugins
         assert brain.plugins["test_plugin"] == mock_plugin_instance
         
-        # Verify lifecycle methods called
+        # Verify instantiation with config
         mock_plugin_class.assert_called_once()
+        call_kwargs = mock_plugin_class.call_args.kwargs
+        assert call_kwargs["config"] == {"enabled": True, "key": "value"}
         mock_plugin_instance.register_commands.assert_called_once()
         mock_plugin_instance.on_load.assert_called_once()
 

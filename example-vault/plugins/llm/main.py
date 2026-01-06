@@ -36,19 +36,20 @@ class Plugin(PluginBase):
     def __init__(
         self,
         plugin_dir: Path,
-        vault_path: Path
+        vault_path: Path,
+        config: Dict[str, Any] = None
     ):
         """Initialize LLM plugin."""
-        super().__init__(plugin_dir, vault_path)
+        super().__init__(plugin_dir, vault_path, config)
         
         # Plugin state
         self.conversation_history: List[Dict[str, str]] = []
         self.model_name = "gpt-4"  # Placeholder
         
-        # Load settings
-        settings = self.load_settings()
-        if settings:
-            self.model_name = cast(str, settings.get("model", self.model_name))
+        # Use injected config
+        self.model_name = cast(str, self.config.get("model", self.model_name))
+        
+        if self.config.get("model"):
             self.logger.info(f"Using model: {self.model_name}")
         
         self.logger.info("LLM plugin initialized")
@@ -96,7 +97,7 @@ class Plugin(PluginBase):
         })
         
         # Emit event to update UI
-        self.brain.emit_to_frontend(
+        self.emit(
             EventType.LLM_RESPONSE,
             {
                 "user_message": message,
@@ -122,7 +123,8 @@ class Plugin(PluginBase):
         self.logger.info(f"Cleared {previous_count} messages from history")
         
         # Notify UI
-        self.brain.emit_to_frontend(EventType.LLM_CLEARED, {}, scope=EventScope.WINDOW)
+        # Notify UI
+        self.emit(EventType.LLM_CLEARED, {}, scope=EventScope.WINDOW)
         
         return {
             "status": "success",

@@ -24,17 +24,19 @@ from sidecar.api.plugin_base import PluginBase
 class Plugin(PluginBase):
     """Example plugin that demonstrates command registration and execution."""
     
-    def __init__(self, plugin_dir: Path, vault_path: Path):
+    def __init__(
+        self,
+        plugin_dir: Path,
+        vault_path: Path,
+        config: Dict[str, Any] = None
+    ):
         """
         Initialize plugin.
         """
-        super().__init__(plugin_dir, vault_path)
+        super().__init__(plugin_dir, vault_path, config)
         
-        self.name = "example_plugin"
+        # self.name is set by base class
         self.tick_count = 0
-        
-        # Load plugin config from vault/configs/example_plugin/
-        self.config = self._load_config()
         
         print(f"[{self.name}] Plugin initialized from {plugin_dir}")
         
@@ -53,20 +55,7 @@ class Plugin(PluginBase):
                 severity="success"
             )
     
-    def _load_config(self):
-        """Load plugin configuration from settings.json in plugin directory."""
-        import json
-        config_file = self.plugin_dir / "settings.json"
-        
-        if config_file.exists():
-            with open(config_file, "r") as f:
-                return json.load(f)
-        
-        # Default configuration
-        return {
-            "heartbeat_interval": 3,  # Every 3 ticks
-            "enabled": True
-        }
+    # _load_config removed - handled by VaultBrain
     
     async def on_tick(self):
         """
