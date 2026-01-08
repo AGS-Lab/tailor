@@ -161,20 +161,38 @@ class Plugin(PluginBase):
             }
     
     async def _generate_response(self, message: str) -> str:
-        """Generate LLM response."""
-        # Placeholder implementation
+        """Generate LLM response using VaultBrain's LLM pipeline."""
         if not message:
             return "Please send a message."
         
-        if "hello" in message.lower() or "hi" in message.lower():
-            return "Hello! I'm your vault AI assistant. How can I help you today?"
-        
-        if "?" in message:
-            return f"That's an interesting question. I'm a demo LLM plugin, so I can't provide real answers yet. But you asked: '{message}'"
-        
-        # Echo back with word count
-        word_count = len(message.split())
-        return f"I received your message ({word_count} words). In a real implementation, I would process this with an LLM API and provide a meaningful response."
+        # Use the LLM pipeline from VaultBrain (which has OpenAI integration)
+        if self.brain and self.brain.llm_pipeline:
+            try:
+                result = await self.brain.llm_pipeline.process(
+                    message=message,
+                    history=self.conversation_history[:-1],  # Exclude the just-added user message
+                    metadata={"plugin": self.name}
+                )
+                
+                if result.get("status") == "success":
+                    return result.get("response", "No response generated.")
+                elif result.get("status") == "aborted":
+                    return f"Request blocked: {result.get('reason', 'Unknown reason')}"
+                else:
+                    error = result.get("error", "Unknown error")
+                    self.logger.error(f"LLM pipeline error: {error}")
+                    return f"Error generating response: {error}"
+                    
+            except Exception as e:
+                self.logger.error(f"LLM pipeline exception: {e}")
+                return f"Error: {str(e)}"
+        else:
+            # Fallback if pipeline not available
+            self.logger.warning("LLM pipeline not available, using fallback")
+            return (
+                "LLM pipeline not initialized. "
+                "Please ensure your OpenAI API key is set in .env file."
+            )
     
     async def on_load(self) -> None:
         """Called after plugin is loaded."""

@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use tauri::{AppHandle, WebviewWindow, WebviewWindowBuilder, Manager};
+use tauri::{AppHandle, WebviewWindowBuilder};
 use anyhow::Result;
 
 pub struct WindowManager {
@@ -29,7 +29,7 @@ impl WindowManager {
         let window_label = format!("vault_{}", uuid::Uuid::new_v4());
 
         // Create the window
-        let window = WebviewWindowBuilder::new(
+        let _window = WebviewWindowBuilder::new(
             app,
             &window_label,
             tauri::WebviewUrl::App("vault.html".into()),

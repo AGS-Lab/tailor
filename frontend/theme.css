@@ -1,63 +1,82 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 :root {
-    /* Backgrounds - GitHub Dark Dimmed Palette Inspiration */
-    --bg-app: #0d1117;
-    /* Main App Background (Dark Slate) */
-    --bg-panel: #161b22;
-    /* Panel Background (Lighter Slate) */
-    --bg-header: #010409;
-    /* Header/Top Bar (Darker) */
-    --bg-input: #0d1117;
-    /* Input fields */
-    --bg-card: #21262d;
-    /* Cards/Buttons */
-    --bg-hover: #30363d;
-    /* Hover states */
+    /* Backgrounds - Minimal Black & White with subtle grays */
+    --bg-app: #ffffff;
+    /* Main App Background - Clean white */
+    --bg-panel: #f7f7f7;
+    /* Panel Background - Subtle light gray */
+    --bg-header: #ffffff;
+    /* Header/Top Bar */
+    --bg-input: #ffffff;
+    /* Input fields - Clean white */
+    --bg-card: #f7f7f7;
+    /* Cards/Buttons - Light gray */
+    --bg-hover: #ececec;
+    /* Hover states - Slightly darker gray */
+    --bg-sidebar: #ffffff;
+    /* Sidebar background */
+    --bg-overlay: rgba(0, 0, 0, 0.04);
+    /* Subtle overlay */
 
     /* Text */
-    --text-primary: #c9d1d9;
-    /* White-ish Grey */
-    --text-secondary: #8b949e;
-    /* Muted Grey */
-    --text-disabled: #484f58;
-    --text-link: #58a6ff;
+    --text-primary: #0d0d0d;
+    /* Dark text - almost black */
+    --text-secondary: #565656;
+    /* Medium gray text */
+    --text-disabled: #8b8b8b;
+    /* Light gray text */
+    --text-link: #0d0d0d;
+    /* Links use primary text */
 
     /* Accents */
-    --accent-primary: #58a6ff;
-    /* Blue (GitHub Action Blue) */
-    --accent-secondary: #238636;
-    /* Green (Success) */
-    --accent-error: #da3633;
+    --accent-primary: #10a37f;
+    /* Green (ChatGPT-like primary) */
+    --accent-secondary: #10a37f;
+    /* Green (Same as primary) */
+    --accent-error: #d32f2f;
     /* Red (Error) */
-    --accent-warning: #d29922;
-    /* Yellow/Orange */
-
-    /* Gradients (Removed for Flat Design) */
-    --accent-gradient: none;
-    --bg-gradient-subtle: none;
+    --accent-warning: #f57c00;
+    /* Orange (Warning) */
+    --accent-success: #388e3c;
+    /* Green (Success) */
 
     /* Borders */
-    --border-subtle: #30363d;
-    --border-active: #58a6ff;
-    --border-radius: 4px;
-    /* Reduced radius for sharper look */
+    --border-subtle: #d1d5db;
+    /* Light gray border */
+    --border-active: #10a37f;
+    /* Green border on focus/active */
+    --border-radius: 8px;
+    /* Rounded corners for modern look */
+    --border-width: 1px;
 
     /* Typography */
     --font-main: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     --font-mono: 'JetBrains Mono', 'Fira Code', Consolas, "Courier New", monospace;
+    --font-weight-light: 300;
+    --font-weight-normal: 400;
+    --font-weight-medium: 500;
+    --font-weight-semibold: 600;
+    --font-weight-bold: 700;
 
     /* Spacing */
     --spacing-xs: 4px;
     --spacing-sm: 8px;
-    --spacing-md: 16px;
-    --spacing-lg: 24px;
+    --spacing-md: 12px;
+    --spacing-lg: 16px;
+    --spacing-xl: 24px;
+    --spacing-2xl: 32px;
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
 }
 
-/* Custom Scrollbars (Flat) */
+/* Custom Scrollbars */
 ::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
+    width: 8px;
+    height: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -65,17 +84,12 @@
 }
 
 ::-webkit-scrollbar-thumb {
-    background: #30363d;
-    /* Flat grey */
-    border: 2px solid var(--bg-app);
-    /* Gives padding effect */
-    border-radius: 0;
-    /* Square/Flat */
+    background: #ccc;
+    border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: #58a6ff;
-    /* Highlight on hover */
+    background: #999;
 }
 
 ::-webkit-scrollbar-corner {
@@ -93,36 +107,53 @@ body {
     background: var(--bg-app);
     color: var(--text-primary);
     font-family: var(--font-main);
+    font-size: 14px;
     overflow: hidden;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    line-height: 1.5;
 }
 
-/* Panel Containers */
-.panel-container {
+/* App Container Layout */
+.app-container {
+    display: flex;
+    height: 100vh;
+    width: 100%;
+    background: var(--bg-app);
+}
+
+/* Main Navigation Sidebar */
+#main-nav-container {
+    width: 260px;
+    background: var(--bg-sidebar);
+    border-right: 1px solid var(--border-subtle);
+    overflow-y: auto;
+    flex-shrink: 0;
     display: flex;
     flex-direction: column;
-    height: 100%;
-    overflow: hidden;
-    background: var(--bg-app);
-    /* Unified background */
 }
 
-.scrollable {
+/* Main Content Area */
+#app-content {
     flex: 1;
-    overflow: auto;
-    padding: 0;
-    /* Full width content */
+    overflow-y: auto;
+    background: var(--bg-app);
 }
 
-/* Toolbar/Inputs */
-.toolbar {
-    padding: 8px 16px;
-    background: var(--bg-panel);
-    border-top: 1px solid var(--border-subtle);
-    display: flex;
-    gap: 8px;
-    align-items: center;
+/* Status Badges */
+#conn-status.disconnected .status-badge {
+    background: var(--accent-error);
+}
+
+#conn-status.connected .status-badge {
+    background: var(--accent-success);
+}
+
+.status-badge {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
 }
 
 textarea,
@@ -130,53 +161,78 @@ input {
     background: var(--bg-input);
     color: var(--text-primary);
     border: 1px solid var(--border-subtle);
-    padding: 6px 8px;
-    font-family: var(--font-mono);
-    border-radius: 2px;
-    /* Minimal radius */
+    padding: var(--spacing-md) var(--spacing-lg);
+    font-family: var(--font-main);
+    border-radius: var(--border-radius);
     outline: none;
-    font-size: 0.85rem;
+    font-size: 14px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+textarea::placeholder,
+input::placeholder {
+    color: var(--text-disabled);
 }
 
 textarea:focus,
 input:focus {
     border-color: var(--accent-primary);
+    box-shadow: 0 0 0 3px rgba(16, 163, 127, 0.1);
 }
 
 /* App Header (Removed) */
 /* .app-header, .brand-text, .port-badger, .port-input removed */
 
-/* Buttons (Flat) */
+/* Buttons */
 .btn {
-    padding: 4px 10px;
-    border-radius: 2px;
+    padding: var(--spacing-md) var(--spacing-lg);
+    border-radius: var(--border-radius);
     cursor: pointer;
-    font-size: 0.8rem;
-    font-weight: 400;
-    transition: background 0.1s;
-    border: 1px solid transparent;
+    font-size: 14px;
+    font-weight: var(--font-weight-medium);
+    transition: all 0.2s;
+    border: none;
+    font-family: var(--font-main);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    text-decoration: none;
+}
+
+.btn-primary {
+    background: var(--accent-primary);
+    color: #ffffff;
+}
+
+.btn-primary:hover {
+    background: #0d8c6d;
+    box-shadow: var(--shadow-md);
+}
+
+.btn-primary:active {
+    background: #0a6d56;
 }
 
 .btn-secondary {
+    background: var(--bg-card);
+    color: var(--text-primary);
+    border: 1px solid var(--border-subtle);
+}
+
+.btn-secondary:hover {
+    background: var(--bg-hover);
+    border-color: var(--text-secondary);
+}
+
+.btn-tertiary {
     background: transparent;
     color: var(--text-secondary);
     border: 1px solid transparent;
 }
 
-.btn-secondary:hover {
-    background: var(--bg-hover);
+.btn-tertiary:hover {
+    background: var(--bg-card);
     color: var(--text-primary);
-}
-
-.btn-primary {
-    background: var(--accent-secondary);
-    color: #fff;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.btn-primary:hover {
-    background: #2ea043;
-    /* GitHub hover green */
 }
 
 /* Connecting/Disconnected Overlay - Flat */
@@ -271,6 +327,32 @@ input:focus {
 .lm_controls {
     display: none !important;
     /* Hide maximize/close buttons for cleaner look if not needed */
+}
+
+/* Panel Container - fills GoldenLayout content area */
+.panel-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+}
+
+/* Scrollable area - takes remaining space and scrolls */
+.scrollable {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-height: 0;
+    /* Important for flex children to scroll */
+}
+
+/* Toolbar at bottom of panels */
+.toolbar {
+    flex-shrink: 0;
+    padding: 8px;
+    border-top: 1px solid var(--border-subtle);
+    background: var(--bg-panel);
 }
 
 /* --- Shared Utilities --- */
@@ -427,4 +509,119 @@ input:focus {
     overflow: hidden;
     position: relative;
     background: var(--bg-app);
+}
+
+/* ===== NAVIGATION STYLES ===== */
+.main-nav {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: var(--spacing-lg) 0;
+    gap: var(--spacing-lg);
+}
+
+.nav-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    padding: 0 var(--spacing-md);
+}
+
+.nav-brand {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    padding: 0 var(--spacing-lg) var(--spacing-xl) var(--spacing-lg);
+    font-size: 18px;
+    font-weight: var(--font-weight-bold);
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.nav-section-bottom {
+    margin-top: auto;
+    border-top: 1px solid var(--border-subtle);
+    padding-top: var(--spacing-lg);
+    padding-bottom: var(--spacing-lg);
+}
+
+.nav-item {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    padding: var(--spacing-md) var(--spacing-lg);
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-radius: var(--border-radius);
+    transition: all 0.2s;
+    user-select: none;
+    font-size: 14px;
+    font-weight: var(--font-weight-medium);
+}
+
+.nav-item:hover {
+    background: var(--bg-card);
+    color: var(--text-primary);
+}
+
+.nav-item.active {
+    background: var(--bg-overlay);
+    color: var(--accent-primary);
+}
+
+.nav-item i {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+}
+
+.nav-item span {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ===== UTILITY CLASSES ===== */
+.loading-spinner {
+    display: inline-block;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-2xl);
+    text-align: center;
+    color: var(--text-secondary);
+}
+
+.error-message {
+    padding: var(--spacing-lg);
+    background: rgba(211, 47, 47, 0.1);
+    border: 1px solid var(--accent-error);
+    border-radius: var(--border-radius);
+    color: var(--accent-error);
+    font-size: 14px;
+}
+
+.success-message {
+    padding: var(--spacing-lg);
+    background: rgba(56, 142, 60, 0.1);
+    border: 1px solid var(--accent-success);
+    border-radius: var(--border-radius);
+    color: var(--accent-success);
+    font-size: 14px;
 }

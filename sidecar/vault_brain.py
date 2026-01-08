@@ -17,6 +17,8 @@ from collections import defaultdict
 from . import utils
 from . import constants
 from . import exceptions
+from .llm import HookRegistry, LLMPipeline, PipelineConfig
+from .plugin_installer import PluginInstaller
 
 # Local import avoids circular dependency in type checking if used carefully
 # from .api.plugin_base import PluginBase
@@ -76,6 +78,13 @@ class VaultBrain:
         self.config: Dict[str, Any] = {}
         self.graph: Optional[Dict[str, Any]] = None
         
+        # LLM Processing Pipeline with Hook System
+        self.hook_registry = HookRegistry()
+        self.llm_pipeline: Optional[LLMPipeline] = None
+        
+        # Plugin Installer
+        self.plugin_installer = PluginInstaller(self.vault_path)
+        
         self._initialized = True
         logger.info(f"VaultBrain Singleton created for: {self.vault_path}")
 
@@ -98,6 +107,11 @@ class VaultBrain:
         
         # Initialize Memory
         self._init_memory()
+        
+        # Initialize LLM Pipeline with config
+        llm_config = self.config.get("llm", {})
+        pipeline_config = PipelineConfig.from_dict(llm_config)
+        self.llm_pipeline = LLMPipeline(self.hook_registry, pipeline_config)
         
         # Register Core Commands
         self._register_core_commands()
@@ -217,11 +231,15 @@ class VaultBrain:
                     config=final_config
                 )
                 
-                # Phase 1: Register
+                # Phase 1: Register commands and hooks
                 plugin.register_commands()
                 
+                # Call register_hooks if plugin has it
+                if hasattr(plugin, 'register_hooks'):
+                    plugin.register_hooks()
+                
                 self.plugins[plugin_name] = plugin
-                plugin_logger.info(f"Plugin loaded. Config: {final_config}")
+                logger.info(f"Plugin '{plugin_name}' loaded. Config: {final_config}")
             
             except Exception as e:
                 logger.exception(f"Failed to load plugin '{plugin_name}': {e}")
@@ -288,8 +306,15 @@ class VaultBrain:
     def _register_core_commands(self) -> None:
         """Register system-level commands (chat, list, etc)."""
         
-        # Chat (Placeholder)
-        async def handle_chat(message: str = "") -> Dict[str, Any]:
+        # Chat - Now uses LLM Pipeline
+        async def handle_chat(message: str = "", history: List[Dict[str, str]] = None) -> Dict[str, Any]:
+            if self.llm_pipeline:
+                result = await self.llm_pipeline.process(
+                    message=message,
+                    history=history or [],
+                    metadata={}
+                )
+                return result
             return {"response": f"Echo: {message}", "status": "success"}
             
         # List Commands
@@ -348,6 +373,67 @@ class VaultBrain:
             
             return {"status": "ok"}
         self.ws_server.register_handler("system.client_ready", client_ready)
+        
+        # Plugin Management Commands
+        async def install_plugin(p: Dict[str, Any]) -> Dict[str, Any]:
+            repo_url = p.get("repo_url", "")
+            plugin_id = p.get("plugin_id")
+            
+            if not repo_url:
+                return {"status": "error", "error": "repo_url is required"}
+            
+            result = await self.plugin_installer.install(repo_url, plugin_id)
+            return {
+                "status": result.status.value,
+                "plugin_id": result.plugin_id,
+                "message": result.message,
+                "manifest": result.manifest
+            }
+        
+        async def update_plugin(p: Dict[str, Any]) -> Dict[str, Any]:
+            plugin_id = p.get("plugin_id", "")
+            
+            if not plugin_id:
+                return {"status": "error", "error": "plugin_id is required"}
+            
+            result = await self.plugin_installer.update(plugin_id)
+            return {
+                "status": result.status.value,
+                "plugin_id": result.plugin_id,
+                "message": result.message
+            }
+        
+        async def uninstall_plugin(p: Dict[str, Any]) -> Dict[str, Any]:
+            plugin_id = p.get("plugin_id", "")
+            
+            if not plugin_id:
+                return {"status": "error", "error": "plugin_id is required"}
+            
+            success = await self.plugin_installer.uninstall(plugin_id)
+            return {
+                "status": "success" if success else "error",
+                "plugin_id": plugin_id,
+                "message": f"Plugin '{plugin_id}' uninstalled" if success else "Uninstall failed"
+            }
+        
+        async def list_plugins(p: Dict[str, Any]) -> Dict[str, Any]:
+            plugins = self.plugin_installer.list_installed()
+            return {
+                "status": "success",
+                "plugins": plugins,
+                "count": len(plugins)
+            }
+        
+        self.ws_server.register_handler("plugins.install", install_plugin)
+        self.ws_server.register_handler("plugins.update", update_plugin)
+        self.ws_server.register_handler("plugins.uninstall", uninstall_plugin)
+        self.ws_server.register_handler("plugins.list", list_plugins)
+        
+        # Also register the async functions directly as brain commands
+        self.register_command("plugins.install", install_plugin, constants.CORE_PLUGIN_NAME)
+        self.register_command("plugins.update", update_plugin, constants.CORE_PLUGIN_NAME)
+        self.register_command("plugins.uninstall", uninstall_plugin, constants.CORE_PLUGIN_NAME)
+        self.register_command("plugins.list", list_plugins, constants.CORE_PLUGIN_NAME)
 
     @property
     def is_client_connected(self) -> bool:

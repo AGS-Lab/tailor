@@ -10,7 +10,9 @@
     "app": {
         "windows": [
             {
+                "label": "main",
                 "title": "Tailor - Multi-Window AI Workspace",
+                "url": "index.html",
                 "width": 1200,
                 "height": 800,
                 "resizable": true,

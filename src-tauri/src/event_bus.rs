@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{Mutex, mpsc};
+use tokio::sync::Mutex;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 

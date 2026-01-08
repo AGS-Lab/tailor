@@ -402,19 +402,33 @@ def discover_plugins(vault_path: Path) -> List[Path]:
     """Discover all plugin directories in a vault."""
     plugins_dir = get_plugins_dir(vault_path)
     
+    from loguru import logger
+    logger_inst = logger.bind(name=__name__)
+    
     if not plugins_dir:
+        logger_inst.debug(f"Plugins directory does not exist or is not a directory: {vault_path / constants.PLUGINS_DIR}")
         return []
+    
+    logger_inst.debug(f"Scanning plugins directory: {plugins_dir}")
     
     plugin_dirs = []
     
     for item in plugins_dir.iterdir():
         # Skip hidden directories and files
         if item.name.startswith(('.', '_')):
+            logger_inst.debug(f"Skipping hidden item: {item.name}")
             continue
         
         # Only include directories with main.py
-        if item.is_dir() and (item / constants.PLUGIN_MAIN_FILE).exists():
-            plugin_dirs.append(item)
+        if item.is_dir():
+            main_file = item / constants.PLUGIN_MAIN_FILE
+            if main_file.exists():
+                logger_inst.debug(f"Found plugin: {item.name}")
+                plugin_dirs.append(item)
+            else:
+                logger_inst.debug(f"Skipping {item.name} (no main.py)")
+        else:
+            logger_inst.debug(f"Skipping {item.name} (not a directory)")
     
     return sorted(plugin_dirs, key=lambda p: p.name)
 

@@ -386,30 +386,49 @@
                 // indicator.className = 'connected'; // Removed overlay, maybe show in activity bar later?
                 log('Connected to Sidecar', 'in');
 
-                // Auto-load stuff
-                loadPlugins();
+                // Wait for GoldenLayout to fully initialize and sidecar to be ready
+                // Then load plugins with a longer delay
+                setTimeout(() => {
+                    log('Starting plugin load after delay...', 'info');
+                    loadPlugins();
+                }, 2000);  // 2 second delay for sidecar init
             } else {
                 // indicator.className = 'disconnected';
                 log('Disconnected', 'error');
             }
         }
 
+        let reconnectAttempts = 0;
+        const maxReconnectAttempts = 10;
+        let currentPort = null;
+
         function connect(explicitPort) {
             // Priority: Explicit Arg > URL param > Default 9002
-            let port = explicitPort;
+            let port = explicitPort || currentPort;
             if (!port) {
                 const params = new URLSearchParams(window.location.search);
                 port = params.get('port') || '9002';
             }
+            currentPort = port;  // Save for reconnect
 
-            log(`Connecting to ws://127.0.0.1:${port}...`);
+            log(`Connecting to ws://127.0.0.1:${port}... (attempt ${reconnectAttempts + 1}/${maxReconnectAttempts})`);
 
             ws = new WebSocket(`ws://127.0.0.1:${port}`);
 
-            ws.onopen = () => setConnected(true);
-            ws.onclose = () => setConnected(false);
-            ws.onerror = (e) => log('WebSocket Error', 'error');
+            ws.onopen = () => {
+                reconnectAttempts = 0;  // Reset on successful connect
+                setConnected(true);
+            };
 
+            ws.onclose = () => {
+                setConnected(false);
+                scheduleReconnect();
+            };
+
+            ws.onerror = (e) => {
+                log('WebSocket Error', 'error');
+                // onclose will be called after onerror, which will trigger reconnect
+            };
 
             ws.onmessage = (e) => {
                 try {
@@ -420,12 +439,26 @@
                         pending.get(data.id)(data);
                         pending.delete(data.id);
                     }
-                    // Log incoming responses if needed
-                    // log(`< ${JSON.stringify(data).slice(0, 100)}`, 'in');
                 } catch (err) {
                     log(`Parse Error: ${err}`, 'error');
                 }
             };
+        }
+
+        function scheduleReconnect() {
+            if (reconnectAttempts >= maxReconnectAttempts) {
+                log(`Max reconnect attempts (${maxReconnectAttempts}) reached. Please reload.`, 'error');
+                return;
+            }
+
+            reconnectAttempts++;
+            // Exponential backoff: 500ms, 1s, 2s, 4s... capped at 5s
+            const delay = Math.min(500 * Math.pow(2, reconnectAttempts - 1), 5000);
+            log(`Reconnecting in ${delay}ms...`, 'info');
+
+            setTimeout(() => {
+                connect();
+            }, delay);
         }
 
         // RPC
@@ -444,33 +477,63 @@
         }
         window.request = request; // Expose for plugins
 
-        // Plugin Loading
-        async function loadPlugins() {
+        // Plugin Loading with retry
+        async function loadPlugins(retryCount = 0) {
+            const maxRetries = 3;
+            const retryDelay = 500; // ms
+
             try {
                 // 0. Notify Backend Client is Ready (Triggers Plugin UI Registration)
                 log('Notifying backend: system.client_ready', 'out');
-                // Call directly as an RPC method, corresponding to ws_server.register_handler("system.client_ready")
-                request('system.client_ready', {})
+                await request('system.client_ready', {})
                     .catch(e => console.warn('system.client_ready failed', e));
+
+                // Wait for sidecar to finish initializing (longer on first attempt)
+                const initDelay = retryCount === 0 ? 1000 : 300;
+                await new Promise(resolve => setTimeout(resolve, initDelay));
 
                 // 1. List Commands
                 const res = await request('list_commands');
-                const commands = res.result.commands || {};
+                log(`list_commands response: ${JSON.stringify(res).slice(0, 200)}`, 'in');
+
+                const commands = res.result?.commands || {};
+                const commandList = Object.keys(commands);
+                log(`Available commands: ${commandList.length}`, 'info');
 
                 // 2. Check for UI commands (convention: *.get_ui)
-                const hasLLM = Object.keys(commands).includes('llm.get_ui');
+                const hasLLM = commandList.includes('llm.get_ui');
+                log(`Has llm.get_ui: ${hasLLM}`, 'info');
+
+                // If no commands yet and we have retries left, wait and retry
+                if (commandList.length === 0 && retryCount < maxRetries) {
+                    log(`No commands found, retrying in ${retryDelay}ms... (attempt ${retryCount + 1}/${maxRetries})`, 'info');
+                    await new Promise(resolve => setTimeout(resolve, retryDelay));
+                    return loadPlugins(retryCount + 1);
+                }
 
                 if (hasLLM) {
+                    log('Loading LLM UI...', 'out');
                     const uiRes = await request('execute_command', {
                         command: 'llm.get_ui',
                         args: {}
                     });
 
-                    // Unwrap execute_command result structure: { result: { html: ... }, status: 'success' }
-                    const cmdResult = uiRes.result ? uiRes.result.result : null;
+                    log(`llm.get_ui response: ${JSON.stringify(uiRes).slice(0, 300)}`, 'in');
 
-                    if (cmdResult && cmdResult.html) {
-                        const stage = document.getElementById('chat-area'); // Target the new chat pane
+                    // Handle various result structures
+                    let html = null;
+
+                    // Try different result paths
+                    if (uiRes.result?.result?.html) {
+                        html = uiRes.result.result.html;
+                    } else if (uiRes.result?.html) {
+                        html = uiRes.result.html;
+                    } else if (uiRes.html) {
+                        html = uiRes.html;
+                    }
+
+                    if (html) {
+                        const stage = document.getElementById('chat-area');
                         if (!stage) {
                             log('Chat pane not found', 'error');
                             return;
@@ -478,20 +541,48 @@
                         // Use createContextualFragment to ensure scripts execute
                         const range = document.createRange();
                         range.selectNode(stage);
-                        const fragment = range.createContextualFragment(`<div class="panel-container" style="padding:10px;">${cmdResult.html}</div>`);
-                        stage.innerHTML = ''; // Clear previous content
+                        const fragment = range.createContextualFragment(`<div class="panel-container" style="height:100%;">${html}</div>`);
+                        stage.innerHTML = '';
                         stage.appendChild(fragment);
+
+                        // Re-initialize Lucide icons if present
+                        if (window.lucide) {
+                            window.lucide.createIcons();
+                        }
+
                         log('Loaded LLM UI into Chat Pane', 'in');
+                    } else {
+                        log('No HTML in llm.get_ui response', 'error');
+                    }
+                } else if (!hasLLM && retryCount < maxRetries) {
+                    // LLM plugin not found, retry
+                    log(`LLM plugin not found, retrying... (attempt ${retryCount + 1}/${maxRetries})`, 'info');
+                    await new Promise(resolve => setTimeout(resolve, retryDelay));
+                    return loadPlugins(retryCount + 1);
+                } else {
+                    // No LLM plugin after all retries, show default chat UI
+                    const stage = document.getElementById('chat-area');
+                    if (stage) {
+                        stage.innerHTML = `
+                            <div style="text-align:center; padding:40px; color:var(--text-disabled);">
+                                <div style="font-size:2rem; margin-bottom:10px;">💬</div>
+                                <p>LLM plugin not loaded</p>
+                                <p style="font-size:0.8rem;">Enable the LLM plugin in .vault.json</p>
+                            </div>
+                        `;
                     }
                 }
 
-                // 3. NEW: Load Sidebar Plugins (Check for *.get_sidebar)
-                // For now, we will simulate this or let plugins register themselves via events if they were smarter.
-                // But since our plugins are passive until called, we might need a "startup" hook or iterate plugins.
-                // Since this is just a demo, we'll manually register the explorer if consistent.
-
             } catch (e) {
                 log(`Plugin Load Error: ${e}`, 'error');
+                console.error('loadPlugins error:', e);
+
+                // Retry on error
+                if (retryCount < maxRetries) {
+                    log(`Retrying after error... (attempt ${retryCount + 1}/${maxRetries})`, 'info');
+                    await new Promise(resolve => setTimeout(resolve, retryDelay));
+                    return loadPlugins(retryCount + 1);
+                }
             }
         }
 

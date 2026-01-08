@@ -3,5 +3,14 @@
     "name": "Example Vault",
     "version": "1.0.0",
     "description": "Example vault demonstrating Tailor's plugin system",
-    "created": "2025-12-31T01:30:00Z"
+    "created": "2025-12-31T01:30:00Z",
+    "plugins": {
+        "llm": {
+            "enabled": true,
+            "model": "gpt-4"
+        },
+        "explorer": {
+            "enabled": true
+        }
+    }
 }

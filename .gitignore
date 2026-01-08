@@ -37,7 +37,7 @@ example-vault/config/
 build-log.txt
 build-errors.txt
 build-check.ps1
-
+.env
 
 # Coverage
 htmlcov/

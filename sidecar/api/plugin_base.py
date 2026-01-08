@@ -13,12 +13,19 @@ from typing import Dict, Any, Optional, TYPE_CHECKING, cast, Callable, Awaitable
 try:
     from sidecar import utils
     from sidecar import constants
+    from sidecar.llm import HookPhase, HookContext
 except ImportError:
     import utils
     import constants
+    try:
+        from llm import HookPhase, HookContext
+    except ImportError:
+        HookPhase = None  # type: ignore
+        HookContext = None  # type: ignore
 
 if TYPE_CHECKING:
     from sidecar.vault_brain import VaultBrain
+    from sidecar.llm import HookContext as HookContextType
 
 
 class PluginBase(ABC):
@@ -92,6 +99,60 @@ class PluginBase(ABC):
         DO NOT run active code here. Just register.
         """
         pass
+    
+    def register_hooks(self) -> None:
+        """
+        Register LLM processing hooks.
+        
+        Called by VaultBrain after register_commands().
+        Override this method to register hooks for LLM pipeline phases.
+        
+        Available hooks:
+        - input.transform: Modify user message before processing
+        - input.validate: Validate/filter input (can abort pipeline)
+        - process.before_llm: Inject context before LLM call
+        - process.after_llm: Post-process LLM response
+        - output.format: Format response for UI
+        
+        Example:
+            def register_hooks(self) -> None:
+                self.register_hook(
+                    "process.before_llm",
+                    self._inject_context,
+                    priority=50
+                )
+        """
+        pass
+    
+    def register_hook(
+        self,
+        phase: str,
+        handler: Callable[["HookContextType"], Awaitable["HookContextType"]],
+        priority: int = 100
+    ) -> None:
+        """
+        Register a hook for LLM processing.
+        
+        Args:
+            phase: Hook phase (e.g., "input.transform", "process.before_llm")
+            handler: Async function that receives and returns HookContext
+            priority: Execution priority (lower = runs first)
+        """
+        if HookPhase is None:
+            self.logger.warning("Hook system not available")
+            return
+        
+        try:
+            hook_phase = HookPhase(phase)
+            self.brain.hook_registry.register(
+                hook_phase,
+                handler,
+                self.name,
+                priority
+            )
+            self.logger.debug(f"Registered hook: {phase} (priority={priority})")
+        except ValueError as e:
+            self.logger.error(f"Invalid hook phase '{phase}': {e}")
     
     async def on_load(self) -> None:
         """

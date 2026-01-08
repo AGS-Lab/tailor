@@ -1,5 +1,5 @@
-use crate::{AppState, dependency_checker::DependencyChecker};
-use tauri::{AppHandle, State, Manager};
+use crate::{AppState, window_manager::WindowManager, sidecar_manager::SidecarManager, dependency_checker::DependencyChecker};
+use tauri::{AppHandle, Manager, State};
 use serde::{Deserialize, Serialize};
 use anyhow::Result;
 use std::path::PathBuf;
@@ -133,7 +133,7 @@ pub async fn get_current_vault_info(
 }
 
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct VaultListItem {
     pub name: String,
     pub path: String,
@@ -142,49 +142,9 @@ pub struct VaultListItem {
 
 /// List all known vaults
 #[tauri::command]
-pub async fn list_vaults(app: AppHandle) -> Result<Vec<VaultListItem>, String> {
-    let mut vaults = Vec::new();
-    
-    // Get app data directory
-    let app_data_dir = app.path().app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {}", e))?;
-    
-    // Create app data directory if it doesn't exist
-    fs::create_dir_all(&app_data_dir)
-        .map_err(|e| format!("Failed to create app data directory: {}", e))?;
-    
-    let registry_path = app_data_dir.join("vaults.json");
-    
-    // If registry exists, load it
-    if registry_path.exists() {
-        if let Ok(contents) = fs::read_to_string(&registry_path) {
-                if let Ok(registry) = serde_json::from_str::<Vec<VaultListItem>>(&contents) {
-                    // Validate that vaults still exist and load info from .vault.json
-                    for mut vault in registry {
-                        let vault_path = PathBuf::from(&vault.path);
-                        if vault_path.exists() {
-                            // Try to load vault info from .vault.json
-                            let config_path = vault_path.join(".vault.json");
-                            if config_path.exists() {
-                                if let Ok(config_contents) = fs::read_to_string(&config_path) {
-                                    if let Ok(config) = serde_json::from_str::<serde_json::Value>(&config_contents) {
-                                        if let Some(name) = config.get("name").and_then(|v| v.as_str()) {
-                                            vault.name = name.to_string();
-                                        }
-                                        if let Some(created) = config.get("created").and_then(|v| v.as_str()) {
-                                            vault.created = Some(created.to_string());
-                                        }
-                                    }
-                                }
-                            }
-                            vaults.push(vault);
-                        }
-                    }
-                }
-        }
-    }
-    
-    Ok(vaults)
+pub async fn list_vaults() -> Result<Vec<VaultListItem>, String> {
+    // TODO: Implement vault discovery
+    Ok(vec![])
 }
 
 /// Get vault information
@@ -208,123 +168,8 @@ pub async fn get_vault_info(vault_path: String) -> Result<serde_json::Value, Str
 
 /// Create a new vault
 #[tauri::command]
-pub async fn create_vault(
-    name: String,
-    path: String,
-    app: AppHandle,
-) -> Result<VaultListItem, String> {
-    // Validate that path is provided
-    if path.is_empty() {
-        return Err("Vault path is required".to_string());
-    }
-    
-    let vault_path = PathBuf::from(&path);
-    
-    // Check if vault already exists
-    if vault_path.exists() {
-        return Err(format!("Directory already exists: {}", path));
-    }
-    
-    // Create vault directory
-    fs::create_dir_all(&vault_path)
-        .map_err(|e| format!("Failed to create vault directory: {}", e))?;
-    
-    // Create subdirectories
-    let plugins_dir = vault_path.join("plugins");
-    let lib_dir = vault_path.join("lib");
-    let memory_dir = vault_path.join(".memory");
-    let configs_dir = vault_path.join("configs");
-    
-    fs::create_dir_all(&plugins_dir)
-        .map_err(|e| format!("Failed to create plugins directory: {}", e))?;
-    fs::create_dir_all(&lib_dir)
-        .map_err(|e| format!("Failed to create lib directory: {}", e))?;
-    fs::create_dir_all(&memory_dir)
-        .map_err(|e| format!("Failed to create memory directory: {}", e))?;
-    fs::create_dir_all(&configs_dir)
-        .map_err(|e| format!("Failed to create configs directory: {}", e))?;
-    
-    // Create empty requirements.txt in plugins directory
-    let requirements_file = plugins_dir.join("requirements.txt");
-    if !requirements_file.exists() {
-        fs::write(&requirements_file, "# Shared plugin dependencies\n")
-            .map_err(|e| format!("Failed to create requirements.txt: {}", e))?;
-    }
-    
-    // Generate vault ID
-    let vault_id = format!("vault_{}", uuid::Uuid::new_v4().to_string().replace("-", ""));
-    
-    // Get current timestamp in ISO 8601 format
-    let created_iso = chrono::Utc::now().to_rfc3339();
-    
-    // Create .vault.json file
-    let vault_config = serde_json::json!({
-        "id": vault_id,
-        "name": name,
-        "version": "1.0.0",
-        "description": format!("Vault: {}", name),
-        "created": created_iso
-    });
-    
-    let config_path = vault_path.join(".vault.json");
-    let config_json = serde_json::to_string_pretty(&vault_config)
-        .map_err(|e| format!("Failed to serialize vault config: {}", e))?;
-    
-    fs::write(&config_path, config_json)
-        .map_err(|e| format!("Failed to write vault config: {}", e))?;
-    
-    println!("Created vault: {} at {}", name, path);
-    
-    let vault_item = VaultListItem {
-        name: name.clone(),
-        path: path.clone(),
-        created: Some(created_iso.clone()),
-    };
-    
-    // Register vault in registry
-    register_vault_in_registry(&app, &vault_item).await?;
-    
-    Ok(vault_item)
-}
-
-/// Register a vault in the registry
-async fn register_vault_in_registry(
-    app: &AppHandle,
-    vault: &VaultListItem,
-) -> Result<(), String> {
-    // Get app data directory
-    let app_data_dir = app.path().app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {}", e))?;
-    
-    // Create app data directory if it doesn't exist
-    fs::create_dir_all(&app_data_dir)
-        .map_err(|e| format!("Failed to create app data directory: {}", e))?;
-    
-    let registry_path = app_data_dir.join("vaults.json");
-    
-    // Load existing registry
-    let mut vaults = if registry_path.exists() {
-        if let Ok(contents) = fs::read_to_string(&registry_path) {
-            serde_json::from_str::<Vec<VaultListItem>>(&contents).unwrap_or_default()
-        } else {
-            Vec::new()
-        }
-    } else {
-        Vec::new()
-    };
-    
-    // Check if vault already exists in registry
-    if !vaults.iter().any(|v| v.path == vault.path) {
-        vaults.push(vault.clone());
-        
-        // Write registry back
-        let registry_json = serde_json::to_string_pretty(&vaults)
-            .map_err(|e| format!("Failed to serialize registry: {}", e))?;
-        fs::write(&registry_path, registry_json)
-            .map_err(|e| format!("Failed to write registry: {}", e))?;
-    }
-    
-    Ok(())
+pub async fn create_vault(name: String, _path: String) -> Result<VaultListItem, String> {
+    Err("Vault creation not yet implemented".to_string())
 }
 
 /// Search plugins in the community store
@@ -483,4 +328,5 @@ pub async fn validate_plugin(_vault_path: String, plugin_path: String) -> Result
         "message": "Plugin structure is valid",
     }))
 }
+
 

@@ -1,0 +1,273 @@
+/* UI Template Store Styles */
+
+.template-store {
+    padding: 24px;
+    max-width: 1200px;
+    margin: 0 auto;
+    font-family: var(--font-main);
+}
+
+.store-header {
+    text-align: center;
+    margin-bottom: 32px;
+}
+
+.store-header h1 {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    font-size: 1.75rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 8px 0;
+}
+
+.store-header h1 svg {
+    width: 28px;
+    height: 28px;
+    color: var(--accent-primary);
+}
+
+.store-header .subtitle {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    margin: 0;
+}
+
+/* Controls */
+.store-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.search-box {
+    position: relative;
+    max-width: 400px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+.search-box svg {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 18px;
+    height: 18px;
+    color: var(--text-disabled);
+}
+
+.search-box input {
+    width: 100%;
+    padding: 10px 12px 10px 40px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+    background: var(--bg-input);
+    color: var(--text-primary);
+    font-size: 0.9rem;
+}
+
+.search-box input:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+}
+
+.category-filters {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.filter-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.filter-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.filter-btn.active {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+    color: white;
+}
+
+.filter-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* Template Grid */
+.template-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 20px;
+}
+
+.template-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    overflow: hidden;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.template-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.template-preview {
+    height: 140px;
+    background: linear-gradient(135deg, var(--bg-panel) 0%, var(--bg-card) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.template-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.preview-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+}
+
+.preview-placeholder svg {
+    width: 48px;
+    height: 48px;
+    color: var(--text-disabled);
+    opacity: 0.5;
+}
+
+.template-info {
+    padding: 16px;
+}
+
+.template-info h3 {
+    margin: 0 0 8px 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.template-desc {
+    margin: 0 0 12px 0;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+.template-meta {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 12px;
+    font-size: 0.75rem;
+    color: var(--text-disabled);
+}
+
+.template-meta span {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.template-meta svg {
+    width: 12px;
+    height: 12px;
+}
+
+.template-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.template-actions .btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 12px;
+    font-size: 0.85rem;
+}
+
+.template-actions .btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* Empty state */
+.empty-state {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-disabled);
+}
+
+.empty-state svg {
+    width: 48px;
+    height: 48px;
+    margin-bottom: 12px;
+    opacity: 0.5;
+}
+
+.empty-state p {
+    margin: 0;
+    font-size: 0.95rem;
+}
+
+/* Spinning animation for loading */
+.spinning {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Button states */
+.btn-success {
+    background: var(--accent-secondary) !important;
+    border-color: var(--accent-secondary) !important;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .template-store {
+        padding: 16px;
+    }
+    
+    .template-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .category-filters {
+        justify-content: flex-start;
+        overflow-x: auto;
+        padding-bottom: 8px;
+    }
+}

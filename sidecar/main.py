@@ -97,6 +97,23 @@ def main() -> None:
     args = parse_arguments()
     vault_path = Path(args.vault)
     
+    # Load environment variables from .env file if it exists
+    # Check vault path first, then tailor root
+    env_paths = [
+        vault_path / ".env",
+        Path(__file__).parent.parent / ".env"
+    ]
+    
+    for env_path in env_paths:
+        if env_path.exists():
+            try:
+                from dotenv import load_dotenv
+                load_dotenv(env_path)
+                # Log after logger is configured
+            except ImportError:
+                pass  # dotenv not installed, use system env vars
+            break
+    
     # Configure logging first
     utils.configure_logging(
         level=args.log_level,
