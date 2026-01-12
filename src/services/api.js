@@ -68,6 +68,13 @@ export const vaultApi = {
     async closeVault(windowLabel) {
         return await invoke('close_vault', { windowLabel });
     },
+
+    /**
+     * Update plugin configuration in .vault.json
+     */
+    async updatePluginConfig(vaultPath, pluginId, config) {
+        return await invoke('update_plugin_config', { vaultPath, pluginId, config });
+    },
 };
 
 /**

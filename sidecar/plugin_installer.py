@@ -2,6 +2,7 @@
 Plugin Installer - Handles plugin installation, updates, and removal.
 
 Provides functionality for:
+- Installing plugins from HTTP URLs (zip archives)
 - Installing plugins from git repositories
 - Updating installed plugins
 - Removing plugins
@@ -11,6 +12,10 @@ Provides functionality for:
 import json
 import shutil
 import subprocess
+import tempfile
+import zipfile
+import urllib.request
+import urllib.error
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Any, Optional, List
@@ -24,6 +29,7 @@ class InstallStatus(Enum):
     SUCCESS = "success"
     ALREADY_EXISTS = "already_exists"
     CLONE_FAILED = "clone_failed"
+    DOWNLOAD_FAILED = "download_failed"
     VALIDATION_FAILED = "validation_failed"
     DEPENDENCY_FAILED = "dependency_failed"
 
@@ -51,11 +57,13 @@ class PluginInstaller:
     """
     Handles plugin installation, updates, and removal.
     
-    Plugins are installed via git clone into the vault's plugins directory.
+    Plugins can be installed via:
+    - HTTP download (zip file from GitHub releases/archives)
+    - Git clone (for development)
     """
     
-    REQUIRED_FILES = ["main.py", "plugin.json"]
-    MANIFEST_REQUIRED_FIELDS = ["name", "version", "main"]
+    REQUIRED_FILES = ["main.py"]  # plugin.json is optional
+    MANIFEST_REQUIRED_FIELDS = ["name", "version"]
     
     def __init__(self, vault_path: Path):
         """
@@ -174,6 +182,130 @@ class PluginInstaller:
                 shutil.rmtree(plugin_dir, ignore_errors=True)
             return InstallResult(
                 status=InstallStatus.CLONE_FAILED,
+                plugin_id=plugin_id,
+                message=str(e)
+            )
+    
+    async def install_from_url(
+        self,
+        download_url: str,
+        plugin_id: str
+    ) -> InstallResult:
+        """
+        Install a plugin from an HTTP URL (zip file).
+        
+        Args:
+            download_url: URL to download the plugin zip file
+            plugin_id: Plugin identifier
+            
+        Returns:
+            InstallResult with status and details
+        """
+        plugin_dir = self.plugins_dir / plugin_id
+        
+        # Check if already installed
+        if plugin_dir.exists():
+            return InstallResult(
+                status=InstallStatus.ALREADY_EXISTS,
+                plugin_id=plugin_id,
+                message=f"Plugin '{plugin_id}' is already installed",
+                plugin_dir=plugin_dir
+            )
+        
+        self._logger.info(f"Installing plugin '{plugin_id}' from {download_url}")
+        
+        try:
+            # Download zip file to temp location
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_path = Path(temp_dir)
+                zip_path = temp_path / f"{plugin_id}.zip"
+                
+                # Download the file
+                self._logger.debug(f"Downloading {download_url}")
+                try:
+                    urllib.request.urlretrieve(download_url, zip_path)
+                except urllib.error.URLError as e:
+                    return InstallResult(
+                        status=InstallStatus.DOWNLOAD_FAILED,
+                        plugin_id=plugin_id,
+                        message=f"Failed to download plugin: {e}"
+                    )
+                except Exception as e:
+                    return InstallResult(
+                        status=InstallStatus.DOWNLOAD_FAILED,
+                        plugin_id=plugin_id,
+                        message=f"Download error: {e}"
+                    )
+                
+                # Extract zip file
+                self._logger.debug(f"Extracting {zip_path}")
+                extract_dir = temp_path / "extracted"
+                extract_dir.mkdir()
+                
+                try:
+                    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                        zip_ref.extractall(extract_dir)
+                except zipfile.BadZipFile:
+                    return InstallResult(
+                        status=InstallStatus.DOWNLOAD_FAILED,
+                        plugin_id=plugin_id,
+                        message="Downloaded file is not a valid zip archive"
+                    )
+                
+                # GitHub archives have a top-level folder like "repo-main/"
+                # Find the actual plugin directory
+                extracted_items = list(extract_dir.iterdir())
+                if len(extracted_items) == 1 and extracted_items[0].is_dir():
+                    source_dir = extracted_items[0]
+                else:
+                    source_dir = extract_dir
+                
+                # Move to plugins directory
+                shutil.copytree(source_dir, plugin_dir)
+            
+            # Validate the installed plugin
+            validation = await self.validate(plugin_dir)
+            
+            if not validation.valid:
+                # Remove the directory
+                shutil.rmtree(plugin_dir, ignore_errors=True)
+                return InstallResult(
+                    status=InstallStatus.VALIDATION_FAILED,
+                    plugin_id=plugin_id,
+                    message=f"Plugin validation failed: {', '.join(validation.errors)}"
+                )
+            
+            # Install Python dependencies if requirements.txt exists
+            requirements_file = plugin_dir / "requirements.txt"
+            if requirements_file.exists():
+                dep_result = await self._install_dependencies(requirements_file)
+                if not dep_result:
+                    self._logger.warning(
+                        f"Some dependencies may have failed to install for {plugin_id}"
+                    )
+            
+            # Create settings.json with enabled=true by default
+            settings_file = plugin_dir / "settings.json"
+            if not settings_file.exists():
+                settings_file.write_text(json.dumps({"enabled": True}, indent=2))
+            
+            self._logger.info(f"Plugin '{plugin_id}' installed successfully from URL")
+            
+            return InstallResult(
+                status=InstallStatus.SUCCESS,
+                plugin_id=plugin_id,
+                message=f"Plugin '{plugin_id}' installed successfully",
+                plugin_dir=plugin_dir,
+                manifest=validation.manifest
+            )
+            
+        except Exception as e:
+            self._logger.exception(f"Installation from URL failed: {e}")
+            # Cleanup on failure
+            if plugin_dir.exists():
+                shutil.rmtree(plugin_dir, ignore_errors=True)
+            return InstallResult(
+                status=InstallStatus.DOWNLOAD_FAILED,
                 plugin_id=plugin_id,
                 message=str(e)
             )

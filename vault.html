@@ -144,13 +144,288 @@
             }
         }
 
+        // --- Panel Manager (GoldenLayout tabs) ---
+        class PanelManager {
+            constructor() {
+                this.panels = new Map(); // id -> { title, content, component }
+            }
+
+            registerPanel(id, title, icon = null, position = 'right') {
+                console.log(`[PanelManager] Registering panel: ${id}, title: ${title}, position: ${position}`);
+
+                if (this.panels.has(id)) {
+                    console.log(`[PanelManager] Panel ${id} already registered`);
+                    return;
+                }
+
+                this.panels.set(id, { title, icon, content: '', position });
+
+                // Register component with GoldenLayout
+                if (window.myLayout) {
+                    // Register the component type if not already registered
+                    try {
+                        window.myLayout.registerComponent(`plugin_${id}`, (container, state) => {
+                            container.element.innerHTML = `
+                                <div class="panel-container" id="panel-${id}">
+                                    <div class="scrollable" style="padding: 12px;">
+                                        <div style="color:var(--text-disabled); text-align:center;">
+                                            Loading ${title}...
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        });
+                    } catch (e) {
+                        // Component already registered, which is fine
+                    }
+
+                    // Find target stack based on position
+                    const root = window.myLayout.root;
+                    if (root && root.contentItems && root.contentItems.length > 0) {
+                        // Add to existing layout - find appropriate stack
+                        const newItem = {
+                            type: 'component',
+                            componentName: `plugin_${id}`,
+                            title: title,
+                            id: id
+                        };
+
+                        // Try to add to existing right column stack
+                        try {
+                            const rightColumn = root.contentItems[0]?.contentItems?.[1];
+                            if (rightColumn && rightColumn.contentItems) {
+                                const stack = rightColumn.contentItems[0]; // First stack in right column
+                                if (stack && stack.addChild) {
+                                    stack.addChild(newItem);
+                                    console.log(`[PanelManager] Added panel ${id} to layout`);
+                                }
+                            }
+                        } catch (e) {
+                            console.warn(`[PanelManager] Could not add panel to layout:`, e);
+                        }
+                    }
+                }
+            }
+
+            setPanelContent(id, html) {
+                console.log(`[PanelManager] Setting content for panel: ${id}`);
+                if (this.panels.has(id)) {
+                    this.panels.get(id).content = html;
+                }
+
+                // Update DOM if panel exists
+                const panelEl = document.getElementById(`panel-${id}`);
+                if (panelEl) {
+                    panelEl.innerHTML = `<div class="scrollable" style="padding: 12px;">${html}</div>`;
+                    // Re-init icons
+                    if (window.lucide) window.lucide.createIcons();
+                }
+            }
+
+            removePanel(id) {
+                console.log(`[PanelManager] Removing panel: ${id}`);
+                this.panels.delete(id);
+
+                // Remove from GoldenLayout
+                if (window.myLayout) {
+                    const items = window.myLayout.root.getItemsById(id);
+                    items.forEach(item => item.remove());
+                }
+            }
+        }
+
+        // --- Toolbar Manager ---
+        class ToolbarManager {
+            constructor() {
+                this.buttons = new Map(); // id -> { icon, title, command }
+                this._ensureToolbar();
+            }
+
+            _ensureToolbar() {
+                // Create toolbar container if it doesn't exist
+                if (!document.getElementById('plugin-toolbar')) {
+                    const activityBar = document.getElementById('activity-bar');
+                    if (activityBar) {
+                        const separator = document.createElement('div');
+                        separator.className = 'activity-separator';
+                        separator.style.cssText = 'height:1px; background:var(--border-color); margin:8px 4px;';
+
+                        const toolbar = document.createElement('div');
+                        toolbar.id = 'plugin-toolbar';
+                        toolbar.className = 'plugin-toolbar';
+
+                        activityBar.appendChild(separator);
+                        activityBar.appendChild(toolbar);
+                    }
+                }
+            }
+
+            registerButton(id, icon, title, command) {
+                console.log(`[ToolbarManager] Registering button: ${id}, command: ${command}`);
+
+                if (this.buttons.has(id)) {
+                    console.log(`[ToolbarManager] Button ${id} already registered`);
+                    return;
+                }
+
+                this.buttons.set(id, { icon, title, command });
+                this._ensureToolbar();
+
+                const toolbar = document.getElementById('plugin-toolbar');
+                if (toolbar) {
+                    const btn = document.createElement('div');
+                    btn.className = 'activity-action toolbar-btn';
+                    btn.title = title;
+                    btn.dataset.id = id;
+                    btn.dataset.command = command;
+                    btn.innerHTML = `<i data-lucide="${icon}"></i>`;
+
+                    btn.onclick = async () => {
+                        console.log(`[ToolbarManager] Executing command: ${command}`);
+                        try {
+                            await window.request('execute_command', { command: command, args: {} });
+                        } catch (e) {
+                            console.error(`[ToolbarManager] Command failed:`, e);
+                        }
+                    };
+
+                    toolbar.appendChild(btn);
+
+                    if (window.lucide) window.lucide.createIcons();
+                }
+            }
+        }
+
+        // --- Modal Manager ---
+        class ModalManager {
+            constructor() {
+                this.isOpen = false;
+                this._ensureModal();
+            }
+
+            _ensureModal() {
+                if (!document.getElementById('plugin-modal-overlay')) {
+                    const overlay = document.createElement('div');
+                    overlay.id = 'plugin-modal-overlay';
+                    overlay.className = 'modal-overlay';
+                    overlay.style.cssText = `
+                        display: none;
+                        position: fixed;
+                        top: 0; left: 0; right: 0; bottom: 0;
+                        background: rgba(0,0,0,0.6);
+                        z-index: 1000;
+                        justify-content: center;
+                        align-items: center;
+                    `;
+                    overlay.innerHTML = `
+                        <div id="plugin-modal" class="modal-dialog" style="
+                            background: var(--surface-color);
+                            border-radius: 8px;
+                            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+                            max-height: 80vh;
+                            overflow: hidden;
+                            display: flex;
+                            flex-direction: column;
+                        ">
+                            <div class="modal-header" style="
+                                padding: 16px 20px;
+                                border-bottom: 1px solid var(--border-color);
+                                display: flex;
+                                justify-content: space-between;
+                                align-items: center;
+                            ">
+                                <h3 id="modal-title" style="margin:0; font-size:1rem;"></h3>
+                                <button id="modal-close-btn" class="icon-btn" style="
+                                    background: none; border: none; cursor: pointer;
+                                    color: var(--text-secondary); font-size: 1.2rem;
+                                ">&times;</button>
+                            </div>
+                            <div id="modal-content" class="modal-body" style="
+                                padding: 20px;
+                                overflow-y: auto;
+                                flex: 1;
+                            "></div>
+                        </div>
+                    `;
+
+                    document.body.appendChild(overlay);
+
+                    // Close handlers
+                    overlay.onclick = (e) => {
+                        if (e.target === overlay) this.close();
+                    };
+                    document.getElementById('modal-close-btn').onclick = () => this.close();
+                }
+            }
+
+            show(title, html, width = '500px') {
+                console.log(`[ModalManager] Showing modal: ${title}`);
+                this._ensureModal();
+
+                const overlay = document.getElementById('plugin-modal-overlay');
+                const modal = document.getElementById('plugin-modal');
+                const titleEl = document.getElementById('modal-title');
+                const contentEl = document.getElementById('modal-content');
+
+                titleEl.textContent = title;
+                contentEl.innerHTML = html;
+                modal.style.width = width;
+                overlay.style.display = 'flex';
+                this.isOpen = true;
+
+                if (window.lucide) window.lucide.createIcons();
+            }
+
+            close() {
+                console.log(`[ModalManager] Closing modal`);
+                const overlay = document.getElementById('plugin-modal-overlay');
+                if (overlay) {
+                    overlay.style.display = 'none';
+                }
+                this.isOpen = false;
+            }
+        }
+
+        // --- Stage Manager ---
+        class StageManager {
+            setContent(html) {
+                console.log(`[StageManager] Setting stage content`);
+                const stage = document.getElementById('plugin-area');
+                if (stage) {
+                    stage.innerHTML = html;
+                    if (window.lucide) window.lucide.createIcons();
+                }
+            }
+        }
+
+        // Initialize managers
         const sidebar = new SidebarManager();
+        const panels = new PanelManager();
+        const toolbar = new ToolbarManager();
+        const modal = new ModalManager();
+        const stage = new StageManager();
 
         // Public API for Plugins
         window.ui = {
+            // Sidebar
             registerSidebarView: (id, icon, title) => sidebar.registerView(id, icon, title),
             setSidebarContent: (id, html) => sidebar.setContent(id, html),
-            toggleSidebar: (id) => sidebar.toggle(id)
+            toggleSidebar: (id) => sidebar.toggle(id),
+
+            // Panels (GoldenLayout tabs)
+            registerPanel: (id, title, icon, position) => panels.registerPanel(id, title, icon, position),
+            setPanelContent: (id, html) => panels.setPanelContent(id, html),
+            removePanel: (id) => panels.removePanel(id),
+
+            // Toolbar buttons
+            registerToolbarButton: (id, icon, title, command) => toolbar.registerButton(id, icon, title, command),
+
+            // Stage content
+            setStageContent: (html) => stage.setContent(html),
+
+            // Modal dialogs
+            showModal: (title, html, width) => modal.show(title, html, width),
+            closeModal: () => modal.close()
         };
 
         // Sidebar views are registered dynamically by plugins via UI_COMMAND events
@@ -599,14 +874,88 @@
             // Handle UI Commands from Backend
             if (eventType === 'UI_COMMAND') {
                 console.log('[handleEvent] UI_COMMAND received:', evt.data);
-                // Plugin requested UI action: { action: 'register_sidebar', id: '..', ... }
                 const data = evt.data;
-                if (data.action === 'register_sidebar') {
-                    console.log('[handleEvent] Registering sidebar:', data.id, data.icon, data.title);
-                    window.ui.registerSidebarView(data.id, data.icon, data.title);
-                } else if (data.action === 'set_sidebar') {
-                    console.log('[handleEvent] Setting sidebar content:', data.id);
-                    window.ui.setSidebarContent(data.id, data.html);
+
+                switch (data.action) {
+                    // Sidebar
+                    case 'register_sidebar':
+                        console.log('[handleEvent] Registering sidebar:', data.id, data.icon, data.title);
+                        window.ui.registerSidebarView(data.id, data.icon, data.title);
+                        break;
+                    case 'set_sidebar':
+                        console.log('[handleEvent] Setting sidebar content:', data.id);
+                        window.ui.setSidebarContent(data.id, data.html);
+                        break;
+
+                    // Panels (GoldenLayout tabs)
+                    case 'register_panel':
+                        console.log('[handleEvent] Registering panel:', data.id, data.title);
+                        window.ui.registerPanel(data.id, data.title, data.icon, data.position);
+                        break;
+                    case 'set_panel':
+                        console.log('[handleEvent] Setting panel content:', data.id);
+                        window.ui.setPanelContent(data.id, data.html);
+                        break;
+                    case 'remove_panel':
+                        console.log('[handleEvent] Removing panel:', data.id);
+                        window.ui.removePanel(data.id);
+                        break;
+
+                    // Toolbar
+                    case 'register_toolbar':
+                        console.log('[handleEvent] Registering toolbar button:', data.id, data.command);
+                        window.ui.registerToolbarButton(data.id, data.icon, data.title, data.command);
+                        break;
+
+                    // Stage
+                    case 'set_stage':
+                        console.log('[handleEvent] Setting stage content');
+                        window.ui.setStageContent(data.html);
+                        break;
+
+                    // Modal
+                    case 'show_modal':
+                        console.log('[handleEvent] Showing modal:', data.title);
+                        window.ui.showModal(data.title, data.html, data.width);
+                        break;
+                    case 'close_modal':
+                        console.log('[handleEvent] Closing modal');
+                        window.ui.closeModal();
+                        break;
+
+                    // Input field control (for plugins like prompt refiner)
+                    case 'request_input':
+                        // Plugin wants the current input text - send it via callback command
+                        console.log('[handleEvent] Requesting input for:', data.callback_command);
+                        // Try multiple selectors: LLM plugin input, generic chat input
+                        const inputEl = document.querySelector('#llm-input, #chat-input, .chat-input, .llm-input');
+                        const inputText = inputEl ? inputEl.value : '';
+                        console.log('[handleEvent] Found input el:', inputEl, 'text:', inputText);
+
+                        if (data.callback_command && window.request) {
+                            window.request(data.callback_command, { text: inputText });
+                        }
+                        break;
+                    case 'set_input':
+                        // Plugin wants to set the input field text
+                        console.log('[handleEvent] Setting input text:', data.text);
+                        // Try multiple selectors: LLM plugin input, generic chat input
+                        const targetInput = document.querySelector('#llm-input, #chat-input, .chat-input, .llm-input');
+                        console.log('[handleEvent] Found target input:', targetInput);
+                        if (targetInput) {
+                            targetInput.value = data.text || '';
+                            // Trigger input event for any listeners
+                            targetInput.dispatchEvent(new Event('input', { bubbles: true }));
+                            // Focus the input
+                            targetInput.focus();
+                            console.log('[handleEvent] Input value set successfully');
+                        } else {
+                            console.warn('[handleEvent] No input element found!');
+                        }
+                        break;
+
+                    default:
+                        console.warn('[handleEvent] Unknown UI action:', data.action);
                 }
             }
         }

@@ -102,6 +102,49 @@ class Severity(str, Enum):
     """Error message."""
 
 
+class UIAction(str, Enum):
+    """UI command actions that plugins can emit."""
+    
+    # Sidebar
+    REGISTER_SIDEBAR = "register_sidebar"
+    """Register a new sidebar view."""
+    
+    SET_SIDEBAR = "set_sidebar"
+    """Set content of a sidebar view."""
+    
+    # Panels (GoldenLayout tabs)
+    REGISTER_PANEL = "register_panel"
+    """Register a new panel/tab."""
+    
+    SET_PANEL = "set_panel"
+    """Set content of a panel."""
+    
+    REMOVE_PANEL = "remove_panel"
+    """Remove a panel."""
+    
+    # Toolbar
+    REGISTER_TOOLBAR = "register_toolbar"
+    """Register a toolbar button."""
+    
+    # Stage (main content area)
+    SET_STAGE = "set_stage"
+    """Set stage content."""
+    
+    # Modal
+    SHOW_MODAL = "show_modal"
+    """Show a modal dialog."""
+    
+    CLOSE_MODAL = "close_modal"
+    """Close the modal dialog."""
+    
+    # Input Control
+    REQUEST_INPUT = "request_input"
+    """Request current input field text from frontend."""
+    
+    SET_INPUT = "set_input"
+    """Set the input field text."""
+
+
 # ============================================================================
 # WebSocket Constants
 # ============================================================================

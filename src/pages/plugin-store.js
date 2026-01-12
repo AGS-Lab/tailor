@@ -110,7 +110,9 @@ async function loadPlugins(container, query = '', category = '') {
                 </div>
                 <div class="plugin-card-footer">
                     <span class="plugin-version">v${plugin.version}</span>
-                    <button class="btn btn-primary plugin-install-btn" data-plugin-id="${plugin.id}" data-plugin-repo="${plugin.repo}">
+                    <button class="btn btn-primary plugin-install-btn" 
+                            data-plugin-id="${plugin.id}" 
+                            data-download-url="${plugin.download_url || ''}">
                         <i data-lucide="download"></i>
                         Install
                     </button>
@@ -147,7 +149,7 @@ async function getSamplePlugins(query, category) {
             category: 'memory',
             icon: 'brain',
             version: '1.2.0',
-            repo: 'https://github.com/tailor-dev/memory-plugin',
+            download_url: 'https://github.com/tailor-dev/memory-plugin/archive/refs/heads/main.zip',
         },
         {
             id: 'web-search',
@@ -159,7 +161,7 @@ async function getSamplePlugins(query, category) {
             category: 'tools',
             icon: 'search',
             version: '2.0.1',
-            repo: 'https://github.com/tailor-community/web-search',
+            download_url: 'https://github.com/tailor-community/web-search/archive/refs/heads/main.zip',
         },
         {
             id: 'code-runner',
@@ -171,7 +173,7 @@ async function getSamplePlugins(query, category) {
             category: 'tools',
             icon: 'code',
             version: '3.1.0',
-            repo: 'https://github.com/tailor-dev/code-runner',
+            download_url: 'https://github.com/tailor-dev/code-runner/archive/refs/heads/main.zip',
         },
         {
             id: 'db-connector',
@@ -183,7 +185,7 @@ async function getSamplePlugins(query, category) {
             category: 'integrations',
             icon: 'database',
             version: '1.5.2',
-            repo: 'https://github.com/tailor-community/db-connector',
+            download_url: 'https://github.com/tailor-community/db-connector/archive/refs/heads/main.zip',
         },
         {
             id: 'dark-theme',
@@ -195,7 +197,7 @@ async function getSamplePlugins(query, category) {
             category: 'ui-themes',
             icon: 'palette',
             version: '2.3.0',
-            repo: 'https://github.com/tailor-design/dark-theme-pro',
+            download_url: 'https://github.com/tailor-design/dark-theme-pro/archive/refs/heads/main.zip',
         },
         {
             id: 'notion-sync',
@@ -207,7 +209,7 @@ async function getSamplePlugins(query, category) {
             category: 'integrations',
             icon: 'book',
             version: '1.0.5',
-            repo: 'https://github.com/tailor-community/notion-sync',
+            download_url: 'https://github.com/tailor-community/notion-sync/archive/refs/heads/main.zip',
         },
     ];
 
@@ -260,13 +262,13 @@ function setupInstallListeners(container) {
     installButtons.forEach(btn => {
         btn.addEventListener('click', async (e) => {
             const pluginId = btn.dataset.pluginId;
-            const pluginRepo = btn.dataset.pluginRepo;
-            await installPlugin(pluginId, pluginRepo, container);
+            const downloadUrl = btn.dataset.downloadUrl;
+            await installPlugin(pluginId, downloadUrl, container);
         });
     });
 }
 
-async function installPlugin(pluginId, pluginRepo, container) {
+async function installPlugin(pluginId, downloadUrl, container) {
     const btn = container.querySelector(`[data-plugin-id="${pluginId}"]`);
     const originalText = btn?.innerHTML;
 
@@ -282,7 +284,7 @@ async function installPlugin(pluginId, pluginRepo, container) {
         // This uses the request() helper defined in vault.html
         if (typeof window.request === 'function') {
             const result = await window.request('plugins.install', {
-                repo_url: pluginRepo,
+                download_url: downloadUrl,
                 plugin_id: pluginId
             });
 
@@ -314,8 +316,8 @@ async function installPlugin(pluginId, pluginRepo, container) {
             // Fallback: WebSocket not available, show instructions
             alert(
                 `To install "${pluginId}":\n\n` +
-                `1. Open a terminal in your vault's plugins folder\n` +
-                `2. Run: git clone ${pluginRepo}\n` +
+                `1. Download from: ${downloadUrl}\n` +
+                `2. Extract to your vault's plugins folder\n` +
                 `3. Restart Tailor to load the plugin`
             );
             if (btn) {

@@ -252,7 +252,19 @@ class PluginBase(ABC):
         """Subscribe to internal event."""
         self.brain.subscribe(event_name, handler)
 
-    # UI Helpers
+    # =========================================================================
+    # UI Helpers - Methods for plugins to control frontend UI elements
+    # =========================================================================
+
+    def _emit_ui_command(self, action: str, data: Dict[str, Any]) -> None:
+        """Helper to emit UI commands to frontend."""
+        self.brain.emit_to_frontend(
+            event_type=constants.EventType.UI_COMMAND,
+            data={"action": action, **data},
+            scope=constants.EventScope.WINDOW
+        )
+
+    # --- Sidebar Views ---
 
     async def register_sidebar_view(
         self,
@@ -260,16 +272,17 @@ class PluginBase(ABC):
         icon_svg: str,
         title: str
     ) -> None:
-        """Register a sidebar view."""
-        self.brain.emit_to_frontend(
-            event_type=constants.EventType.UI_COMMAND,
-            data={
-                "action": "register_sidebar",
-                "id": identifier,
-                "icon": icon_svg,
-                "title": title
-            },
-            scope=constants.EventScope.WINDOW # Imported from constants
+        """
+        Register a sidebar view in the activity bar.
+        
+        Args:
+            identifier: Unique ID for this sidebar view
+            icon_svg: Either an SVG string or a Lucide icon name (e.g., "folder")
+            title: Display title for the sidebar
+        """
+        self._emit_ui_command(
+            constants.UIAction.REGISTER_SIDEBAR,
+            {"id": identifier, "icon": icon_svg, "title": title}
         )
 
     async def set_sidebar_content(
@@ -277,16 +290,138 @@ class PluginBase(ABC):
         identifier: str,
         html_content: str
     ) -> None:
-        """Set sidebar content."""
-        self.brain.emit_to_frontend(
-            event_type=constants.EventType.UI_COMMAND,
-            data={
-                "action": "set_sidebar",
-                "id": identifier,
-                "html": html_content
-            },
-            scope=constants.EventScope.WINDOW
+        """
+        Set HTML content for a sidebar view.
+        
+        Args:
+            identifier: ID of the sidebar view
+            html_content: HTML string to display
+        """
+        self._emit_ui_command(
+            constants.UIAction.SET_SIDEBAR,
+            {"id": identifier, "html": html_content}
         )
+
+    # --- Panel/Tab Management (GoldenLayout) ---
+
+    async def register_panel(
+        self,
+        panel_id: str,
+        title: str,
+        icon: str = None,
+        position: str = "right"
+    ) -> None:
+        """
+        Register a new panel/tab in the layout.
+        
+        Args:
+            panel_id: Unique ID for this panel
+            title: Tab title
+            icon: Optional Lucide icon name
+            position: Where to add panel ("left", "right", "bottom")
+        """
+        self._emit_ui_command(
+            constants.UIAction.REGISTER_PANEL,
+            {"id": panel_id, "title": title, "icon": icon, "position": position}
+        )
+
+    async def set_panel_content(
+        self,
+        panel_id: str,
+        html_content: str
+    ) -> None:
+        """
+        Set HTML content for a panel.
+        
+        Args:
+            panel_id: ID of the panel
+            html_content: HTML string to display
+        """
+        self._emit_ui_command(
+            constants.UIAction.SET_PANEL,
+            {"id": panel_id, "html": html_content}
+        )
+
+    async def remove_panel(self, panel_id: str) -> None:
+        """
+        Remove a panel from the layout.
+        
+        Args:
+            panel_id: ID of the panel to remove
+        """
+        self._emit_ui_command(
+            constants.UIAction.REMOVE_PANEL,
+            {"id": panel_id}
+        )
+
+    # --- Toolbar Buttons ---
+
+    async def register_toolbar_button(
+        self,
+        button_id: str,
+        icon: str,
+        title: str,
+        command: str
+    ) -> None:
+        """
+        Register a toolbar button that executes a command when clicked.
+        
+        Args:
+            button_id: Unique ID for this button
+            icon: Lucide icon name (e.g., "play", "settings")
+            title: Tooltip text
+            command: Command to execute on click (e.g., "my_plugin.run")
+        """
+        self._emit_ui_command(
+            constants.UIAction.REGISTER_TOOLBAR,
+            {"id": button_id, "icon": icon, "title": title, "command": command}
+        )
+
+    # --- Stage Content ---
+
+    async def set_stage_content(self, html_content: str) -> None:
+        """
+        Set HTML content for the main stage area.
+        
+        Args:
+            html_content: HTML string to display in the stage
+        """
+        self._emit_ui_command(
+            constants.UIAction.SET_STAGE,
+            {"html": html_content}
+        )
+
+    # --- Modal Dialogs ---
+
+    async def show_modal(
+        self,
+        title: str,
+        html_content: str,
+        width: str = "500px"
+    ) -> None:
+        """
+        Show a modal dialog.
+        
+        Args:
+            title: Modal title
+            html_content: HTML content for the modal body
+            width: CSS width (default: "500px")
+        """
+        self._emit_ui_command(
+            constants.UIAction.SHOW_MODAL,
+            {"title": title, "html": html_content, "width": width}
+        )
+
+    async def close_modal(self) -> None:
+        """Close the currently open modal dialog."""
+        self._emit_ui_command(
+            constants.UIAction.CLOSE_MODAL,
+            {}
+        )
+
+    # =========================================================================
+    # Properties
+    # =========================================================================
     
     @property
     def is_loaded(self) -> bool:
@@ -301,3 +436,4 @@ class PluginBase(ABC):
     def __repr__(self) -> str:
         """String representation of plugin."""
         return f"<{self.__class__.__name__} name='{self.name}' loaded={self._loaded}>"
+
