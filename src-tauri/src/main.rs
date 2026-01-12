@@ -49,6 +49,7 @@ fn main() {
             ipc_router::get_current_vault_info,
             ipc_router::list_vaults,
             ipc_router::get_vault_info,
+            ipc_router::update_plugin_config,
             ipc_router::create_vault,
             ipc_router::search_plugins,
             ipc_router::get_plugin_details,

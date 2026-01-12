@@ -206,6 +206,60 @@ pub async fn get_vault_info(vault_path: String) -> Result<serde_json::Value, Str
     Ok(config)
 }
 
+/// Update plugin configuration in .vault.json
+#[tauri::command]
+pub async fn update_plugin_config(
+    vault_path: String,
+    plugin_id: String,
+    config: serde_json::Value,
+) -> Result<(), String> {
+    let path = PathBuf::from(&vault_path);
+    let config_path = path.join(".vault.json");
+    
+    // Read existing config
+    let contents = if config_path.exists() {
+        fs::read_to_string(&config_path)
+            .map_err(|e| format!("Failed to read vault config: {}", e))?
+    } else {
+        r#"{"plugins": {}}"#.to_string()
+    };
+    
+    let mut vault_config: serde_json::Value = serde_json::from_str(&contents)
+        .map_err(|e| format!("Failed to parse vault config: {}", e))?;
+    
+    // Ensure plugins object exists
+    if vault_config.get("plugins").is_none() {
+        vault_config["plugins"] = serde_json::json!({});
+    }
+    
+    // Get or create plugin config
+    if vault_config["plugins"].get(&plugin_id).is_none() {
+        vault_config["plugins"][&plugin_id] = serde_json::json!({});
+    }
+    
+    // Merge config values
+    if let Some(plugin_config) = vault_config["plugins"].get_mut(&plugin_id) {
+        if let serde_json::Value::Object(plugin_obj) = plugin_config {
+            if let serde_json::Value::Object(new_config) = config {
+                for (key, value) in new_config {
+                    plugin_obj.insert(key, value);
+                }
+            }
+        }
+    }
+    
+    // Write back
+    let updated = serde_json::to_string_pretty(&vault_config)
+        .map_err(|e| format!("Failed to serialize config: {}", e))?;
+    
+    fs::write(&config_path, updated)
+        .map_err(|e| format!("Failed to write vault config: {}", e))?;
+    
+    println!("Updated plugin config for '{}' in {}", plugin_id, vault_path);
+    
+    Ok(())
+}
+
 /// Create a new vault
 #[tauri::command]
 pub async fn create_vault(

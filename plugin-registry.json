@@ -1,0 +1,116 @@
+{
+    "version": "1.0.0",
+    "lastUpdated": "2026-01-12",
+    "plugins": [
+        {
+            "id": "llm",
+            "name": "LLM Chat",
+            "author": "Tailor Team",
+            "description": "Core LLM chat interface with conversation history and OpenAI integration",
+            "version": "1.0.0",
+            "category": "core",
+            "icon": "message-square",
+            "stars": 500,
+            "installs": 10000,
+            "download_url": "https://github.com/tailor-dev/tailor-llm-plugin/archive/refs/heads/main.zip",
+            "homepage": "https://github.com/tailor-dev/tailor-llm-plugin",
+            "tags": [
+                "chat",
+                "ai",
+                "openai",
+                "core"
+            ]
+        },
+        {
+            "id": "memory-plugin",
+            "name": "Memory Management",
+            "author": "Tailor Team",
+            "description": "Advanced conversation history and context retention for longer interactions",
+            "version": "1.2.0",
+            "category": "memory",
+            "icon": "brain",
+            "stars": 128,
+            "installs": 1200,
+            "download_url": "https://github.com/tailor-dev/memory-plugin/archive/refs/heads/main.zip",
+            "homepage": "https://github.com/tailor-dev/memory-plugin",
+            "tags": [
+                "memory",
+                "context",
+                "history"
+            ]
+        },
+        {
+            "id": "web-search",
+            "name": "Web Search",
+            "author": "Community",
+            "description": "Search the web and bring results into your conversations",
+            "version": "2.0.1",
+            "category": "tools",
+            "icon": "search",
+            "stars": 95,
+            "installs": 890,
+            "download_url": "https://github.com/tailor-community/web-search/archive/refs/heads/main.zip",
+            "homepage": "https://github.com/tailor-community/web-search",
+            "tags": [
+                "search",
+                "web",
+                "research"
+            ]
+        },
+        {
+            "id": "code-runner",
+            "name": "Code Runner",
+            "author": "Tailor Team",
+            "description": "Execute Python and JavaScript code directly from conversations",
+            "version": "3.1.0",
+            "category": "tools",
+            "icon": "code",
+            "stars": 212,
+            "installs": 2150,
+            "download_url": "https://github.com/tailor-dev/code-runner/archive/refs/heads/main.zip",
+            "homepage": "https://github.com/tailor-dev/code-runner",
+            "tags": [
+                "code",
+                "python",
+                "javascript",
+                "execution"
+            ]
+        },
+        {
+            "id": "db-connector",
+            "name": "Database Connector",
+            "author": "Community",
+            "description": "Connect and query your databases from Tailor",
+            "version": "1.5.2",
+            "category": "integrations",
+            "icon": "database",
+            "stars": 76,
+            "installs": 640,
+            "download_url": "https://github.com/tailor-community/db-connector/archive/refs/heads/main.zip",
+            "homepage": "https://github.com/tailor-community/db-connector",
+            "tags": [
+                "database",
+                "sql",
+                "query"
+            ]
+        },
+        {
+            "id": "notion-sync",
+            "name": "Notion Sync",
+            "author": "Community",
+            "description": "Sync conversations and notes with Notion automatically",
+            "version": "1.0.5",
+            "category": "integrations",
+            "icon": "book",
+            "stars": 154,
+            "installs": 1340,
+            "download_url": "https://github.com/tailor-community/notion-sync/archive/refs/heads/main.zip",
+            "homepage": "https://github.com/tailor-community/notion-sync",
+            "tags": [
+                "notion",
+                "sync",
+                "notes"
+            ]
+        }
+    ]
+}

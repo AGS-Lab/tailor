@@ -166,22 +166,20 @@ class Plugin(PluginBase):
             return "Please send a message."
         
         # Use the LLM pipeline from VaultBrain (which has OpenAI integration)
-        if self.brain and self.brain.llm_pipeline:
+        if self.brain and self.brain.pipeline:
             try:
-                result = await self.brain.llm_pipeline.process(
+                # Use the pipeline's run() method which returns a context object
+                ctx = await self.brain.pipeline.run(
                     message=message,
-                    history=self.conversation_history[:-1],  # Exclude the just-added user message
-                    metadata={"plugin": self.name}
+                    history=self.conversation_history[:-1]  # Exclude the just-added user message
                 )
                 
-                if result.get("status") == "success":
-                    return result.get("response", "No response generated.")
-                elif result.get("status") == "aborted":
-                    return f"Request blocked: {result.get('reason', 'Unknown reason')}"
+                # The pipeline returns a context with response and metadata
+                if ctx.response:
+                    return ctx.response
                 else:
-                    error = result.get("error", "Unknown error")
-                    self.logger.error(f"LLM pipeline error: {error}")
-                    return f"Error generating response: {error}"
+                    self.logger.warning("Pipeline returned empty response")
+                    return "No response generated."
                     
             except Exception as e:
                 self.logger.error(f"LLM pipeline exception: {e}")

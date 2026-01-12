@@ -70,7 +70,7 @@ async function loadSettings(vaultPath, container) {
 
 async function showSection(section, vaultPath, container) {
     const contentArea = container.querySelector('#settings-content-area');
-    
+
     const navItems = container.querySelectorAll('.settings-nav-item');
     navItems.forEach(item => {
         item.classList.toggle('active', item.dataset.section === section);
@@ -135,14 +135,121 @@ async function showSection(section, vaultPath, container) {
                 <div class="settings-section">
                     <h2>Plugins</h2>
                     <p class="settings-section-description">Manage plugins installed in this vault</p>
-                    <div class="empty-state" style="padding: 40px;">
-                        <i data-lucide="package"></i>
-                        <div class="empty-state-title">No Plugins</div>
-                        <div class="empty-state-subtitle">Install plugins from the Plugin Store</div>
+                    <div id="installed-plugins-list" class="plugins-list">
+                        <div class="loading-indicator">
+                            <i data-lucide="loader" class="spinning"></i>
+                            Loading plugins...
+                        </div>
+                    </div>
+                    <div class="settings-actions" style="margin-top: 20px;">
+                        <a href="#plugin-store" class="btn btn-primary">
+                            <i data-lucide="plus"></i>
+                            Browse Plugin Store
+                        </a>
                     </div>
                 </div>
             `;
             if (window.lucide) window.lucide.createIcons();
+
+            // Load installed plugins
+            try {
+                const listEl = contentArea.querySelector('#installed-plugins-list');
+
+                // Fetch plugins via WebSocket if available
+                if (typeof window.request === 'function') {
+                    const result = await window.request('plugins.list', {});
+
+                    if (result.plugins && result.plugins.length > 0) {
+                        listEl.innerHTML = result.plugins.map(plugin => `
+                            <div class="plugin-item" data-plugin-id="${plugin.id}">
+                                <div class="plugin-item-info">
+                                    <div class="plugin-item-header">
+                                        <h4>${plugin.name || plugin.id}</h4>
+                                        <span class="plugin-version">v${plugin.version || '0.0.0'}</span>
+                                    </div>
+                                    <p class="plugin-description">${plugin.description || ''}</p>
+                                </div>
+                                <div class="plugin-item-actions">
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" 
+                                               class="plugin-toggle" 
+                                               data-plugin-id="${plugin.id}"
+                                               ${plugin.enabled ? 'checked' : ''}>
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                    <button class="btn btn-icon btn-danger plugin-uninstall" 
+                                            data-plugin-id="${plugin.id}"
+                                            title="Uninstall plugin">
+                                        <i data-lucide="trash-2"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        `).join('');
+                    } else {
+                        listEl.innerHTML = `
+                            <div class="empty-state" style="padding: 40px;">
+                                <i data-lucide="package"></i>
+                                <div class="empty-state-title">No Plugins Installed</div>
+                                <div class="empty-state-subtitle">Install plugins from the Plugin Store to extend functionality</div>
+                            </div>
+                        `;
+                    }
+                } else {
+                    // No WebSocket, show manual instructions
+                    listEl.innerHTML = `
+                        <div class="info-message">
+                            <i data-lucide="info"></i>
+                            <span>Open a vault to manage plugins</span>
+                        </div>
+                    `;
+                }
+
+                if (window.lucide) window.lucide.createIcons();
+
+                // Setup toggle listeners
+                const toggles = contentArea.querySelectorAll('.plugin-toggle');
+                toggles.forEach(toggle => {
+                    toggle.addEventListener('change', async (e) => {
+                        const pluginId = toggle.dataset.pluginId;
+                        const enabled = toggle.checked;
+
+                        // Update .vault.json
+                        try {
+                            await vaultApi.updatePluginConfig(vaultPath, pluginId, { enabled });
+                            console.log(`Plugin ${pluginId} ${enabled ? 'enabled' : 'disabled'}`);
+                        } catch (err) {
+                            console.error('Failed to update plugin config:', err);
+                            toggle.checked = !enabled; // Revert
+                        }
+                    });
+                });
+
+                // Setup uninstall listeners
+                const uninstallBtns = contentArea.querySelectorAll('.plugin-uninstall');
+                uninstallBtns.forEach(btn => {
+                    btn.addEventListener('click', async (e) => {
+                        const pluginId = btn.dataset.pluginId;
+
+                        if (confirm(`Are you sure you want to uninstall "${pluginId}"?`)) {
+                            try {
+                                if (typeof window.request === 'function') {
+                                    await window.request('plugins.uninstall', { plugin_id: pluginId });
+                                    // Refresh the list
+                                    await showSection('plugins', vaultPath, container);
+                                }
+                            } catch (err) {
+                                console.error('Failed to uninstall plugin:', err);
+                                alert('Failed to uninstall plugin');
+                            }
+                        }
+                    });
+                });
+
+            } catch (err) {
+                console.error('Error loading plugins:', err);
+                const listEl = contentArea.querySelector('#installed-plugins-list');
+                listEl.innerHTML = `<div class="error-message">Failed to load plugins</div>`;
+            }
             break;
     }
 

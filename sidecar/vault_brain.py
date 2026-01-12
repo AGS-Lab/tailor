@@ -302,15 +302,43 @@ class VaultBrain:
         logger.debug(f"Registered command: {command_id}")
 
     async def execute_command(self, command_id: str, **kwargs: Any) -> Any:
-        """Execute a registered command."""
-        if command_id not in self.commands:
-            raise exceptions.CommandNotFoundError(command_id, list(self.commands.keys()))
+        """
+        Execute a registered command.
         
-        info = self.commands[command_id]
-        handler = info["handler"]
+        Commands can be registered via:
+        1. brain.register_command() - stored in self.commands
+        2. ws_server.register_handler() - stored in ws_server.command_handlers
+        
+        This method checks both locations for backward compatibility.
+        """
+        handler = None
+        source = None
+        
+        # Check brain commands first
+        if command_id in self.commands:
+            handler = self.commands[command_id]["handler"]
+            source = "brain"
+        # Fallback: check ws_server handlers (for plugins that register there)
+        elif self.ws_server and command_id in self.ws_server.command_handlers:
+            handler = self.ws_server.command_handlers[command_id]
+            source = "ws_server"
+            # ws_server handlers expect a params dict, wrap kwargs
+            kwargs = {"params": kwargs} if kwargs else {}
+        
+        if handler is None:
+            all_commands = list(self.commands.keys())
+            if self.ws_server:
+                all_commands.extend(list(self.ws_server.command_handlers.keys()))
+            raise exceptions.CommandNotFoundError(command_id, all_commands)
         
         try:
-            result = await handler(**kwargs)
+            # Execute handler
+            if source == "ws_server":
+                # ws_server handlers take a single params dict
+                result = await handler(kwargs.get("params", {}))
+            else:
+                result = await handler(**kwargs)
+            
             # Emit command executed event (fire and forget)
             asyncio.create_task(self.publish(
                 constants.CoreEvents.COMMAND_EXECUTED,
@@ -398,11 +426,22 @@ class VaultBrain:
         self.ws_server.register_handler("system.client_ready", client_ready)
         
         # Plugin Management Commands
-        async def install_plugin(repo_url: str = "", plugin_id: str = None, **kwargs) -> Dict[str, Any]:
-            if not repo_url:
-                return {"status": "error", "error": "repo_url is required"}
+        async def install_plugin(p: Dict[str, Any]) -> Dict[str, Any]:
+            download_url = p.get("download_url", "")
+            repo_url = p.get("repo_url", "")
+            plugin_id = p.get("plugin_id", "")
             
-            result = await self.plugin_installer.install(repo_url, plugin_id)
+            if not plugin_id:
+                return {"status": "error", "error": "plugin_id is required"}
+            
+            # Prefer HTTP download over git clone
+            if download_url:
+                result = await self.plugin_installer.install_from_url(download_url, plugin_id)
+            elif repo_url:
+                result = await self.plugin_installer.install(repo_url, plugin_id)
+            else:
+                return {"status": "error", "error": "download_url or repo_url is required"}
+            
             return {
                 "status": result.status.value,
                 "plugin_id": result.plugin_id,
@@ -460,6 +499,7 @@ class VaultBrain:
         return self.ws_server.is_connected()
 
     # =========================================================================
+
     # Event System (Frontend Notification + Pub/Sub)
     # =========================================================================
 

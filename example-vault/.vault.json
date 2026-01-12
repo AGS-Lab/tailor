@@ -11,6 +11,12 @@
         },
         "explorer": {
             "enabled": true
+        },
+        "demo_ui": {
+            "enabled": true
+        },
+        "prompt_refiner": {
+            "enabled": true
         }
     }
 }

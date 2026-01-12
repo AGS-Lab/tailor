@@ -50,6 +50,7 @@ class WebSocketServer:
         self.message_queue: asyncio.Queue = asyncio.Queue()
         self.command_handlers: Dict[str, CommandHandler] = {}
         self.pending_messages: list[Dict[str, Any]] = []
+        self.brain = None  # Will be set by VaultBrain after initialization
         
         logger.info(f"WebSocket server initialized on {host}:{port}")
     
@@ -162,8 +163,12 @@ class WebSocketServer:
             
             logger.debug(f"Received command: {method}")
             
-            # Call handler if registered
+            result = None
+            handler_found = False
+            
+            # Call handler if registered in ws_server
             if method in self.command_handlers:
+                handler_found = True
                 try:
                     result = await self.command_handlers[method](**params)
                     
@@ -175,8 +180,6 @@ class WebSocketServer:
                 
                 except Exception as e:
                     logger.exception(f"Handler error for '{method}': {e}")
-                    
-                    # Send error response
                     error_response = utils.build_internal_error(
                         message=str(e),
                         details={
@@ -186,10 +189,40 @@ class WebSocketServer:
                         request_id=request_id,
                     )
                     await self.send(error_response)
+                    return
             
+            # Fallback: check brain commands (for plugins that register there)
+            elif self.brain and method in self.brain.commands:
+                handler_found = True
+                try:
+                    # Brain commands use **kwargs, extract from params
+                    result = await self.brain.commands[method]["handler"](**params)
+                except Exception as e:
+                    logger.exception(f"Brain command error for '{method}': {e}")
+                    error_response = utils.build_internal_error(
+                        message=str(e),
+                        details={
+                            "method": method,
+                            "error_type": type(e).__name__,
+                        },
+                        request_id=request_id,
+                    )
+                    await self.send(error_response)
+                    return
+            
+            if handler_found:
+                # Send success response
+                response = utils.build_response(result, request_id=request_id)
+                await self.send(response)
+                logger.debug(f"Command '{method}' executed successfully")
             else:
                 logger.warning(f"No handler registered for method: {method}")
-                # Could send method not found error here
+                # Send method not found error
+                error_response = utils.build_method_not_found(
+                    method=method,
+                    request_id=request_id,
+                )
+                await self.send(error_response)
         
         except exceptions.WebSocketMessageError as e:
             logger.error(f"Message handling error: {e.message}")
@@ -224,8 +257,14 @@ class WebSocketServer:
         """
         if self.connection:
             try:
-                self.connection.close()
-                logger.debug("Connection closed")
+                # Create a task to close the connection asynchronously
+                try:
+                    loop = asyncio.get_running_loop()
+                    asyncio.create_task(self.connection.close())
+                except RuntimeError:
+                    # No running loop, connection will be closed when event loop ends
+                    pass
+                logger.debug("Connection close initiated")
             except Exception as e:
                 logger.exception(f"Close error: {e}")
 

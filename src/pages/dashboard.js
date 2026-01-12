@@ -5,6 +5,9 @@
 
 import { vaultApi } from '../services/api.js';
 
+// Track whether event listeners have been set up to prevent duplicates
+let eventListenersInitialized = false;
+
 export async function initDashboard(container) {
     container.innerHTML = `
         <div class="dashboard-container">
@@ -66,7 +69,7 @@ async function loadDashboardData(container) {
 
 async function loadStats(container) {
     const statsContainer = container.querySelector('#dashboard-stats');
-    
+
     try {
         const stats = {
             totalVaults: 0,
@@ -131,10 +134,10 @@ async function loadStats(container) {
 
 async function loadVaults(container) {
     const vaultsGrid = container.querySelector('#vaults-grid');
-    
+
     try {
         let vaults = [];
-        
+
         try {
             vaults = await vaultApi.listVaults();
         } catch (e) {
@@ -229,6 +232,12 @@ function setupVaultCardListeners(container) {
 }
 
 function setupEventListeners(container) {
+    // Only set up event listeners once to prevent duplicates
+    if (eventListenersInitialized) {
+        return;
+    }
+    eventListenersInitialized = true;
+
     const openVaultBtn = container.querySelector('#open-vault-btn');
     const createVaultBtn = container.querySelector('#create-vault-btn');
 
@@ -269,15 +278,15 @@ async function createNewVault(container) {
 
         const sanitizedName = name.trim().replace(/[<>:"/\\|?*]/g, '_');
         const separator = parentDir.includes('\\') ? '\\' : '/';
-        const vaultPath = parentDir.endsWith(separator) 
-            ? parentDir + sanitizedName 
+        const vaultPath = parentDir.endsWith(separator)
+            ? parentDir + sanitizedName
             : parentDir + separator + sanitizedName;
 
         await vaultApi.createVault(name.trim(), vaultPath);
-        
+
         await loadVaults(container);
         await loadStats(container);
-        
+
         const shouldOpen = confirm('Vault created! Open it now?');
         if (shouldOpen) {
             await vaultApi.openVaultByPath(vaultPath);

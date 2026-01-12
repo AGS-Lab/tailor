@@ -71,7 +71,7 @@ def configure_logging(
             logger.add(
                 str(log_file),
                 rotation="10 MB",
-                retention="5 files",
+                retention=5,
                 level=log_level,
                 format=format_str,
                 encoding="utf-8"
@@ -157,6 +157,18 @@ def build_internal_error(
         constants.JSONRPC_INTERNAL_ERROR,
         message,
         data=details,
+        request_id=request_id,
+    )
+
+def build_method_not_found(
+    method: str,
+    request_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Build a method not found error response."""
+    return build_error(
+        constants.JSONRPC_METHOD_NOT_FOUND,
+        f"Method not found: {method}",
+        data={"method": method},
         request_id=request_id,
     )
 
