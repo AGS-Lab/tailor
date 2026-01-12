@@ -2,10 +2,16 @@
     "$schema": "https://schema.tauri.app/config/2",
     "productName": "Tailor",
     "version": "0.1.0",
-    "identifier": "com.tailor.app",
+    "identifier": "com.tailor.desktop",
     "build": {
         "beforeDevCommand": "npm run dev",
         "devUrl": "http://localhost:5173"
+    },
+    "bundle": {
+        "icon": [
+            "icons/icon.png",
+            "icons/icon.ico"
+        ]
     },
     "app": {
         "windows": [

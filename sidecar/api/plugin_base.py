@@ -15,10 +15,10 @@ try:
     from sidecar import constants
     from sidecar.llm import HookPhase, HookContext
 except ImportError:
-    import utils
-    import constants
+    from sidecar import utils
+    from sidecar import constants
     try:
-        from llm import HookPhase, HookContext
+        from sidecar.llm import HookPhase, HookContext
     except ImportError:
         HookPhase = None  # type: ignore
         HookContext = None  # type: ignore

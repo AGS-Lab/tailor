@@ -6,6 +6,7 @@ use anyhow::{Result, Context};
 
 pub struct SidecarProcess {
     pub child: Child,
+    #[allow(dead_code)]
     pub vault_path: String,
     pub ws_port: u16,
 }
@@ -131,6 +132,26 @@ impl SidecarManager {
         Ok(())
     }
 
+    /// Terminate ALL sidecar processes (used for app shutdown)
+    pub fn shutdown_all(&self) {
+        println!("Shutting down all sidecars...");
+        // Use blocking lock for shutdown
+        if let Ok(mut processes) = self.processes.try_lock() {
+             for (label, mut process) in processes.drain() {
+                println!("Killing sidecar for window '{}' (PID: {})", label, process.child.id());
+                if let Err(e) = process.child.kill() {
+                    eprintln!("Failed to kill sidecar {}: {}", label, e);
+                } else {
+                     let _ = process.child.wait(); // Best effort wait
+                }
+             }
+        } else {
+            // Fallback: If we can't lock (unlikely in shutdown), we might leak. 
+            // Better to force lock if possible, but try_lock avoids deadlock potential in panic paths.
+            eprintln!("Failed to acquire lock for shutdown cleanup!");
+        }
+    }
+    
     /// Get WebSocket port for a sidecar
     pub async fn get_ws_port(&self, window_label: &str) -> Option<u16> {
         self.processes.lock().await
@@ -139,6 +160,7 @@ impl SidecarManager {
     }
 
     /// Check if sidecar is still running
+    #[allow(dead_code)]
     pub async fn is_running(&self, window_label: &str) -> bool {
         self.processes.lock().await.contains_key(window_label)
     }

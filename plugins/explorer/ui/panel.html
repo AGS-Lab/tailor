@@ -1,0 +1,131 @@
+<!-- Explorer Panel -->
+<div class="explorer-container">
+    <div class="explorer-section">
+        <div class="explorer-section-header">
+            <span class="explorer-chevron">▶</span>
+            <span class="text-label">VAULT ROOT</span>
+        </div>
+        <div class="explorer-section-content">
+            <div class="explorer-item">
+                <span class="explorer-icon"><i data-lucide="file-text"></i></span>
+                <span>.vault.json</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="explorer-section">
+        <div class="explorer-section-header">
+            <span class="explorer-chevron">▼</span>
+            <span class="text-label">PLUGINS</span>
+        </div>
+        <div class="explorer-section-content open">
+            <div class="explorer-item">
+                <span class="explorer-icon"><i data-lucide="folder"></i></span>
+                <span>demo_plugin</span>
+            </div>
+            <div class="explorer-item active">
+                <span class="explorer-icon"><i data-lucide="folder-open"></i></span>
+                <span>explorer</span>
+            </div>
+            <div class="explorer-item">
+                <span class="explorer-icon"><i data-lucide="folder"></i></span>
+                <span>llm</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .explorer-container {
+        padding: 0;
+        font-family: var(--font-main);
+        font-size: 0.85rem;
+    }
+
+    .explorer-section {
+        margin-bottom: 4px;
+    }
+
+    .explorer-section-header {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 8px;
+        cursor: pointer;
+        color: var(--text-secondary);
+        font-weight: 600;
+    }
+
+    .explorer-section-header:hover {
+        background: var(--bg-hover);
+        color: var(--text-primary);
+    }
+
+    .explorer-chevron {
+        font-size: 0.65rem;
+        width: 12px;
+    }
+
+    .explorer-section-content {
+        display: none;
+        padding-left: 12px;
+    }
+
+    .explorer-section-content.open {
+        display: block;
+    }
+
+    .explorer-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 8px;
+        cursor: pointer;
+        color: var(--text-secondary);
+    }
+
+    .explorer-item:hover {
+        background: var(--bg-hover);
+        color: var(--text-primary);
+    }
+
+    .explorer-item.active {
+        background: var(--bg-card);
+        color: var(--accent-primary);
+    }
+
+    .explorer-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 16px;
+        height: 16px;
+    }
+
+    .explorer-icon svg {
+        width: 14px;
+        height: 14px;
+    }
+</style>
+
+<script>
+    // Toggle sections
+    document.querySelectorAll('.explorer-section-header').forEach(header => {
+        header.addEventListener('click', () => {
+            const content = header.nextElementSibling;
+            const chevron = header.querySelector('.explorer-chevron');
+            if (content.classList.contains('open')) {
+                content.classList.remove('open');
+                chevron.textContent = '▶';
+            } else {
+                content.classList.add('open');
+                chevron.textContent = '▼';
+            }
+        });
+    });
+
+    // Initialize Lucide icons
+    if (window.lucide) {
+        window.lucide.createIcons();
+    }
+</script>

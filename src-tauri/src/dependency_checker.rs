@@ -78,6 +78,7 @@ impl DependencyChecker {
     }
 
     /// Check if dependencies need updating
+    #[allow(dead_code)]
     pub async fn needs_update(vault_path: &str) -> Result<bool> {
         let vault_path = PathBuf::from(vault_path);
         let requirements_file = vault_path.join("plugins").join("requirements.txt");

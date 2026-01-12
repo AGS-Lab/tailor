@@ -114,10 +114,18 @@ def main() -> None:
                 pass  # dotenv not installed, use system env vars
             break
     
+    # Determine log file path
+    log_file = args.log_file
+    if not log_file:
+        # Default to .tailor/logs/sidecar.log inside vault
+        log_dir = vault_path / ".tailor" / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log_file = log_dir / "sidecar.log"
+
     # Configure logging first
     utils.configure_logging(
         level=args.log_level,
-        log_file=args.log_file,
+        log_file=log_file,
         verbose=args.verbose,
     )
     

@@ -351,7 +351,7 @@ sequenceDiagram
 4. **Window Creation**: `WindowManager` creates new window `vault_1`
 5. **Sidecar Spawn**: 
    - `SidecarManager` allocates port `9001`
-   - Spawns: `python -u sidecar/main.py --vault example-vault --ws-port 9001`
+   - Spawns: `python -m sidecar --vault example-vault --ws-port 9001`
 6. **Python Sidecar Starts**:
    - Loads config from `.vault.json`
    - Creates `.memory/` directory
@@ -626,7 +626,7 @@ tailor/
 │   │   ├── sidecar_manager.rs   # Python process orchestration
 │   │   ├── event_bus.rs          # Event routing (window/vault/global)
 │   │   ├── ipc_router.rs         # IPC commands (open/close/send)
-│   │   └── dependency_checker.rs # Auto pip install
+│   │   └── dependency_checker.rs # Auto install dependencies
 │   └── Cargo.toml
 ├── sidecar/                      # Python sidecar
 │   ├── main.py                   # Entry point (CLI args parser)
@@ -676,7 +676,7 @@ tailor/
 
 ### **Running the Application**
 ```powershell
-npm run tauri:dev
+pixi run dev
 ```
 
 This will:

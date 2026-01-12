@@ -219,7 +219,7 @@ def __init__(self, emitter, brain, plugin_dir, vault_path):
 
 ```bash
 # Run sidecar with your vault
-python sidecar/main.py --vault example-vault --ws-port 9001 --verbose
+pixi run sidecar --vault example-vault --ws-port 9001 --verbose
 
 # Check logs
 # Look for: "Plugin 'your_plugin' loaded"
@@ -229,7 +229,7 @@ python sidecar/main.py --vault example-vault --ws-port 9001 --verbose
 
 Enable verbose logging:
 ```bash
-python sidecar/main.py --vault example-vault --ws-port 9001 --verbose
+pixi run sidecar --vault example-vault --ws-port 9001 --verbose
 ```
 
 Check plugin-specific logs:

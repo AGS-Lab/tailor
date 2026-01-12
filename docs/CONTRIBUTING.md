@@ -7,7 +7,7 @@ Thank you for your interest in contributing to Tailor! This document provides gu
 1.  **Environment**: Ensure you have Python 3.12+ installed.
 2.  **Dependencies**: Install development dependencies:
     ```bash
-    pip install -r sidecar/tests/test-requirements.txt
+    pixi install
     ```
 
 ## Code Structure
@@ -29,10 +29,10 @@ We use `pytest` for testing. You must run tests from the project root (`tailor` 
 
 ```bash
 # Correct way to run tests
-python -m pytest sidecar/tests
+pixi run test
 
 # Run specific test file
-python -m pytest sidecar/tests/test_integration.py
+pixi run pytest sidecar/tests/test_integration.py
 ```
 
 ## Developing Plugins
@@ -45,7 +45,7 @@ Plugins reside in the vault's `plugins/` directory.
     ```python
     from sidecar.api.plugin_base import PluginBase
     ```
-3.  **Path Configuration**: If running independently or in tests, ensure the `tailor` root directory is in `sys.path`.
+3.  **Path Configuration**: The `tailor` root directory must be in `sys.path`. This is handled automatically by the app, but crucial for standalone testing when importing `sidecar`.
 
 ### Example Plugin Structure
 ```python

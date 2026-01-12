@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct Event {
     pub event_type: String,
     pub scope: EventScope,
@@ -14,6 +15,7 @@ pub struct Event {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[allow(dead_code)]
 pub enum EventScope {
     Window,
     Global,
@@ -22,6 +24,7 @@ pub enum EventScope {
 
 pub struct EventBus {
     // Map window labels to their vault IDs
+    #[allow(dead_code)]
     window_vaults: Arc<Mutex<HashMap<String, String>>>,
 }
 
@@ -31,6 +34,7 @@ impl Default for EventBus {
     }
 }
 
+#[allow(dead_code)]
 impl EventBus {
     pub fn new() -> Self {
         Self {
@@ -97,7 +101,9 @@ impl EventBus {
     }
 
     /// Unregister a window
+    #[allow(dead_code)]
     pub async fn unregister_window(&self, window_label: &str) {
         self.window_vaults.lock().await.remove(window_label);
     }
 }
+

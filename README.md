@@ -24,40 +24,26 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed design
 
 ## Prerequisites
 
-- **Rust**: Install from [rustup.rs](https://rustup.rs/)
-- **Node.js**: v18+ for frontend build
-- **Python**: 3.10+ for sidecar execution
+- **Pixi**: Install from [prefix.dev](https://prefix.dev/)
+- **Rust**: Install from [rustup.rs](https://rustup.rs/) (Required for Tauri)
 
 ## Installation
 
-### 1. Install Rust (Required)
+### 1. Install Dependencies
 
-```powershell
-# Windows - Run in PowerShell
-winget install --id Rustlang.Rustup
+```bash
+pixi install
 ```
 
-After installation, restart your terminal.
-
-### 2. Install Dependencies
-
-```powershell
-# Install Node dependencies
-npm install
-
-# Install Python sidecar dependencies
-cd sidecar
-pip install -r requirements.txt
-cd ..
-```
+This will automatically set up the isolated Python and Node.js environments with all dependencies.
 
 ## Development
 
 ### Run in Development Mode
 
-```powershell
+```bash
 # Start Tauri development server
-npm run tauri:dev
+pixi run dev
 ```
 
 This will:
@@ -83,13 +69,14 @@ tailor/
 │   │   ├── main.rs               # Entry point
 │   │   ├── window_manager.rs    # Window lifecycle
 │   │   ├── sidecar_manager.rs   # Process orchestration
-│   │   ├── dependency_checker.rs # Auto pip install
+│   │   ├── dependency_checker.rs # Auto install dependencies
 │   │   ├── ipc_router.rs        # Command routing
 │   │   └── event_bus.rs         # Event routing
 │   ├── Cargo.toml
 │   └── tauri.conf.json
 ├── sidecar/                      # Python sidecar (✨ refactored)
-│   ├── main.py                   # Entry point with CLI
+│   ├── __main__.py               # Module entry point
+│   ├── main.py                   # CLI logic
 │   ├── websocket_server.py       # JSON-RPC 2.0 WebSocket server
 │   ├── vault_brain.py            # Plugin orchestrator
 │   ├── event_emitter.py          # Event emission API
@@ -207,9 +194,9 @@ emitter.vault_event("STATE_CHANGED", {"key": "value"})        # Same vault
 
 ## Building for Production
 
-```powershell
+```bash
 # Build application bundle
-npm run tauri:build
+pixi run build
 ```
 
 The compiled app will be in `src-tauri/target/release/bundle/`.

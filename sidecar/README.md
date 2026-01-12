@@ -6,7 +6,8 @@ The Python backend for the Tailor Desktop Application. It operates as a sidecar 
 
 The Sidecar communicates with the main Tauri process via **WebSockets** (JSON-RPC 2.0).
 
-- **`main.py`**: Entry point. Starts `WebSocketServer` and `VaultBrain`.
+- **`__main__.py`**: Module entry point (supports `python -m sidecar`).
+- **`main.py`**: CLI argument parsing and initialization.
 - **`websocket_server.py`**: Handles bi-directional communication with Tauri.
 - **`vault_brain.py`**: Core orchestrator. Loads plugins, manages lifecycle, and executes commands.
 - **`api/plugin_base.py`**: Base class for all plugins.
@@ -21,19 +22,17 @@ The Sidecar communicates with the main Tauri process via **WebSockets** (JSON-RP
 
 ### Setup
 ```bash
-cd sidecar
-pip install -r requirements.txt
-pip install -r test-requirements.txt
+pixi install
 ```
 
 ### Running Tests
 We use `pytest` for unit and integration testing.
 ```bash
 # Run all tests
-pytest tests/
+pixi run test
 
-# Run with coverage
-pytest tests/ --cov=.
+# Run with coverage (configured in pixi.toml or via arguments)
+pixi run pytest tests/ --cov=.
 ```
 
 ### Type Checking
@@ -48,7 +47,8 @@ sidecar/
 ├── api/             # Public APIs for plugins
 ├── utils/           # Shared utilities (logging, paths, json-rpc)
 ├── tests/           # Unit and Integration tests
-├── main.py          # Entry point
+├── __main__.py      # Module entry point
+├── main.py          # Entry point logic
 ├── vault_brain.py   # Core logic
 └── ...
 ```

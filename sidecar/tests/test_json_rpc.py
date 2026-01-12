@@ -72,21 +72,9 @@ class TestValidation:
 class TestHelpers:
     """Test helper functions."""
     
-    def test_is_request(self):
-        """Test is_request helper."""
-        request = {"jsonrpc": "2.0", "method": "test", "id": 1}
-        notification = {"jsonrpc": "2.0", "method": "notify"}
-        
-        assert utils.is_request(request) is True
-        assert utils.is_request(notification) is False
+
     
-    def test_is_notification(self):
-        """Test is_notification helper."""
-        request = {"jsonrpc": "2.0", "method": "test", "id": 1}
-        notification = {"jsonrpc": "2.0", "method": "notify"}
-        
-        assert utils.is_notification(notification) is True
-        assert utils.is_notification(request) is False
+
     
     def test_get_method(self):
         """Test get_method helper."""

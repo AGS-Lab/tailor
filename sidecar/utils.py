@@ -15,7 +15,7 @@ import os
 import sys
 import time
 import json
-import uuid
+
 import random
 import string
 from . import constants
@@ -85,9 +85,7 @@ def configure_logging(
     logger.info(f"Logging configured at {log_level} level")
 
 
-def setup_dev_logging() -> None:
-    """Quick setup for development logging."""
-    configure_logging(verbose=True)
+
 
 
 # =============================================================================
@@ -149,53 +147,6 @@ def build_error(
         "id": request_id,
     }
 
-
-def build_parse_error(request_id: Optional[str] = None) -> Dict[str, Any]:
-    """Build a JSON parse error response."""
-    return build_error(
-        constants.JSONRPC_PARSE_ERROR,
-        "Parse error",
-        data={"description": "Invalid JSON was received by the server"},
-        request_id=request_id,
-    )
-
-
-def build_invalid_request_error(request_id: Optional[str] = None) -> Dict[str, Any]:
-    """Build an invalid request error response."""
-    return build_error(
-        constants.JSONRPC_INVALID_REQUEST,
-        "Invalid Request",
-        data={"description": "The JSON sent is not a valid Request object"},
-        request_id=request_id,
-    )
-
-
-def build_method_not_found_error(
-    method: str,
-    request_id: Optional[str] = None,
-) -> Dict[str, Any]:
-    """Build a method not found error response."""
-    return build_error(
-        constants.JSONRPC_METHOD_NOT_FOUND,
-        f"Method not found: {method}",
-        data={"method": method},
-        request_id=request_id,
-    )
-
-
-def build_invalid_params_error(
-    reason: str,
-    request_id: Optional[str] = None,
-) -> Dict[str, Any]:
-    """Build an invalid params error response."""
-    return build_error(
-        constants.JSONRPC_INVALID_PARAMS,
-        "Invalid params",
-        data={"reason": reason},
-        request_id=request_id,
-    )
-
-
 def build_internal_error(
     message: str,
     details: Optional[Dict[str, Any]] = None,
@@ -208,7 +159,6 @@ def build_internal_error(
         data=details,
         request_id=request_id,
     )
-
 
 def validate_jsonrpc_message(message: Dict[str, Any]) -> None:
     """Validate that a message conforms to JSON-RPC 2.0 spec."""
@@ -255,21 +205,6 @@ def validate_jsonrpc_message(message: Dict[str, Any]) -> None:
             "Message must be request or response",
             constants.JSONRPC_INVALID_REQUEST
         )
-
-
-def is_request(message: Dict[str, Any]) -> bool:
-    """Check if a message is a JSON-RPC request (has method and id)."""
-    return "method" in message and "id" in message
-
-
-def is_response(message: Dict[str, Any]) -> bool:
-    """Check if a message is a JSON-RPC response."""
-    return "result" in message or "error" in message
-
-
-def is_notification(message: Dict[str, Any]) -> bool:
-    """Check if a message is a JSON-RPC notification (request without ID)."""
-    return "method" in message and "id" not in message
 
 
 def get_request_id(message: Dict[str, Any]) -> Optional[str]:
@@ -340,21 +275,6 @@ def validate_plugin_structure(plugin_dir: Path) -> None:
             f"{constants.PLUGIN_MAIN_FILE} is not a file"
         )
 
-
-def safe_path_join(base: Path, *parts: str) -> Path:
-    """Safely join path components, preventing directory traversal."""
-    base = base.resolve()
-    joined = (base / Path(*parts)).resolve()
-    
-    # Check if joined path is within base directory
-    try:
-        joined.relative_to(base)
-    except ValueError:
-        raise exceptions.PathTraversalError(str(joined))
-    
-    return joined
-
-
 def ensure_directory(path: Path, create: bool = True) -> Path:
     """Ensure a directory exists, optionally creating it."""
     resolved = path.resolve()
@@ -393,58 +313,6 @@ def get_plugins_dir(vault_path: Path) -> Optional[Path]:
     return plugins_path if plugins_path.exists() and plugins_path.is_dir() else None
 
 
-def get_lib_dir(vault_path: Path, create: bool = True) -> Path:
-    """Get the lib directory for a vault (for isolated dependencies)."""
-    return ensure_directory(vault_path / constants.LIB_DIR, create=create)
-
-
-def discover_plugins(vault_path: Path) -> List[Path]:
-    """Discover all plugin directories in a vault."""
-    plugins_dir = get_plugins_dir(vault_path)
-    
-    from loguru import logger
-    logger_inst = logger.bind(name=__name__)
-    
-    if not plugins_dir:
-        logger_inst.debug(f"Plugins directory does not exist or is not a directory: {vault_path / constants.PLUGINS_DIR}")
-        return []
-    
-    logger_inst.debug(f"Scanning plugins directory: {plugins_dir}")
-    
-    plugin_dirs = []
-    
-    for item in plugins_dir.iterdir():
-        # Skip hidden directories and files
-        if item.name.startswith(('.', '_')):
-            logger_inst.debug(f"Skipping hidden item: {item.name}")
-            continue
-        
-        # Only include directories with main.py
-        if item.is_dir():
-            main_file = item / constants.PLUGIN_MAIN_FILE
-            if main_file.exists():
-                logger_inst.debug(f"Found plugin: {item.name}")
-                plugin_dirs.append(item)
-            else:
-                logger_inst.debug(f"Skipping {item.name} (no main.py)")
-        else:
-            logger_inst.debug(f"Skipping {item.name} (not a directory)")
-    
-    return sorted(plugin_dirs, key=lambda p: p.name)
-
-
-def is_safe_filename(filename: str) -> bool:
-    """Check if a filename is safe (no path traversal characters)."""
-    dangerous_chars = ['..', '/', '\\', '\0']
-    return not any(char in filename for char in dangerous_chars)
-
-
-def get_relative_path(path: Path, base: Path) -> Optional[Path]:
-    """Get relative path from base to path."""
-    try:
-        return path.resolve().relative_to(base.resolve())
-    except ValueError:
-        return None
 
 
 # =============================================================================
@@ -463,7 +331,3 @@ def generate_id(prefix: str = "") -> str:
         return f"{prefix}{timestamp}_{random_suffix}"
     return f"{timestamp}_{random_suffix}"
 
-
-def generate_uuid() -> str:
-    """Generate a standard UUID v4 string."""
-    return str(uuid.uuid4())

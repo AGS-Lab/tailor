@@ -8,6 +8,7 @@ import pytest
 import asyncio
 import json
 from unittest.mock import Mock, AsyncMock, patch, MagicMock
+import inspect
 from sidecar.websocket_server import WebSocketServer, CommandHandler
 from sidecar import exceptions
 from sidecar import utils
@@ -41,18 +42,12 @@ class TestWebSocketServer:
 
     def test_register_handler_async(self, server):
         """Test registering an async handler."""
-        async def handler(params): return {}
+        async def handler(**kwargs): return {}
         server.register_handler("test.method", handler)
         assert "test.method" in server.command_handlers
         assert server.command_handlers["test.method"] == handler
 
-    def test_register_handler_sync(self, server):
-        """Test registering a sync handler (wrapper)."""
-        def handler(params): return {}
-        server.register_handler("test.method", handler)
-        assert "test.method" in server.command_handlers
-        # Should be wrapped in async
-        assert asyncio.iscoroutinefunction(server.command_handlers["test.method"])
+
 
     @pytest.mark.asyncio
     async def test_send_to_rust_connected(self, server, mock_ws):
@@ -95,7 +90,7 @@ class TestWebSocketServer:
         await server.handle_message(json.dumps(request))
         
         # Check handler called
-        handler.assert_called_once_with({"msg": "hello"})
+        handler.assert_called_once_with(msg="hello")
         
         # Check response sent
         server.connection.send.assert_called_once()

@@ -25,25 +25,16 @@ cargo --version
 # Should output: cargo 1.xx.x
 ```
 
-### Step 2: Install Node.js Dependencies
+### Step 2: Install Dependencies
 
-```powershell
-cd c:\Users\ARC\Dev\tailor
-npm install
+```bash
+pixi install
 ```
 
-### Step 3: Install Python Sidecar Dependencies
+### Step 3: Run Development Server
 
-```powershell
-cd sidecar
-pip install -r requirements.txt
-cd ..
-```
-
-### Step 4: Run Development Server
-
-```powershell
-npm run tauri:dev
+```bash
+pixi run dev
 ```
 
 This will:
@@ -56,7 +47,7 @@ This will:
 ### Test 1: Open Example Vault
 
 1. Click "Open Vault" button
-2. Navigate to `c:\Users\ARC\Dev\tailor\example-vault`
+2. Navigate to `<path-to-repo>\example-vault`
 3. Select the folder
 
 **Expected Behavior**:
@@ -108,8 +99,8 @@ python --version
 
 Check:
 - Python is accessible via `python` command
-- Sidecar dependencies are installed: `pip list | grep websockets`
-- Path to `sidecar/main.py` is correct
+- Sidecar dependencies are installed: `pixi list | grep websockets`
+- Sidecar module is executable: `python -m sidecar --help` works
 
 ### "WebSocket connection failed"
 
@@ -156,20 +147,19 @@ Tailor will auto-install when you open the vault.
 
 ## Development Commands
 
-```powershell
+```bash
 # Run in dev mode
-npm run tauri:dev
+pixi run dev
 
 # Build for production
-npm run tauri:build
+pixi run build
 
 # Run Rust tests
 cd src-tauri
 cargo test
 
 # Run Python sidecar standalone
-cd sidecar
-python main.py --vault ../example-vault --ws-port 9000
+pixi run sidecar
 ```
 
 ## Support

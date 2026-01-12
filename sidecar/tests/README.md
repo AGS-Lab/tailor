@@ -18,38 +18,38 @@ tests/
 ### Install Dependencies
 
 ```bash
-pip install -r test-requirements.txt
+pixi install
 ```
 
 ### Run All Tests
 
 ```bash
-pytest tests/
+pixi run test
 ```
 
 ### Run Specific Test File
 
 ```bash
-pytest tests/test_constants.py -v
+pixi run pytest tests/test_constants.py -v
 ```
 
 ### Run Tests by Marker
 
 ```bash
 # Run only unit tests
-pytest tests/ -m unit
+pixi run pytest tests/ -m unit
 
 # Run integration tests
-pytest tests/ -m integration
+pixi run pytest tests/ -m integration
 
 # Run all except slow tests
-pytest tests/ -m "not slow"
+pixi run pytest tests/ -m "not slow"
 ```
 
 ### With Coverage
 
 ```bash
-pytest tests/ --cov=. --cov-report=html
+pixi run pytest tests/ --cov=. --cov-report=html
 ```
 
 The coverage report will be generated in `htmlcov/index.html`.
@@ -127,8 +127,8 @@ def test_file_creation(tmp_path):
 For development with auto-rerun on file changes:
 
 ```bash
-pip install pytest-watch
-ptw tests/
+pixi add pytest-watch
+pixi run ptw tests/
 ```
 
 This will automatically run tests when you modify files.

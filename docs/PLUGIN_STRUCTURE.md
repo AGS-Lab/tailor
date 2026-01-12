@@ -24,42 +24,33 @@ example-vault/
 Each plugin must have a `main.py` file with a `Plugin` class:
 
 ```python
-class Plugin:
+from sidecar.api.plugin_base import PluginBase
+
+class Plugin(PluginBase):
     def __init__(self, emitter, brain, plugin_dir, vault_path):
         """
         Initialize plugin.
         
         Args:
             emitter: EventEmitter for UI interactions
- brain: VaultBrain for command registration
+            brain: VaultBrain for command registration
             plugin_dir: Path to plugin directory (for plugin-specific files)
             vault_path: Path to vault root (for accessing configs/)
         """
-        self.emitter = emitter
-        self.brain = brain
-        self.plugin_dir = plugin_dir
-        self.vault_path = vault_path
-        self.name = "my_plugin"
+        super().__init__(emitter, brain, plugin_dir, vault_path)
         
         # Load plugin config from vault/configs/my_plugin/
-        self.config = self._load_config()
+        self.config = self.load_settings()
         
         # Register commands
-        brain.register_command("myPlugin.action", self.my_action, self.name)
+        self.register_commands()
         
         # Send init notification
-        emitter.notify(f"Plugin '{self.name}' loaded!", severity="success")
+        self.emitter.notify(f"Plugin '{self.name}' loaded!", severity="success")
     
-    def _load_config(self):
-        """Load plugin configuration from settings.json"""
-        import json
-        config_file = self.plugin_dir / "settings.json"
-        
-        if config_file.exists():
-            with open(config_file, "r") as f:
-                return json.load(f)
-        
-        return {}  # Default config
+    def register_commands(self):
+        """Register plugin commands."""
+        self.brain.register_command("myPlugin.action", self.my_action, self.name)
     
     async def on_tick(self, emitter):
         """Called every 5 seconds (optional)."""
@@ -87,18 +78,18 @@ Each plugin can have a `settings.json` file in its directory:
 Access config in your plugin:
 
 ```python
-def __init__(self, emitter, brain, plugin_dir, vault_path):
-    self.plugin_dir = plugin_dir
-    self.config = self._load_config()
-    
-    # Use config values
-    if self.config.get("enabled", True):
-        self.setup()
+from sidecar.api.plugin_base import PluginBase
 
-def _load_config(self):
-    import json
-    config_file = self.plugin_dir / "settings.json"
-    return json.load(open(config_file)) if config_file.exists() else {}
+class Plugin(PluginBase):
+    def __init__(self, emitter, brain, plugin_dir, vault_path):
+        super().__init__(emitter, brain, plugin_dir, vault_path)
+        
+        # Load settings using helper
+        self.config = self.load_settings() # Defaults to loading settings.json
+        
+        # Use config values
+        if self.config.get("enabled", True):
+            self.setup()
 ```
 
 ## Plugin Loading
@@ -149,12 +140,12 @@ example_plugin/
 
 2. Create `main.py`:
    ```python
-   class Plugin:
-       def __init__(self, emitter, brain, plugin_dir):
-           self.emitter = emitter
-           self.brain = brain
-           self.plugin_dir = plugin_dir
-           # ... setup
+   from sidecar.api.plugin_base import PluginBase
+   
+   class Plugin(PluginBase):
+       def __init__(self, emitter, brain, plugin_dir, vault_path):
+           super().__init__(emitter, brain, plugin_dir, vault_path)
+           self.register_commands()
    ```
 
 3. Create `configs/settings.json`:

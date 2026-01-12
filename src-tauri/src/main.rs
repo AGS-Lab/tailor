@@ -19,6 +19,7 @@ use event_bus::EventBus;
 struct AppState {
     window_manager: Arc<Mutex<WindowManager>>,
     sidecar_manager: Arc<SidecarManager>,
+    #[allow(dead_code)]
     event_bus: Arc<EventBus>,
 }
 
@@ -67,6 +68,13 @@ fn main() {
             ipc_router::get_plugin_template,
             ipc_router::validate_plugin,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            if let tauri::RunEvent::Exit = event {
+                println!("Application exiting - performing cleanup");
+                let state = app.state::<AppState>();
+                state.sidecar_manager.shutdown_all();
+            }
+        });
 }

@@ -1,0 +1,11 @@
+{
+    "python_version": "3.12",
+    "dockerfile_lines": [],
+    "graphs": {
+        "default": "./sidecar/pipeline/studio_entrypoint.py:graph"
+    },
+    "env": ".env",
+    "dependencies": [
+        "./requirements-studio.txt"
+    ]
+}

@@ -43,3 +43,6 @@ build-check.ps1
 htmlcov/
 .coverage
 .coverage.*
+# pixi environments
+.pixi/*
+!.pixi/config.toml

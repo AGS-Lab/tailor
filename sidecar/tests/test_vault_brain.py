@@ -79,15 +79,17 @@ class TestVaultBrain:
         assert brain.config["name"] == valid_vault.name
 
     @patch("sidecar.utils.validate_plugin_structure")
-    @patch("sidecar.utils.discover_plugins")
+
     @patch("sidecar.vault_brain.importlib.util.spec_from_file_location")
     @patch("sidecar.vault_brain.importlib.util.module_from_spec")
     @pytest.mark.asyncio
-    async def test_load_plugins(self, mock_module, mock_spec, mock_discover, mock_validate, valid_vault, mock_ws_server):
+    async def test_load_plugins(self, mock_module, mock_spec, mock_validate, valid_vault, mock_ws_server):
         """Test loading plugins."""
-        # Mock discovered plugin path
+        # Mock discovered plugin path by ensuring it exists in the valid_vault
         plugin_path = valid_vault / "plugins" / "test_plugin"
-        mock_discover.return_value = [plugin_path]
+        # mock_discover.return_value = [plugin_path] -> We rely on filesystem now or need to mock get_plugins_dir if we want to isolate
+        # The test actually creates the directories later, so standard discovery should work if we create files BEFORE initialize
+
         
         # Mock plugin module and class
         mock_plugin_instance = Mock()
@@ -109,6 +111,7 @@ class TestVaultBrain:
         
         # Connect paths
         plugin_path.mkdir(parents=True, exist_ok=True)
+        (plugin_path / "main.py").touch()
         # Create settings.json to enable plugin
         (plugin_path / "settings.json").write_text('{"enabled": true, "key": "value"}')
 

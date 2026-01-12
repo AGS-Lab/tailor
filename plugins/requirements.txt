@@ -1,0 +1,2 @@
+# Example plugin dependencies
+# Currently empty - add dependencies as needed
