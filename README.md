@@ -215,7 +215,4 @@ MIT
 
 ## Documentation
 
-For detailed architecture documentation, see:
-- Architecture Overview: `.gemini/antigravity/brain/.../architecture_overview.md`
-- Implementation Plan: `.gemini/antigravity/brain/.../implementation_plan.md`
-- Event Bus Design: `.gemini/antigravity/brain/.../event_bus_design.md`
+[WIP]
