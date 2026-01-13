@@ -76,6 +76,10 @@ class VaultBrain:
         self.subscribers: Dict[str, List[EventHandler]] = defaultdict(list)
         self.ws_server = ws_server
         
+        # Set back-reference so ws_server can look up brain.commands
+        if ws_server:
+            ws_server.brain = self
+        
         self.config: Dict[str, Any] = {}
         self.graph: Optional[Dict[str, Any]] = None
         
