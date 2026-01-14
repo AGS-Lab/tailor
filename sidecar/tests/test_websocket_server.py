@@ -84,6 +84,7 @@ class TestWebSocketServer:
         # Mock connection to verify response
         server.connection = Mock()
         server.connection.send = AsyncMock()
+        server.connection.close = AsyncMock()
         
         request = utils.build_request("test.echo", {"msg": "hello"}, request_id="1")
         
@@ -105,6 +106,7 @@ class TestWebSocketServer:
         """Test unknown method."""
         server.connection = Mock()
         server.connection.send = AsyncMock()
+        server.connection.close = AsyncMock()
         
         request = utils.build_request("unknown", request_id="2")
         
@@ -112,8 +114,13 @@ class TestWebSocketServer:
         
         await server.handle_message(json.dumps(request))
         
-        # Verify NO response sent (based on current implementation)
-        server.connection.send.assert_not_called()
+        # Verify method not found error sent
+        server.connection.send.assert_called_once()
+        response_str = server.connection.send.call_args[0][0]
+        response = json.loads(response_str)
+        
+        assert "error" in response
+        assert response["error"]["code"] == constants.JSONRPC_METHOD_NOT_FOUND
 
     @pytest.mark.asyncio
     async def test_handle_message_invalid_json(self, server):
@@ -135,6 +142,7 @@ class TestWebSocketServer:
         
         server.connection = Mock()
         server.connection.send = AsyncMock()
+        server.connection.close = AsyncMock()
         
         request = utils.build_request("test.fail", request_id="3")
         

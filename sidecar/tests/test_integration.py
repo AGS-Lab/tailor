@@ -47,6 +47,7 @@ def mock_ws_server():
     server = MagicMock(spec=WebSocketServer)
     server.send = AsyncMock()
     server.send_to_rust = MagicMock()
+    server.command_handlers = {}
     return server
 
 @pytest.fixture

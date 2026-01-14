@@ -150,16 +150,26 @@ class TestVaultBrain:
         assert "system.chat" in brain.commands
 
     @pytest.mark.asyncio
-    async def test_tick(self, valid_vault, mock_ws_server):
-        """Test tick method calls plugins."""
+    async def test_tick_event_subscription(self, valid_vault, mock_ws_server):
+        """Test that plugins are auto-subscribed to TICK event."""
         brain = VaultBrain(valid_vault, mock_ws_server)
         
         mock_plugin = Mock()
+        mock_plugin.on_load = AsyncMock()
         mock_plugin.on_tick = AsyncMock() # Async tick
+        
+        # Manually add plugin to verify subscription logic in _activate_plugins
         brain.plugins["test_plugin"] = mock_plugin
         
-        # Call the tick method
-        await brain._tick_plugins()
+        # Trigger activation
+        await brain._activate_plugins()
+        
+        # Verify subscription
+        assert constants.CoreEvents.TICK in brain.subscribers
+        assert mock_plugin.on_tick in brain.subscribers[constants.CoreEvents.TICK]
+        
+        # Verify publishing event calls the plugin
+        await brain.publish(constants.CoreEvents.TICK)
         mock_plugin.on_tick.assert_called_once()
 
     @patch("sidecar.vault_brain.ChatLiteLLM")
@@ -291,5 +301,26 @@ class TestCommandRegistry:
         assert "cmd1" in brain.commands
         assert "cmd2" in brain.commands
         assert brain.commands["cmd1"]["plugin"] == "plugin1"
+
+    def test_register_command_override(self, brain):
+        """Test overriding a command."""
+        async def cmd1(): return 1
+        async def cmd2(): return 2
+        
+        brain.register_command("test.cmd", cmd1)
+        
+        # Override with flag
+        brain.register_command("test.cmd", cmd2, override=True)
+        assert brain.commands["test.cmd"]["handler"] == cmd2
+        
+    def test_clear_subscribers(self, brain):
+        """Test clearing event subscribers."""
+        async def handler(): pass
+        
+        brain.subscribe("test.evt", handler)
+        assert len(brain.subscribers["test.evt"]) == 1
+        
+        brain.clear_subscribers("test.evt")
+        assert len(brain.subscribers["test.evt"]) == 0
 
 

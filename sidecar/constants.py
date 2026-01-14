@@ -280,6 +280,9 @@ class CoreEvents(str, Enum):
     LLM_REQUEST = "llm:request"
     LLM_RESPONSE = "llm:response"
     LLM_ERROR = "llm:error"
+
+    # Periodic
+    TICK = "system:tick"
     
     def __str__(self) -> str:
         return self.value

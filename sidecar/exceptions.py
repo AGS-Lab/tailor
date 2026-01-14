@@ -173,6 +173,9 @@ class WebSocketMessageError(WebSocketError):
         )
 
 
+
+from . import constants
+
 class JSONRPCError(WebSocketError):
     """Raised when JSON-RPC message is invalid."""
     
@@ -182,6 +185,14 @@ class JSONRPCError(WebSocketError):
             {"code": code}
         )
         self.code = code
+
+
+class MethodNotFoundError(JSONRPCError):
+    """Raised when a JSON-RPC method is not found."""
+    
+    def __init__(self, method: str):
+        super().__init__(f"Method not found: {method}", code=-32601)
+
 
 
 # ============================================================================

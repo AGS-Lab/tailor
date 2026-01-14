@@ -163,63 +163,30 @@ class WebSocketServer:
             
             logger.debug(f"Received command: {method}")
             
-            result = None
-            handler_found = False
-            
-            # Call handler if registered in ws_server
-            if method in self.command_handlers:
-                handler_found = True
-                try:
-                    result = await self.command_handlers[method](**params)
-                    
-                    # Send success response
-                    response = utils.build_response(result, request_id=request_id)
-                    await self.send(response)
-                    
-                    logger.debug(f"Command '{method}' executed successfully")
+            try:
+                result = await self._execute_request(method, params, request_id)
                 
-                except Exception as e:
-                    logger.exception(f"Handler error for '{method}': {e}")
-                    error_response = utils.build_internal_error(
-                        message=str(e),
-                        details={
-                            "method": method,
-                            "error_type": type(e).__name__,
-                        },
-                        request_id=request_id,
-                    )
-                    await self.send(error_response)
-                    return
-            
-            # Fallback: check brain commands (for plugins that register there)
-            elif self.brain and method in self.brain.commands:
-                handler_found = True
-                try:
-                    # Brain commands use **kwargs, extract from params
-                    result = await self.brain.commands[method]["handler"](**params)
-                except Exception as e:
-                    logger.exception(f"Brain command error for '{method}': {e}")
-                    error_response = utils.build_internal_error(
-                        message=str(e),
-                        details={
-                            "method": method,
-                            "error_type": type(e).__name__,
-                        },
-                        request_id=request_id,
-                    )
-                    await self.send(error_response)
-                    return
-            
-            if handler_found:
                 # Send success response
                 response = utils.build_response(result, request_id=request_id)
                 await self.send(response)
                 logger.debug(f"Command '{method}' executed successfully")
-            else:
+                
+            except exceptions.MethodNotFoundError:
                 logger.warning(f"No handler registered for method: {method}")
-                # Send method not found error
                 error_response = utils.build_method_not_found(
                     method=method,
+                    request_id=request_id,
+                )
+                await self.send(error_response)
+                
+            except Exception as e:
+                logger.exception(f"Execution error for '{method}': {e}")
+                error_response = utils.build_internal_error(
+                    message=str(e),
+                    details={
+                        "method": method,
+                        "error_type": type(e).__name__,
+                    },
                     request_id=request_id,
                 )
                 await self.send(error_response)
@@ -233,6 +200,33 @@ class WebSocketServer:
         except Exception as e:
             logger.exception(f"Unexpected error handling message: {e}")
             self.close()
+
+    async def _execute_request(self, method: str, params: Dict[str, Any], request_id: Optional[str]) -> Any:
+        """
+        Execute the requested method via local handlers or VaultBrain.
+        """
+        # 1. Check local command handlers
+        if method in self.command_handlers:
+            return await self.command_handlers[method](**params)
+            
+        # 2. Check VaultBrain commands
+        try:
+            from .vault_brain import VaultBrain
+            brain = VaultBrain.get()
+            if method in brain.commands:
+                # Brain commands use **kwargs, matches params dict
+                return await brain.commands[method]["handler"](**params)
+        except RuntimeError:
+            # Brain not initialized
+            pass
+        except ImportError:
+            # Should not happen in normal environment
+            pass
+            
+        # 3. Not found
+        raise exceptions.MethodNotFoundError(method)
+        
+
     
     async def send(self, data: Dict[str, Any]) -> None:
         """

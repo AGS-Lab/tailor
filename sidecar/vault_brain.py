@@ -18,6 +18,7 @@ from collections import defaultdict
 from . import utils
 from . import constants
 from . import exceptions
+from .decorators import command, on_event
 
 from .pipeline import PipelineManager, DefaultPipeline, GraphPipeline, PipelineConfig
 from .plugin_installer import PluginInstaller
@@ -77,11 +78,7 @@ class VaultBrain:
         self.commands: Dict[str, Dict[str, Any]] = {}
         self.subscribers: Dict[str, List[EventHandler]] = defaultdict(list)
         self.ws_server = ws_server
-        
-        # Set back-reference so ws_server can look up brain.commands
-        if ws_server:
-            ws_server.brain = self
-        
+                
         self.config: Dict[str, Any] = {}
         self.graph: Optional[Dict[str, Any]] = None
         
@@ -142,8 +139,25 @@ class VaultBrain:
         # Activate Plugins (Phase 2: on_load)
         await self._activate_plugins()
         
+        # Register decorated methods (Core Commands)
+        self._register_decorated_handlers()
+        
         await self.publish(constants.CoreEvents.ALL_PLUGINS_LOADED)
         logger.info("VaultBrain fully initialized and ready.")
+
+    def _register_decorated_handlers(self) -> None:
+        """Scan and register decorated commands and event handlers."""
+        # Scan self for decorated methods
+        for name, method in inspect.getmembers(self, predicate=inspect.ismethod):
+            # Register Commands
+            if hasattr(method, "_command_meta"):
+                for meta in method._command_meta:
+                    self.register_command(meta["id"], method, meta["plugin"])
+            
+            # Register Event Handlers
+            if hasattr(method, "_event_meta"):
+                for meta in method._event_meta:
+                    self.subscribe(meta["event"], method)
         
     async def shutdown(self) -> None:
         """
@@ -279,6 +293,17 @@ class VaultBrain:
         for plugin_name, plugin in self.plugins.items():
             try:
                 await plugin.on_load()
+                
+                # Auto-subscribe to TICK if plugin overrides on_tick
+                # We check if the method is different from the base class implementation
+                # This is a bit tricky since PluginBase is abstract, but we can check if it's callable
+                # A safer way is checking if it's NOT the base implementation, but base is abstract pass?
+                # Actually, PluginBase.on_tick is defined as 'pass'.
+                # Let's just subscribe it. If it does nothing, it does nothing.
+                # Optimization: Check if plugin.on_tick code object is different from PluginBase.on_tick code object?
+                # For now, just subscribe. The event system handles errors.
+                self.subscribe(constants.CoreEvents.TICK, plugin.on_tick)
+                
                 # Announce plugin loaded
                 await self.publish(constants.CoreEvents.PLUGIN_LOADED, plugin_name=plugin_name)
             except Exception as e:
@@ -292,20 +317,35 @@ class VaultBrain:
         self,
         command_id: str,
         handler: CommandHandler,
-        plugin_name: Optional[str] = None
+        plugin_name: Optional[str] = None,
+        override: bool = False
     ) -> None:
         """Register a command."""
         if not inspect.iscoroutinefunction(handler):
             raise exceptions.CommandRegistrationError(command_id, "Handler must be an async function")
         
         if command_id in self.commands:
-            logger.warning(f"Overwriting command '{command_id}'")
+            if not override:
+                logger.warning(f"Overwriting command '{command_id}'")
+            else:
+                logger.debug(f"Overriding command '{command_id}'")
         
         self.commands[command_id] = {
             "handler": handler,
             "plugin": plugin_name,
         }
         logger.debug(f"Registered command: {command_id}")
+
+    def unregister_command(self, command_id: str) -> bool:
+        """
+        Unregister a command.
+        Returns True if command existed and was removed.
+        """
+        if command_id in self.commands:
+            del self.commands[command_id]
+            logger.debug(f"Unregistered command: {command_id}")
+            return True
+        return False
 
     async def execute_command(self, command_id: str, **kwargs: Any) -> Any:
         """
@@ -357,176 +397,186 @@ class VaultBrain:
             logger.exception(f"Command '{command_id}' failed: {e}")
             raise exceptions.CommandExecutionError(command_id, e)
 
-    def _register_core_commands(self) -> None:
-        """Register system-level commands (chat, list, etc)."""
-        
-        # Chat - Now uses LLM Pipeline
-        async def handle_chat(message: str = "", history: List[Dict[str, str]] = None) -> Dict[str, Any]:
-            if self.pipeline:
-                ctx = await self.pipeline.run(
-                    message=message,
-                    history=history or []
-                )
-                return {
-                    "response": ctx.response,
-                    "metadata": ctx.metadata,
-                    "status": "success"
-                }
-            return {"response": f"Echo: {message}", "status": "success"}
-            
-        # List Commands
-        async def list_commands() -> Dict[str, Any]:
-            return {
-                "commands": {k: v["plugin"] for k, v in self.commands.items()},
-                "count": len(self.commands)
-            }
-            
-        # Get Info
-        async def get_info() -> Dict[str, Any]:
-            return {
-                "vault": self.config.get("name"),
-                "plugins": list(self.plugins.keys())
-            }
-
-        # No "ui.notify" commands here. Plugins call brain.notify_frontend directly.
-        
-        # Register them
-        # Note: We rely on WebSocketServer mapping "execute_command" -> brain.execute_command
-        # But we also register these so internal plugins can call them if needed?
-        # Actually, the WebSocketServer handles specific prefixes or purely 'execute_command'.
-        # Let's keep these as standard commands.
-        self.register_command("system.chat", handle_chat, constants.CORE_PLUGIN_NAME)
-        self.register_command("system.list_commands", list_commands, constants.CORE_PLUGIN_NAME)
-        self.register_command("system.list_commands", list_commands, constants.CORE_PLUGIN_NAME)
-        self.register_command("system.info", get_info, constants.CORE_PLUGIN_NAME)
-
-        # Litellm Completion Command
-        async def handle_litellm_completion(messages: List[Dict[str, str]], model: str = "gpt-3.5-turbo", **kwargs) -> Dict[str, Any]:
+    async def _client_ready_handler(self, **kwargs):
+        """Handle client ready signal."""
+        logger.info("Client ready signal received. Triggering plugin hooks...")
+        # Trigger on_client_connected for all plugins
+        for name, plugin in self.plugins.items():
             try:
-                # Convert dict messages to LangChain messages
-                lc_messages: List[BaseMessage] = []
-                for msg in messages:
-                    role = msg.get("role", "user")
-                    content = msg.get("content", "")
-                    if role == "system":
-                        lc_messages.append(SystemMessage(content=content))
-                    elif role == "assistant":
-                        lc_messages.append(AIMessage(content=content))
-                    else:
-                        lc_messages.append(HumanMessage(content=content))
-
-                chat = ChatLiteLLM(model=model, **kwargs)
-                response = await chat.ainvoke(lc_messages)
-                
-                return {
-                    "content": str(response.content),
-                    "usage": response.response_metadata.get("token_usage", {}),
-                    "model": model,
-                    "status": "success"
-                }
+                await plugin.on_client_connected()
             except Exception as e:
-                logger.error(f"Litellm error: {e}")
-                return {"status": "error", "error": str(e)}
+                logger.error(f"Error in {name}.on_client_connected: {e}")
+        return {"status": "ok"}
 
-        self.register_command("litellm.completion", handle_litellm_completion, constants.CORE_PLUGIN_NAME)
-
-        # Connect WebSocket handlers
+    def _register_core_commands(self) -> None:
+        """Register system-level commands (bridges to WS)."""
+        
+        # We still need to register WS handlers for backward compatibility
+        # or special routing like 'execute_command'
         
         async def chat_handler(message: str = "", **kwargs) -> Dict[str, Any]:
-            return await handle_chat(str(message))
+            return await self.handle_chat(str(message))
             
         async def execute_handler(command: str = "", args: Dict[str, Any] = None, **kwargs) -> Any:
             return await self.execute_command(str(command), **(args or {}))
             
         async def list_handler(**kwargs) -> Dict[str, Any]:
-            return await list_commands()
+            return await self.list_commands()
             
         async def info_handler(**kwargs) -> Dict[str, Any]:
-            return await get_info()
+            return await self.get_info()
 
-        self.ws_server.register_handler(f"{constants.CHAT_COMMAND_PREFIX}send_message", chat_handler)
-        self.ws_server.register_handler("execute_command", execute_handler)
-        self.ws_server.register_handler("list_commands", list_handler)
-        self.ws_server.register_handler("get_vault_info", info_handler)
-        
-        # Client Ready Signal
-        async def client_ready(**kwargs):
-            logger.info("Client ready signal received. Triggering plugin hooks...")
-            # Trigger on_client_connected for all plugins
-            for name, plugin in self.plugins.items():
-                try:
-                    await plugin.on_client_connected()
-                except Exception as e:
-                    logger.error(f"Error in {name}.on_client_connected: {e}")
+        async def client_ready_wrapper(**kwargs) -> Dict[str, Any]:
+            return await self._client_ready_handler(**kwargs)
+
+        if self.ws_server:
+            self.ws_server.register_handler(f"{constants.CHAT_COMMAND_PREFIX}send_message", chat_handler)
+            self.ws_server.register_handler("execute_command", execute_handler)
+            self.ws_server.register_handler("list_commands", list_handler)
+            self.ws_server.register_handler("get_vault_info", info_handler)
+            self.ws_server.register_handler("system.client_ready", client_ready_wrapper)
             
-            return {"status": "ok"}
-        self.ws_server.register_handler("system.client_ready", client_ready)
-        
-        # Plugin Management Commands
-        async def install_plugin(p: Dict[str, Any]) -> Dict[str, Any]:
-            download_url = p.get("download_url", "")
-            repo_url = p.get("repo_url", "")
-            plugin_id = p.get("plugin_id", "")
-            
-            if not plugin_id:
-                return {"status": "error", "error": "plugin_id is required"}
-            
-            # Prefer HTTP download over git clone
-            if download_url:
-                result = await self.plugin_installer.install_from_url(download_url, plugin_id)
-            elif repo_url:
-                result = await self.plugin_installer.install(repo_url, plugin_id)
-            else:
-                return {"status": "error", "error": "download_url or repo_url is required"}
+            # Plugin management WS wrappers (optional, if frontend calls them directly via WS RPC names)
+            self.ws_server.register_handler("plugins.install", self.install_plugin)
+            self.ws_server.register_handler("plugins.update", self.update_plugin)
+            self.ws_server.register_handler("plugins.uninstall", self.uninstall_plugin)
+            self.ws_server.register_handler("plugins.list", self.list_plugins)
+
+    # =========================================================================
+    # Core Command Implementations
+    # =========================================================================
+
+    @command("system.chat", constants.CORE_PLUGIN_NAME)
+    async def handle_chat(self, message: str = "", history: List[Dict[str, str]] = None) -> Dict[str, Any]:
+        if self.pipeline:
+            ctx = await self.pipeline.run(
+                message=message,
+                history=history or []
+            )
+            return {
+                "response": ctx.response,
+                "metadata": ctx.metadata,
+                "status": "success"
+            }
+        return {"response": f"Echo: {message}", "status": "success"}
+
+    @command("system.list_commands", constants.CORE_PLUGIN_NAME)
+    async def list_commands(self) -> Dict[str, Any]:
+        return {
+            "commands": {k: v["plugin"] for k, v in self.commands.items()},
+            "count": len(self.commands)
+        }
+
+    @command("system.info", constants.CORE_PLUGIN_NAME)
+    async def get_info(self) -> Dict[str, Any]:
+        return {
+            "vault": self.config.get("name"),
+            "plugins": list(self.plugins.keys())
+        }
+
+    @command("litellm.completion", constants.CORE_PLUGIN_NAME)
+    async def handle_litellm_completion(self, messages: List[Dict[str, str]], model: str = "gpt-3.5-turbo", **kwargs) -> Dict[str, Any]:
+        try:
+            # Convert dict messages to LangChain messages
+            lc_messages: List[BaseMessage] = []
+            for msg in messages:
+                role = msg.get("role", "user")
+                content = msg.get("content", "")
+                if role == "system":
+                    lc_messages.append(SystemMessage(content=content))
+                elif role == "assistant":
+                    lc_messages.append(AIMessage(content=content))
+                else:
+                    lc_messages.append(HumanMessage(content=content))
+
+            chat = ChatLiteLLM(model=model, **kwargs)
+            response = await chat.ainvoke(lc_messages)
             
             return {
-                "status": result.status.value,
-                "plugin_id": result.plugin_id,
-                "message": result.message,
-                "manifest": result.manifest
+                "content": str(response.content),
+                "usage": response.response_metadata.get("token_usage", {}),
+                "model": model,
+                "status": "success"
             }
+        except Exception as e:
+            logger.error(f"Litellm error: {e}")
+            return {"status": "error", "error": str(e)}
+
+    @command("plugins.install", constants.CORE_PLUGIN_NAME)
+    async def install_plugin(self, download_url: str = "", repo_url: str = "", plugin_id: str = "", **kwargs) -> Dict[str, Any]:
+        # Backward compatibility: Check if args are inside 'p' or 'params' dict in kwargs
+        # This handles cases where frontend sends { "p": { ... } }
+        if not plugin_id:
+            # Try to find in 'p'
+            p = kwargs.get("p") or kwargs.get("params")
+            if isinstance(p, dict):
+                download_url = p.get("download_url", download_url)
+                repo_url = p.get("repo_url", repo_url)
+                plugin_id = p.get("plugin_id", plugin_id)
+
+        if not plugin_id:
+             return {"status": "error", "error": "plugin_id is required"}
         
-        async def update_plugin(plugin_id: str = "", **kwargs) -> Dict[str, Any]:
-            if not plugin_id:
-                return {"status": "error", "error": "plugin_id is required"}
-            
-            result = await self.plugin_installer.update(plugin_id)
-            return {
-                "status": result.status.value,
-                "plugin_id": result.plugin_id,
-                "message": result.message
-            }
+        # Prefer HTTP download over git clone
+        if download_url:
+            result = await self.plugin_installer.install_from_url(download_url, plugin_id)
+        elif repo_url:
+            result = await self.plugin_installer.install(repo_url, plugin_id)
+        else:
+            return {"status": "error", "error": "download_url or repo_url is required"}
         
-        async def uninstall_plugin(plugin_id: str = "", **kwargs) -> Dict[str, Any]:
-            if not plugin_id:
-                return {"status": "error", "error": "plugin_id is required"}
-            
-            success = await self.plugin_installer.uninstall(plugin_id)
-            return {
-                "status": "success" if success else "error",
-                "plugin_id": plugin_id,
-                "message": f"Plugin '{plugin_id}' uninstalled" if success else "Uninstall failed"
-            }
+        return {
+            "status": result.status.value,
+            "plugin_id": result.plugin_id,
+            "message": result.message,
+            "manifest": result.manifest
+        }
+    
+    @command("plugins.update", constants.CORE_PLUGIN_NAME)
+    async def update_plugin(self, plugin_id: str = "", **kwargs) -> Dict[str, Any]:
+        if not plugin_id:
+            # check 'p'
+            p = kwargs.get("p") or kwargs.get("params")
+            if isinstance(p, dict):
+                plugin_id = p.get("plugin_id", plugin_id)
+
+        if not plugin_id:
+            return {"status": "error", "error": "plugin_id is required"}
         
-        async def list_plugins(**kwargs) -> Dict[str, Any]:
-            # Ignores args anyway
-            plugins = self.plugin_installer.list_installed()
-            return {
-                "status": "success",
-                "plugins": plugins,
-                "count": len(plugins)
-            }
+        result = await self.plugin_installer.update(plugin_id)
+        return {
+            "status": result.status.value,
+            "plugin_id": result.plugin_id,
+            "message": result.message
+        }
+    
+    @command("plugins.uninstall", constants.CORE_PLUGIN_NAME)
+    async def uninstall_plugin(self, plugin_id: str = "", **kwargs) -> Dict[str, Any]:
+        if not plugin_id:
+             # check 'p'
+            p = kwargs.get("p") or kwargs.get("params")
+            if isinstance(p, dict):
+                plugin_id = p.get("plugin_id", plugin_id)
+
+        if not plugin_id:
+            return {"status": "error", "error": "plugin_id is required"}
         
-        self.ws_server.register_handler("plugins.install", install_plugin)
-        self.ws_server.register_handler("plugins.update", update_plugin)
-        self.ws_server.register_handler("plugins.uninstall", uninstall_plugin)
-        self.ws_server.register_handler("plugins.list", list_plugins)
-        
-        # Also register the async functions directly as brain commands
-        self.register_command("plugins.install", install_plugin, constants.CORE_PLUGIN_NAME)
-        self.register_command("plugins.update", update_plugin, constants.CORE_PLUGIN_NAME)
-        self.register_command("plugins.uninstall", uninstall_plugin, constants.CORE_PLUGIN_NAME)
-        self.register_command("plugins.list", list_plugins, constants.CORE_PLUGIN_NAME)
+        success = await self.plugin_installer.uninstall(plugin_id)
+        return {
+            "status": "success" if success else "error",
+            "plugin_id": plugin_id,
+            "message": f"Plugin '{plugin_id}' uninstalled" if success else "Uninstall failed"
+        }
+    
+    @command("plugins.list", constants.CORE_PLUGIN_NAME)
+    async def list_plugins(self, **kwargs) -> Dict[str, Any]:
+        # Ignores args anyway
+        plugins = self.plugin_installer.list_installed()
+        return {
+            "status": "success",
+            "plugins": plugins,
+            "count": len(plugins)
+        }
 
     @property
     def is_client_connected(self) -> bool:
@@ -593,6 +643,26 @@ class VaultBrain:
         self.subscribers[event].append(handler)
         logger.debug(f"Subscribed to internal: {event}")
 
+    def unsubscribe(self, event: str, handler: EventHandler) -> bool:
+        """
+        Unsubscribe from an internal Python event.
+        Returns True if handler was found and removed.
+        """
+        if event in self.subscribers:
+            try:
+                self.subscribers[event].remove(handler)
+                logger.debug(f"Unsubscribed from internal: {event}")
+                return True
+            except ValueError:
+                return False
+        return False
+
+    def clear_subscribers(self, event: str) -> None:
+        """Clear all subscribers for an event."""
+        if event in self.subscribers:
+            self.subscribers[event].clear()
+            logger.debug(f"Cleared subscribers for: {event}")
+
     async def publish(self, event: str, **kwargs: Any) -> None:
         """Publish an internal Python event."""
         handlers = self.subscribers.get(event, [])
@@ -632,12 +702,7 @@ class VaultBrain:
         logger.info("Starting tick loop...")
         while True:
             await asyncio.sleep(constants.DEFAULT_TICK_INTERVAL)
-            await self._tick_plugins()
+            await self.publish(constants.CoreEvents.TICK)
 
-    async def _tick_plugins(self) -> None:
-        """Run one tick cycle for all plugins."""
-        for name, plugin in self.plugins.items():
-            try:
-                await plugin.on_tick()
-            except Exception as e:
-                logger.error(f"Tick error in {name}: {e}")
+    # Removed explicit _tick_plugins iteration
+
