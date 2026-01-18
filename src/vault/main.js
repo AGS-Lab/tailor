@@ -9,6 +9,8 @@ import { initLayout, initResize, log } from './layout.js';
 import { autoConnect } from './connection.js';
 import { loadPlugins, handleEvent } from './plugins.js';
 import { initSettings } from './settings.js';
+import { initPluginStore } from './plugin-store.js';
+
 
 /**
  * Initialize the vault application
@@ -57,6 +59,7 @@ export function initVault() {
 
     // Initialize UI buttons
     initSettings();
+    initPluginStore();
 
     // Auto-connect to WebSocket and load plugins
     autoConnect(loadPlugins, handleEvent);
