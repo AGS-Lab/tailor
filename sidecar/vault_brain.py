@@ -19,7 +19,7 @@ from . import constants
 from . import exceptions
 from .decorators import command, on_event
 
-from .pipeline import DefaultPipeline, GraphPipeline, PipelineConfig
+from .pipeline import Pipeline, PipelineConfig
 from .plugin_installer import PluginInstaller
 from langchain_community.chat_models import ChatLiteLLM
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, BaseMessage
@@ -79,7 +79,6 @@ class VaultBrain:
         self.ws_server = ws_server
                 
         self.config: Dict[str, Any] = {}
-        self.graph: Optional[Dict[str, Any]] = None
         
         # LLM Processing Pipeline
         self.pipeline: Optional[Any] = None # DefaultPipeline or GraphPipeline
@@ -104,11 +103,8 @@ class VaultBrain:
         llm_config = self.config.get("llm", {})
         pipeline_config = PipelineConfig(**llm_config) if llm_config else PipelineConfig()
         
-        # Decide between Default and Graph pipeline
-        if pipeline_config.is_graph_mode:
-            self.pipeline = GraphPipeline(pipeline_config)
-        else:
-            self.pipeline = DefaultPipeline(pipeline_config)
+        # Unified Pipeline (configured via config object)
+        self.pipeline = Pipeline(pipeline_config)
         
 
         # TODO: Implement file system watcher (watchdog) to emit:
