@@ -2,7 +2,6 @@ from typing import List, Dict, Any, Optional
 from loguru import logger
 
 from .types import PipelineConfig, PipelineContext
-from .types import PipelineConfig, PipelineContext
 from .default import DefaultPipeline
 
 class GraphPipeline:

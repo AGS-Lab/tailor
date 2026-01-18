@@ -8,11 +8,10 @@ Acts as the central Event/Command hub.
 import asyncio
 import json
 import importlib.util
-import sys
 import time
 import inspect
 from pathlib import Path
-from typing import Dict, Any, Optional, Callable, Awaitable, cast, List
+from typing import Dict, Any, Optional, Callable, Awaitable, List
 from collections import defaultdict
 
 from . import utils
@@ -122,8 +121,6 @@ class VaultBrain:
         else:
             self.pipeline = DefaultPipeline(pipeline_config)
         
-        # Register Core Commands
-        self._register_core_commands()
 
         # TODO: Implement file system watcher (watchdog) to emit:
         # - CoreEvents.FILE_SAVED
@@ -225,7 +222,7 @@ class VaultBrain:
                 try:
                     defaults = json.loads(settings_path.read_text(encoding="utf-8"))
                 except Exception as e:
-                    plugin_logger.error(f"Failed to load settings.json: {e}")
+                    logger.error(f"Failed to load settings.json for plugin '{plugin_name}': {e}")
             
             # 2. Get Overrides from .vault.json (Global Config)
             # Structure: { "plugins": { "plugin_name": { "enabled": true, "param": 123 } } }
@@ -246,7 +243,7 @@ class VaultBrain:
             is_enabled = final_config.get("enabled", False)
             
             if not is_enabled:
-                # plugin_logger.debug("Plugin disabled")
+                logger.debug(f"Plugin '{plugin_name}' is disabled, skipping")
                 continue
             
             try:
@@ -361,32 +358,16 @@ class VaultBrain:
         This method checks both locations for backward compatibility.
         """
         handler = None
-        source = None
         
-        # Check brain commands first
         if command_id in self.commands:
             handler = self.commands[command_id]["handler"]
-            source = "brain"
-        # Fallback: check ws_server handlers (for plugins that register there)
-        elif self.ws_server and command_id in self.ws_server.command_handlers:
-            handler = self.ws_server.command_handlers[command_id]
-            source = "ws_server"
-            # ws_server handlers expect a params dict, wrap kwargs
-            kwargs = {"params": kwargs} if kwargs else {}
         
         if handler is None:
             all_commands = list(self.commands.keys())
-            if self.ws_server:
-                all_commands.extend(list(self.ws_server.command_handlers.keys()))
             raise exceptions.CommandNotFoundError(command_id, all_commands)
         
         try:
-            # Execute handler
-            if source == "ws_server":
-                # ws_server handlers take a single params dict
-                result = await handler(kwargs.get("params", {}))
-            else:
-                result = await handler(**kwargs)
+            result = await handler(**kwargs)
             
             # Emit command executed event (fire and forget)
             asyncio.create_task(self.publish(
@@ -400,6 +381,7 @@ class VaultBrain:
             logger.exception(f"Command '{command_id}' failed: {e}")
             raise exceptions.CommandExecutionError(command_id, e)
 
+    @command("system.client_ready", constants.CORE_PLUGIN_NAME)
     async def _client_ready_handler(self, **kwargs):
         """Handle client ready signal."""
         logger.info("Client ready signal received. Triggering plugin hooks...")
@@ -411,41 +393,7 @@ class VaultBrain:
                 logger.error(f"Error in {name}.on_client_connected: {e}")
         return {"status": "ok"}
 
-    def _register_core_commands(self) -> None:
-        """Register system-level commands (bridges to WS)."""
-        
-        # We still need to register WS handlers for backward compatibility
-        # or special routing like 'execute_command'
-        
-        async def chat_handler(message: str = "", **kwargs) -> Dict[str, Any]:
-            return await self.handle_chat(str(message))
-            
-        async def execute_handler(command: str = "", args: Dict[str, Any] = None, **kwargs) -> Any:
-            return await self.execute_command(str(command), **(args or {}))
-            
-        async def list_handler(**kwargs) -> Dict[str, Any]:
-            return await self.list_commands()
-            
-        async def info_handler(**kwargs) -> Dict[str, Any]:
-            return await self.get_info()
 
-        async def client_ready_wrapper(**kwargs) -> Dict[str, Any]:
-            return await self._client_ready_handler(**kwargs)
-
-        if self.ws_server:
-            self.ws_server.register_handler(f"{constants.CHAT_COMMAND_PREFIX}send_message", chat_handler)
-            self.ws_server.register_handler("execute_command", execute_handler)
-            self.ws_server.register_handler("list_commands", list_handler)
-            self.ws_server.register_handler("get_vault_info", info_handler)
-            self.ws_server.register_handler("system.client_ready", client_ready_wrapper)
-            
-            # Plugin management WS wrappers (optional, if frontend calls them directly via WS RPC names)
-            self.ws_server.register_handler("plugins.install", self.install_plugin)
-            self.ws_server.register_handler("plugins.update", self.update_plugin)
-            self.ws_server.register_handler("plugins.uninstall", self.uninstall_plugin)
-            self.ws_server.register_handler("plugins.list", self.list_plugins)
-            self.ws_server.register_handler("plugins.toggle", self.toggle_plugin)
-            self.ws_server.register_handler("system.restart_vault", self.restart_vault)
 
     # =========================================================================
     # Core Command Implementations
@@ -465,6 +413,7 @@ class VaultBrain:
             }
         return {"response": f"Echo: {message}", "status": "success"}
 
+    @command("list_commands", constants.CORE_PLUGIN_NAME)
     @command("system.list_commands", constants.CORE_PLUGIN_NAME)
     async def list_commands(self) -> Dict[str, Any]:
         return {
@@ -869,19 +818,16 @@ class VaultBrain:
             # 4. Reload config
             self.config = self._load_config()
             
-            # 5. Re-register core commands
-            self._register_core_commands()
-            
-            # 6. Reload plugins
+            # 5. Reload plugins
             self._load_plugins()
             
-            # 7. Activate plugins
+            # 6. Activate plugins
             await self._activate_plugins()
             
-            # 8. Re-register decorated handlers
+            # 7. Re-register decorated handlers
             self._register_decorated_handlers()
             
-            # 9. Announce ready
+            # 8. Announce ready
             await self.publish(constants.CoreEvents.ALL_PLUGINS_LOADED)
             
             logger.info(f"Vault restarted: {len(self.plugins)} plugins loaded")
@@ -898,9 +844,7 @@ class VaultBrain:
     @property
     def is_client_connected(self) -> bool:
         """Check if frontend client is connected."""
-        if not self.ws_server:
-            return False
-        return self.ws_server.is_connected()
+        return self.ws_server and self.ws_server.is_connected()
 
     # =========================================================================
 

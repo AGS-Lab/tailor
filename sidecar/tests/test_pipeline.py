@@ -2,7 +2,6 @@
 Tests for Sidecar Pipeline (New Architecture).
 Covers:
 - Types (Pydantic)
-- Manager (Events)
 - Nodes (Graph Steps)
 - DefaultPipeline (LangGraph Integration)
 """
@@ -12,7 +11,6 @@ import asyncio
 from unittest.mock import MagicMock, AsyncMock, patch
 
 from sidecar.pipeline import (
-    PipelineManager, 
     DefaultPipeline, 
     PipelineConfig, 
     PipelineContext, 
@@ -51,66 +49,6 @@ def test_pipeline_config_defaults():
     assert cfg.is_graph_mode is False
 
 # =============================================================================
-# Test PipelineManager (Event System)
-# =============================================================================
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-class TestPipelineManager:
-    
-    async def test_subscribe_and_emit(self):
-        manager = PipelineManager()
-        mock_handler = AsyncMock()
-        
-        manager.subscribe(PipelineEvents.INPUT, mock_handler)
-        
-        ctx = PipelineContext(message="test", original_message="test")
-        await manager.emit(PipelineEvents.INPUT, ctx)
-        
-        mock_handler.assert_called_once_with(ctx)
-        assert PipelineEvents.INPUT in ctx.events_emitted
-
-    async def test_emit_aborts_if_flag_set(self):
-        manager = PipelineManager()
-        mock_handler = AsyncMock()
-        
-        manager.subscribe(PipelineEvents.INPUT, mock_handler)
-        
-        ctx = PipelineContext(message="test", original_message="test")
-        ctx.should_abort = True
-        
-        await manager.emit(PipelineEvents.INPUT, ctx)
-        
-        # Should NOT call handler if already aborted
-        mock_handler.assert_not_called()
-
-    async def test_handler_aborts_flow(self):
-        """Test that a handler can abort the pipeline."""
-        manager = PipelineManager()
-        
-        async def aborting_handler(ctx):
-            ctx.abort("Stop here")
-            
-        mock_Handler2 = AsyncMock()
-        
-        manager.subscribe(PipelineEvents.INPUT, aborting_handler)
-        manager.subscribe(PipelineEvents.INPUT, mock_Handler2)
-        
-        ctx = PipelineContext(message="test", original_message="test")
-        await manager.emit(PipelineEvents.INPUT, ctx)
-        
-        assert ctx.should_abort is True
-        assert ctx.abort_reason == "Stop here"
-        # Since logic is sequential per event, handler2 should NOT be called if handler1 aborted?
-        # Let's check logic. PipelineManager.emit loops sequentially.
-        # "if ctx.should_abort: return" is inside the loop? 
-        # Actually in manager.py: 
-        #    await handler(ctx)
-        #    if ctx.should_abort: ... return
-        # So yes, subsequent handlers for SAME event are skipped.
-        mock_Handler2.assert_not_called()
-
-# =============================================================================
 # Test Pipeline Nodes (Isolating Step Logic)
 # =============================================================================
 
@@ -119,27 +57,33 @@ class TestPipelineManager:
 class TestPipelineNodes:
     
     @pytest.fixture
-    def manager(self):
-        return PipelineManager()
+    def mock_brain(self):
+        with patch("sidecar.vault_brain.VaultBrain.get") as mock_get:
+            mock_brain = MagicMock()
+            mock_brain.publish = AsyncMock()
+            mock_get.return_value = mock_brain
+            yield mock_brain
         
     @pytest.fixture
-    def nodes(self, manager):
-        return PipelineNodes(manager)
+    def nodes(self, mock_brain):
+        return PipelineNodes(llm_client=None)
 
-    async def test_input_node_emits_events(self, nodes, manager):
-        mock_emit = AsyncMock()
-        manager.emit = mock_emit
-        
+    async def test_input_node_emits_events(self, nodes, mock_brain):
         ctx = PipelineContext(message="hi", original_message="hi")
         result = await nodes.input_node(ctx)
         
         # Should emit START and INPUT
-        assert mock_emit.call_count == 2
+        assert mock_brain.publish.call_count == 2
         
-        # Should return events_emitted for LangGraph persistence
-        assert "events_emitted" in result
+        # Verify call args
+        calls = mock_brain.publish.call_args_list
+        assert calls[0].args[0] == PipelineEvents.START
+        assert calls[1].args[0] == PipelineEvents.INPUT
+        
+        # Should return events_emitted for LangGraph persistence (or at least valid dict)
+        assert isinstance(result, dict)
 
-    async def test_llm_node_offline(self, nodes):
+    async def test_llm_node_offline(self, nodes, mock_brain):
         """Test LLM node fallback when no client."""
         ctx = PipelineContext(message="hi", original_message="hi")
         
@@ -156,42 +100,50 @@ class TestPipelineNodes:
 @pytest.mark.asyncio
 class TestDefaultPipeline:
     
-    async def test_full_run_success(self):
-        manager = PipelineManager()
+    @pytest.fixture
+    def mock_brain(self):
+        with patch("sidecar.vault_brain.VaultBrain.get") as mock_get:
+            mock_brain = MagicMock()
+            mock_brain.publish = AsyncMock()
+            mock_get.return_value = mock_brain
+            yield mock_brain
+
+    async def test_full_run_success(self, mock_brain):
         config = PipelineConfig()
-        pipeline = DefaultPipeline(manager, config)
+        pipeline = DefaultPipeline(config)
         
-        # Hook into input
-        async def modify_input(ctx):
-            ctx.metadata["visited_input"] = True
-            
-        manager.subscribe(PipelineEvents.INPUT, modify_input)
+        # We can't easily hook into "INPUT" event via manager anymore since manager is gone.
+        # But we can verify that events were published via mock_brain.
         
         result_ctx = await pipeline.run("Test Message")
         
         assert result_ctx.response is not None
-        assert result_ctx.metadata.get("visited_input") is True
-        assert PipelineEvents.END in result_ctx.events_emitted
+        # Verify END event was published
+        assert mock_brain.publish.called
+        # Check for END event
+        event_names = [call.args[0] for call in mock_brain.publish.call_args_list]
+        assert PipelineEvents.END in event_names
 
-    async def test_pipeline_abort_stops_execution(self):
-        manager = PipelineManager()
+    async def test_pipeline_abort_stops_execution(self, mock_brain):
         config = PipelineConfig()
-        pipeline = DefaultPipeline(manager, config)
+        pipeline = DefaultPipeline(config)
         
-        # Abort at INPUT
-        async def abort_hook(ctx):
-            ctx.abort("Security Violation")
-            
-        manager.subscribe(PipelineEvents.INPUT, abort_hook)
+        # Simulate an aborter hook
+        async def mock_publish(event, sequential=False, ctx=None, **kwargs):
+            if event == PipelineEvents.INPUT and ctx:
+                ctx.abort("Security Violation")
         
-        # We need to verify that subsequent nodes (like LLM) didn't run.
-        # But Nodes check `if state.should_abort: return {}`.
-        # So the graph finishes but with no response.
+        mock_brain.publish.side_effect = mock_publish
         
         result_ctx = await pipeline.run("Bad Message")
         
         assert result_ctx.should_abort is True
         assert result_ctx.abort_reason == "Security Violation"
-        # Response should be None (or potentially error string if graph handled it)
-        # But since LLM node returns early, ctx.response stays None.
-        assert result_ctx.response is None
+        # Since logic aborts, LLM node calls mock_publish(LLM) ? 
+        # Actually PipelineNodes checks `if state.should_abort: return {}` at start of nodes.
+        # So subsequent nodes should NOT publish events like PROMPT or LLM.
+        
+        event_names = [call.args[0] for call in mock_brain.publish.call_args_list]
+        assert PipelineEvents.INPUT in event_names
+        # LLM event should NOT be present
+        assert PipelineEvents.LLM not in event_names

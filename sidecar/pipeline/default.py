@@ -9,6 +9,12 @@ from typing import Optional, List, Dict, Any, AsyncGenerator
 from loguru import logger
 from langgraph.graph import StateGraph, END
 
+try:
+    from langchain_openai import ChatOpenAI
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+
 from .types import PipelineConfig, PipelineContext
 from .nodes import PipelineNodes
 

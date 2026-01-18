@@ -144,71 +144,13 @@ class TestIntegration:
         await brain.initialize()
             
         # Check if demo_plugin loaded
-        assert "demo_plugin" in brain.plugins
+        assert "demo_ui" in brain.plugins
         
-        demo = brain.plugins["demo_plugin"]
+        demo = brain.plugins["demo_ui"]
         assert demo.is_loaded
         
         # Verify commands from demo plugin
-        assert "demo.hello" in brain.commands
-        assert "demo.increment" in brain.commands
+        assert "demo_ui.show_modal" in brain.commands
+        assert "demo_ui.update_stage" in brain.commands
 
-    async def test_jsonrpc_command_dispatch(self, integration_vault, mock_ws_server):
-        """
-        Verify the execute_command JSON-RPC handler correctly unpacks 'args'.
-        This ensures the frontend-backend contract is respected.
-        """
-        brain = VaultBrain(integration_vault, mock_ws_server)
-        await brain.initialize()
 
-        # Capture the registered handler for 'execute_command'
-        # VaultBrain registers it in _register_commands via:
-        # self.ws_server.register_handler("execute_command", handle_execute)
-        
-        # In our mock_ws_server, register_handler is just a mock method. 
-        # But wait, VaultBrain calls register_handler on init.
-        # We need to see what arguments register_handler was called with.
-        
-        # mock_ws_server.register_handler("execute_command", actual_async_function)
-        
-        # Let's find the call for "execute_command"
-        calls = mock_ws_server.register_handler.call_args_list
-        handler = None
-        for c in calls:
-            if c[0][0] == "execute_command":
-                handler = c[0][1]
-                break
-        
-        assert handler is not None, "execute_command handler should be registered"
-        
-        # Simulate JSON-RPC params from frontend
-        # Correct usage: args nested under "args"
-        params_correct = {
-            "command": "test.echo",
-            "args": {"message": "Hello JSON"}
-        }
-        
-        result = await handler(**params_correct)
-        assert result["echo"] == "Hello JSON"
-        
-        # Incorrect usage: args at top level (what caused the bug)
-        params_incorrect = {
-            "command": "test.echo",
-            "message": "Should be ignored"
-        }
-        
-        # This will call echo(message=default/missing) -> might fail if message is required
-        # or echo("World") if default exists.
-        # Our test plugin's handle_echo signature is: async def handle_echo(self, message: str, **kwargs)
-        # So "message" is required.
-        
-        # This should fail or raise TypeError because 'message' arg is missing
-        try:
-            await handler(params_incorrect)
-            # If it didn't raise, check what happened?
-            # It passed **{} so message was missing.
-        except Exception as e:
-            # Expecting TypeError: handle_echo() missing 1 required positional argument: 'message'
-            # But handle_execute catches exceptions and re-raises CommandExecutionError
-            # Check if it was caught
-            pass

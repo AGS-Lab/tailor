@@ -7,7 +7,7 @@ manages command/event exchange using JSON-RPC 2.0 protocol.
 
 import asyncio
 import json
-from typing import Optional, Dict, Any, Callable, Awaitable, cast
+from typing import Optional, Dict, Any, Callable, Awaitable
 import websockets
 from websockets.exceptions import ConnectionClosed
 import inspect
@@ -48,31 +48,10 @@ class WebSocketServer:
         self.host = host
         self.connection: Optional[Any] = None
         self.message_queue: asyncio.Queue = asyncio.Queue()
-        self.command_handlers: Dict[str, CommandHandler] = {}
         self.pending_messages: list[Dict[str, Any]] = []
         self.brain = None  # Will be set by VaultBrain after initialization
         
         logger.info(f"WebSocket server initialized on {host}:{port}")
-    
-    def register_handler(self, method: str, handler: Callable[..., Any]) -> None:
-        """
-        Register a command handler.
-        
-        Args:
-            method: Command method name (e.g., "chat.send_message")
-            handler: Async or sync function to handle the command
-        
-        Example:
-            >>> async def handle_chat(params):
-            ...     return {"status": "ok"}
-            >>> server.register_handler("chat.send", handle_chat)
-        """
-        if not inspect.iscoroutinefunction(handler):
-            raise TypeError(f"Handler for '{method}' must be an async function (coroutine).")
-            
-        self.command_handlers[method] = handler
-        
-        logger.debug(f"Registered handler for method: {method}")
     
     async def start(self) -> None:
         """
@@ -203,31 +182,18 @@ class WebSocketServer:
 
     async def _execute_request(self, method: str, params: Dict[str, Any], request_id: Optional[str]) -> Any:
         """
-        Execute the requested method via local handlers or VaultBrain.
+        Execute the requested method via VaultBrain.
         """
-        # 1. Check local command handlers
-        if method in self.command_handlers:
-            return await self.command_handlers[method](**params)
-            
-        # 2. Check VaultBrain commands
         try:
             from .vault_brain import VaultBrain
             brain = VaultBrain.get()
-            if method in brain.commands:
-                # Brain commands use **kwargs, matches params dict
-                return await brain.commands[method]["handler"](**params)
-        except RuntimeError:
-            # Brain not initialized
-            pass
-        except ImportError:
-            # Should not happen in normal environment
-            pass
+            return await brain.execute_command(method, **params)
+        except (ImportError, RuntimeError) as e:
+            logger.error(f"VaultBrain access error: {e}")
+            raise exceptions.MethodNotFoundError(method)
+        except exceptions.CommandNotFoundError:
+            raise exceptions.MethodNotFoundError(method)
             
-        # 3. Not found
-        raise exceptions.MethodNotFoundError(method)
-        
-
-    
     async def send(self, data: Dict[str, Any]) -> None:
         """
         Send message to Rust.
@@ -280,15 +246,6 @@ class WebSocketServer:
             # No running loop yet - queue message to send when connected
             logger.debug(f"Queuing message (no event loop): {data.get('method', 'unknown')}")
             self.pending_messages.append(data)
-    
-    def get_registered_methods(self) -> list[str]:
-        """
-        Get list of all registered method names.
-        
-        Returns:
-            List of method names
-        """
-        return list(self.command_handlers.keys())
     
     def is_connected(self) -> bool:
         """

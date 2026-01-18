@@ -12,6 +12,7 @@ import argparse
 import asyncio
 import sys
 from pathlib import Path
+from typing import Optional
 
 from .websocket_server import WebSocketServer
 from .vault_brain import VaultBrain
@@ -152,6 +153,9 @@ def main() -> None:
         sys.path.insert(0, str(lib_path))
         logger.info(f"Added to PYTHONPATH: {lib_path}")
     
+    brain: Optional[VaultBrain] = None
+    ws_server: Optional[WebSocketServer] = None
+    
     try:
         # Initialize WebSocket server
         logger.info("Initializing WebSocket server...")
@@ -187,12 +191,14 @@ def main() -> None:
         logger.info("Received shutdown signal (Ctrl+C)")
         logger.info("Sidecar shutting down gracefully...")
         
-        # Graceful shutdown
-        try:
-            brain = VaultBrain.get()
-            asyncio.run(brain.shutdown())
-        except Exception as e:
-            logger.error(f"Error during shutdown: {e}")
+        # Graceful shutdown (only if brain was initialized)
+        if brain is not None:
+            try:
+                asyncio.run(brain.shutdown())
+            except Exception as e:
+                logger.error(f"Error during shutdown: {e}")
+        else:
+            logger.debug("VaultBrain not initialized, skipping shutdown")
             
         sys.exit(0)
     

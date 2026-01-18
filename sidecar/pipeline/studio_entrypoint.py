@@ -5,20 +5,18 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from sidecar.pipeline.default import DefaultPipeline
-from sidecar.pipeline.manager import PipelineManager
 from sidecar.pipeline.types import PipelineConfig
 
-# initialize manager and config
+# Initialize config
 # In studio mode, we don't have access to the real VaultBrain/Plugins, 
-# so we run with a barebones manager.
-manager = PipelineManager()
+# so we run with a barebones config.
 config = PipelineConfig(
     model="gpt-4o",
     temperature=0.7
 )
 
 # Initialize Pipeline
-pipeline = DefaultPipeline(manager, config)
+pipeline = DefaultPipeline(config)
 
 # Export the compiled graph
 graph = pipeline.graph

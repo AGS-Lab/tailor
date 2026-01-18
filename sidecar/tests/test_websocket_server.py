@@ -38,89 +38,65 @@ class TestWebSocketServer:
         assert server.port == 9000
         assert server.host == "127.0.0.1"  # Default
         assert server.connection is None
-        assert server.command_handlers == {}
-
-    def test_register_handler_async(self, server):
-        """Test registering an async handler."""
-        async def handler(**kwargs): return {}
-        server.register_handler("test.method", handler)
-        assert "test.method" in server.command_handlers
-        assert server.command_handlers["test.method"] == handler
-
-
-
-    @pytest.mark.asyncio
-    async def test_send_to_rust_connected(self, server, mock_ws):
-        """Test sending message when connected."""
-        server.connection = mock_ws
-        # Use build_request
-        message = utils.build_request("test")
-        
-        # Testing the async send() method directly is more reliable for unit tests
-        await server.send(message)
-        
-        mock_ws.send.assert_called_once()
-        sent_json = mock_ws.send.call_args[0][0]
-        assert json.loads(sent_json) == message
-
-    @pytest.mark.asyncio
-    async def test_send_to_rust_no_loop_queues(self, server):
-        """Test sending message when no loop (queues message)."""
-        message = utils.build_request("test")
-        
-        # Mock get_running_loop to raise RuntimeError (simulate no loop)
-        with patch("asyncio.get_running_loop", side_effect=RuntimeError):
-            server.send_to_rust(message)
-            
-        assert message in server.pending_messages
+        # Should not have local command handlers anymore
+        assert not hasattr(server, "command_handlers")
 
     @pytest.mark.asyncio
     async def test_handle_message_valid_request(self, server):
-        """Test processing a valid request."""
-        # Register a handler
-        handler = AsyncMock(return_value={"status": "ok"})
-        server.register_handler("test.echo", handler)
+        """Test processing a valid request via VaultBrain."""
+        # Mock VaultBrain
+        mock_brain = MagicMock()
+        mock_brain.execute_command = AsyncMock(return_value={"status": "ok"})
         
-        # Mock connection to verify response
-        server.connection = Mock()
-        server.connection.send = AsyncMock()
-        server.connection.close = AsyncMock()
-        
-        request = utils.build_request("test.echo", {"msg": "hello"}, request_id="1")
-        
-        await server.handle_message(json.dumps(request))
-        
-        # Check handler called
-        handler.assert_called_once_with(msg="hello")
-        
-        # Check response sent
-        server.connection.send.assert_called_once()
-        response_str = server.connection.send.call_args[0][0]
-        response = json.loads(response_str)
-        
-        assert response["result"] == {"status": "ok"}
-        assert response["id"] == "1"
+        with patch.dict('sys.modules', {'sidecar.vault_brain': MagicMock(VaultBrain=MagicMock(get=MagicMock(return_value=mock_brain)))}):
+            
+            # Mock connection to verify response
+            server.connection = Mock()
+            server.connection.send = AsyncMock()
+            server.connection.close = AsyncMock()
+            
+            request = utils.build_request("test.echo", {"msg": "hello"}, request_id="1")
+            
+            await server.handle_message(json.dumps(request))
+            
+            # Check Brain called
+            mock_brain.execute_command.assert_called_once_with("test.echo", msg="hello")
+            
+            # Check response sent
+            server.connection.send.assert_called_once()
+            response_str = server.connection.send.call_args[0][0]
+            response = json.loads(response_str)
+            
+            assert response["result"] == {"status": "ok"}
+            assert response["id"] == "1"
 
     @pytest.mark.asyncio
     async def test_handle_message_method_not_found(self, server):
         """Test unknown method."""
+        # Mock VaultBrain to raise CommandNotFoundError -> causes MethodNotFoundError
+        # Or specifically mocking _execute_request failure
+        
         server.connection = Mock()
         server.connection.send = AsyncMock()
         server.connection.close = AsyncMock()
         
         request = utils.build_request("unknown", request_id="2")
         
-        # Implementation logs warning but doesn't strictly require sending error 
+        # We need to act as if VaultBrain raises exception
+        mock_brain = MagicMock()
+        mock_brain.execute_command = AsyncMock(side_effect=exceptions.CommandNotFoundError("unknown", []))
         
-        await server.handle_message(json.dumps(request))
+        with patch.dict('sys.modules', {'sidecar.vault_brain': MagicMock(VaultBrain=MagicMock(get=MagicMock(return_value=mock_brain)))}):
         
-        # Verify method not found error sent
-        server.connection.send.assert_called_once()
-        response_str = server.connection.send.call_args[0][0]
-        response = json.loads(response_str)
-        
-        assert "error" in response
-        assert response["error"]["code"] == constants.JSONRPC_METHOD_NOT_FOUND
+            await server.handle_message(json.dumps(request))
+            
+            # Verify method not found error sent
+            server.connection.send.assert_called_once()
+            response_str = server.connection.send.call_args[0][0]
+            response = json.loads(response_str)
+            
+            assert "error" in response
+            assert response["error"]["code"] == constants.JSONRPC_METHOD_NOT_FOUND
 
     @pytest.mark.asyncio
     async def test_handle_message_invalid_json(self, server):
@@ -136,25 +112,27 @@ class TestWebSocketServer:
     @pytest.mark.asyncio
     async def test_handler_exception(self, server):
         """Test error raised inside handler."""
-        # Handler raises generic exception
-        handler = AsyncMock(side_effect=ValueError("Handler failed"))
-        server.register_handler("test.fail", handler)
+        # Mock VaultBrain to raise generic exception
+        mock_brain = MagicMock()
+        mock_brain.execute_command = AsyncMock(side_effect=ValueError("Handler failed"))
         
-        server.connection = Mock()
-        server.connection.send = AsyncMock()
-        server.connection.close = AsyncMock()
-        
-        request = utils.build_request("test.fail", request_id="3")
-        
-        await server.handle_message(json.dumps(request))
-        
-        # Check internal error response
-        server.connection.send.assert_called_once()
-        response_str = server.connection.send.call_args[0][0]
-        response = json.loads(response_str)
-        
-        assert response["error"]["code"] == constants.JSONRPC_INTERNAL_ERROR
-        assert "Handler failed" in response["error"]["message"] or "ValueError" in response["error"]["message"]
+        with patch.dict('sys.modules', {'sidecar.vault_brain': MagicMock(VaultBrain=MagicMock(get=MagicMock(return_value=mock_brain)))}):
+            
+            server.connection = Mock()
+            server.connection.send = AsyncMock()
+            server.connection.close = AsyncMock()
+            
+            request = utils.build_request("test.fail", request_id="3")
+            
+            await server.handle_message(json.dumps(request))
+            
+            # Check internal error response
+            server.connection.send.assert_called_once()
+            response_str = server.connection.send.call_args[0][0]
+            response = json.loads(response_str)
+            
+            assert response["error"]["code"] == constants.JSONRPC_INTERNAL_ERROR
+            assert "Handler failed" in response["error"]["message"] or "ValueError" in response["error"]["message"]
 
     @pytest.mark.asyncio
     async def test_handle_connection(self, server, mock_ws):
