@@ -69,7 +69,12 @@ class Plugin(PluginBase):
             self._handle_refine,
             self.name
         )
-        self.logger.debug("Registered refiner.refine command")
+        self.brain.register_command(
+            "refiner.refine_from_ui",
+            self._handle_refine_from_ui,
+            self.name
+        )
+        self.logger.debug("Registered refiner.refine and refiner.refine_from_ui commands")
     
     async def on_client_connected(self) -> None:
         """Called when frontend connects - register UI elements."""
@@ -103,7 +108,7 @@ class Plugin(PluginBase):
                 </div>
             </div>
             
-            <button onclick="window.request('execute_command', {command: 'refiner.refine_from_ui'})" 
+            <button onclick="window.request('refiner.refine_from_ui', {})" 
                 style="
                 background: transparent;
                 border: 1px solid var(--border-color);
@@ -120,12 +125,6 @@ class Plugin(PluginBase):
         """
         
         await self.add_toolbox_item(html)
-        
-        # Register a WebSocket handler for the UI button
-        self.brain.ws_server.register_handler(
-            "refiner.refine_from_ui",
-            self._handle_refine_from_ui
-        )
         
         self.notify("Prompt Refiner ready in Toolbox!", severity="success")
     

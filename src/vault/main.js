@@ -8,7 +8,6 @@ import { SidebarManager, PanelManager, ToolbarManager, ModalManager, ToolboxMana
 import { initLayout, initResize, log } from './layout.js';
 import { autoConnect } from './connection.js';
 import { loadPlugins, handleEvent } from './plugins.js';
-import { initPluginStore } from './plugin-store.js';
 import { initSettings } from './settings.js';
 
 /**
@@ -57,7 +56,6 @@ export function initVault() {
     initResize();
 
     // Initialize UI buttons
-    initPluginStore();
     initSettings();
 
     // Auto-connect to WebSocket and load plugins
