@@ -54,8 +54,8 @@ async def test_memory_plugin_integrated():
     assert brain.plugins["memory"].is_loaded
     
     # 1. Send first message (Memory should store this)
-    # Defaults to chat_id = "default" which maps to chat_default.json
-    response1 = await brain.chat_send(message="My name is AutoTest")
+    # Provide chat_id to ensure we use chat_default.json
+    response1 = await brain.chat_send(message="My name is AutoTest", chat_id="chat_default")
     assert response1["status"] == "success"
     assert response1["response"] == "Hello AutoTest"
     
@@ -63,12 +63,15 @@ async def test_memory_plugin_integrated():
     assert memory_file.exists()
     with open(memory_file, "r") as f:
         memories = json.load(f)
-    assert len(memories) == 1
-    assert memories[0]["user_input"] == "My name is AutoTest"
-    assert memories[0]["ai_response"] == "Hello AutoTest"
+    # Expect 2 messages: User + Assistant
+    assert len(memories) == 2
+    assert memories[0]["role"] == "user"
+    assert memories[0]["content"] == "My name is AutoTest"
+    assert memories[1]["role"] == "assistant"
+    assert memories[1]["content"] == "Hello AutoTest"
     
     # 2. Send second message (Memory should inject context)
-    response2 = await brain.chat_send(message="What is my name?")
+    response2 = await brain.chat_send(message="What is my name?", chat_id="chat_default")
     assert response2["response"] == "Your name is AutoTest"
     
     # Verify LLM call arguments to check for injected context

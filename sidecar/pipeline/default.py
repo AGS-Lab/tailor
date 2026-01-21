@@ -153,7 +153,8 @@ class DefaultPipeline:
     async def stream_run(
         self,
         message: str,
-        history: List[Dict[str, str]] = None
+        history: List[Dict[str, str]] = None,
+        metadata: Dict[str, Any] = None
     ) -> AsyncGenerator[str, None]:
         """
         Execute the pipeline with streaming response.
@@ -166,7 +167,17 @@ class DefaultPipeline:
         
         # Build messages list
         messages = []
-        system_prompt = "You are a helpful assistant."
+        
+        # Resolve System Prompt
+        meta = metadata or {}
+        system_prompt = meta.get("system_prompt", "You are a helpful assistant.")
+        
+        # Add RAG context if present
+        rag = meta.get("rag_context", [])
+        if rag:
+            context_str = "\n\n".join(rag[:5])
+            system_prompt += f"\n\nContext:\n{context_str}"
+            
         messages.append({"role": "system", "content": system_prompt})
         
         for msg in (history or []):

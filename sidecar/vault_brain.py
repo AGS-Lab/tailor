@@ -669,6 +669,7 @@ class VaultBrain:
         category: str = "fast",
         stream: bool = False,
         stream_id: str = None,
+        chat_id: str = None,
         **kwargs
     ) -> Dict[str, Any]:
         """
@@ -680,6 +681,7 @@ class VaultBrain:
             category: Model category to use (fast, thinking, etc.)
             stream: If True, stream tokens via WebSocket events
             stream_id: Optional ID to identify this stream (for multiple concurrent streams)
+            chat_id: Optional chat ID for memory persistence
         """
         # Handle nested params
         if not message:
@@ -690,6 +692,7 @@ class VaultBrain:
                 category = p.get("category", category)
                 stream = p.get("stream", stream)
                 stream_id = p.get("stream_id", stream_id)
+                chat_id = p.get("chat_id", chat_id)
         
         if not message:
             return {"status": "error", "error": "message is required"}
@@ -705,14 +708,20 @@ class VaultBrain:
                     message=message,
                     history=history,
                     category=category,
-                    stream_id=stream_id
+                    stream_id=stream_id,
+                    chat_id=chat_id
                 )
             else:
                 # Non-streaming mode: wait for full response
+                metadata = {}
+                if chat_id:
+                    metadata["chat_id"] = chat_id
+                    
                 context = await self.pipeline.run(
                     message=message,
                     history=history,
-                    stream=False
+                    stream=False,
+                    metadata=metadata
                 )
                 
                 return {
@@ -730,7 +739,8 @@ class VaultBrain:
         message: str,
         history: List[Dict[str, str]],
         category: str,
-        stream_id: str
+        stream_id: str,
+        chat_id: str = None
     ) -> Dict[str, Any]:
         """
         Stream chat response tokens via WebSocket events.
@@ -752,10 +762,16 @@ class VaultBrain:
                 }
             )
             
+            # Prepare metadata for pipeline
+            metadata = {}
+            if chat_id:
+                metadata["chat_id"] = chat_id
+            
             # Use pipeline's stream_run method
             async for token in self.pipeline.stream_run(
                 message=message,
-                history=history
+                history=history,
+                metadata=metadata
             ):
                 full_response += token
                 
@@ -778,6 +794,23 @@ class VaultBrain:
                     "status": "success"
                 }
             )
+
+            # Trigger OUTPUT event for plugins (like Memory) to capture the interaction
+            # We need to reconstruct a PipelineContext
+            from .pipeline.types import PipelineContext
+            from .pipeline.events import PipelineEvents
+            
+            ctx = PipelineContext(
+                message=message,
+                original_message=message,
+                history=history or [],
+                response=full_response
+            )
+            
+            if chat_id:
+                ctx.metadata["chat_id"] = chat_id
+            
+            await self.publish(PipelineEvents.OUTPUT, sequential=True, ctx=ctx)
             
             return {
                 "status": "success",

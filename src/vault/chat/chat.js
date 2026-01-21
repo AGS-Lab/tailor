@@ -13,6 +13,7 @@ let conversationHistory = [];
 let isWaitingForResponse = false;
 let currentCategory = 'fast';
 let messageIdCounter = 0;
+let activeChatId = null;
 
 // Streaming state
 let activeStreamId = null;
@@ -235,6 +236,11 @@ async function sendMessage() {
         activeStreamElement = assistantMsgEl;
     }
 
+    // Ensure we have a chat ID for this conversation
+    if (!activeChatId) {
+        activeChatId = `chat_${Math.floor(Date.now() / 1000)}`;
+    }
+
     try {
         const res = await request('execute_command', {
             command: 'chat.send',
@@ -243,7 +249,8 @@ async function sendMessage() {
                 history: conversationHistory.slice(0, -1), // Exclude the just-added message
                 category: currentCategory,
                 stream: enableStreaming,
-                stream_id: streamId
+                stream_id: streamId,
+                chat_id: activeChatId
             }
         });
 
@@ -403,6 +410,7 @@ function addSystemMessage(content, className = '') {
  */
 function clearChat() {
     conversationHistory = [];
+    activeChatId = null;
 
     const messagesEl = document.getElementById('chat-messages');
     if (messagesEl) {
@@ -547,7 +555,8 @@ function setupToolbarEventListeners() {
                     message: userMessage,
                     history: conversationHistory.slice(0, -1),
                     category: currentCategory,
-                    model: model // Override model if specified
+                    model: model, // Override model if specified
+                    chat_id: activeChatId
                 }
             });
 

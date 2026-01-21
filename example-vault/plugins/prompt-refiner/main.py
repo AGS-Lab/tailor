@@ -158,7 +158,8 @@ class Plugin(PluginBase):
             
             ctx = await self.brain.pipeline.run(
                 message=refine_prompt,
-                history=[]
+                history=[],
+                metadata={"save_to_memory": False}
             )
             
             if ctx.response:

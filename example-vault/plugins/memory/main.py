@@ -68,6 +68,9 @@ class Plugin(PluginBase):
         if not ctx.response:
             return
             
+        if ctx.metadata.get("save_to_memory") is False:
+            return
+            
         chat_id = ctx.metadata.get("chat_id")
         if not chat_id:
             chat_id = f"chat_{int(time.time())}"
@@ -76,11 +79,27 @@ class Plugin(PluginBase):
         chat_filename = f"{safe_chat_id}.json"
         chat_file = self.memory_dir / chat_filename
             
-        # Store the whole history as it is in the memory object
-        # This aligns with the standard List[Dict[str, str]] format
+        # Store the history
+        # We prefer to load from disk to ensure we don't lose previous turns if ctx.history is partial
         full_history = []
-        if ctx.history:
-            full_history.extend(ctx.history)
+        if chat_file.exists():
+            try:
+                with open(chat_file, "r", encoding="utf-8") as f:
+                    full_history = json.load(f)
+            except Exception as e:
+                self.logger.error(f"Failed to load existing history from {chat_file}: {e}")
+                # Backup corrupted file to prevent data loss
+                try:
+                    timestamp_str = datetime.now().strftime("%Y%m%d%H%M%S")
+                    corrupted_path = chat_file.with_suffix(f".json.corrupted.{timestamp_str}")
+                    chat_file.rename(corrupted_path)
+                    self.logger.warning(f"Renamed corrupted file to {corrupted_path.name}")
+                except Exception as rename_error:
+                    self.logger.error(f"Failed to rename corrupted file: {rename_error}")
+        
+        # If file didn't exist or was empty, maybe check ctx.history?
+        # But if we are appending, we just add the NEW interaction.
+        # We assume ctx.history was used for context but we are the system of record.
         
         timestamp = datetime.now().strftime("%Y%m%d%H%M")
         time_marker = time.time()
