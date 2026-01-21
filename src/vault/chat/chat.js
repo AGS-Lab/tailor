@@ -274,12 +274,14 @@ async function sendMessage() {
         updateMessage(assistantMsgEl, `Error: ${e.message || e}`, true);
         setStatus('Error');
     } finally {
-        isWaitingForResponse = false;
-        // Clear streaming state if this stream matches
-        if (activeStreamId === streamId) {
+        // For non-streaming mode, we can clean up immediately
+        // For streaming mode, the CHAT_STREAM_END event handler will clean up
+        if (!enableStreaming) {
+            isWaitingForResponse = false;
             activeStreamId = null;
             activeStreamElement = null;
         }
+        // Note: For streaming, isWaitingForResponse and activeStream* are cleared in the CHAT_STREAM_END handler
     }
 }
 
@@ -592,8 +594,6 @@ function setupStreamEventListeners() {
 
     // Handle stream start event
     window.addEventListener('CHAT_STREAM_START', (e) => {
-        const { stream_id } = e.detail || {};
-        console.log(`[Chat] Stream started: ${stream_id}`);
         setStatus('Streaming...');
     });
 
@@ -605,8 +605,6 @@ function setupStreamEventListeners() {
         if (stream_id !== activeStreamId || !activeStreamElement) {
             return;
         }
-
-        console.log(`[Chat] Stream ended: ${stream_id}, status: ${status}`);
 
         if (status === 'success') {
             // Final update with full response

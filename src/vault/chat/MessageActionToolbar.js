@@ -465,11 +465,11 @@ function closeAllDropdowns() {
 /**
  * Setup resize observer for overflow handling
  */
-function setupOverflowHandler(toolbar, actionsContainer, message, context) {
+function setupOverflowHandler(toolbar, actionsContainer, location, message, context) {
     const resizeObserver = new ResizeObserver(entries => {
         for (const entry of entries) {
             const availableWidth = entry.contentRect.width;
-            const actions = getActions(message.role);
+            const actions = getActionsByLocation(location);
 
             // Calculate how many actions fit
             const totalActions = actions.length;
@@ -484,7 +484,7 @@ function setupOverflowHandler(toolbar, actionsContainer, message, context) {
                 maxVisible = Math.max(0, maxVisible);
             }
 
-            renderActions(toolbar, actionsContainer, message, context, maxVisible);
+            renderActions(toolbar, actionsContainer, location, message, context, maxVisible);
         }
     });
 
