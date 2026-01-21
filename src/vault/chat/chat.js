@@ -240,6 +240,8 @@ async function sendMessage() {
     if (!activeChatId) {
         activeChatId = `chat_${Math.floor(Date.now() / 1000)}`;
     }
+    // Expose globally for plugins
+    window.activeChatId = activeChatId;
 
     try {
         const res = await request('execute_command', {

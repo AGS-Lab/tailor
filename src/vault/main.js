@@ -5,7 +5,7 @@
  */
 
 import { SidebarManager, PanelManager, ToolbarManager, ModalManager, ToolboxManager } from './managers/index.js';
-import { registerAction, refreshComposerToolbar } from './chat/index.js';
+import { registerAction, refreshComposerToolbar, showToast } from './chat/index.js';
 import { initLayout, initResize, log } from './layout.js';
 import { autoConnect, request } from './connection.js';
 import { loadPlugins, handleEvent } from './plugins.js';
@@ -33,6 +33,7 @@ export function initVault() {
         registerSidebarView: (id, icon, title) => sidebar.registerView(id, icon, title),
         setSidebarContent: (id, html) => sidebar.setContent(id, html),
         toggleSidebar: (id) => sidebar.toggle(id),
+        showToast,
 
         // Panels (GoldenLayout tabs)
         registerPanel: (id, title, icon, position) => panels.registerPanel(id, title, icon, position),
@@ -61,8 +62,11 @@ export function initVault() {
                         await request('execute_command', {
                             command: action.command,
                             args: {
-                                message: message?.content || '',
+                                message_id: message?.id || itemId,
+                                message_index: context?.index ?? -1,
+                                content: message?.content || '',
                                 role: message?.role || '',
+                                chat_id: window.activeChatId || context?.chat_id || '',
                                 itemId,
                                 context
                             }

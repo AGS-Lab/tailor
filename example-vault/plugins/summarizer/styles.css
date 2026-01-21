@@ -1,0 +1,193 @@
+/* Summary Container Styles - Summarizer Plugin */
+.summary-container {
+    margin: 12px 0 8px 0;
+    padding: 12px 14px;
+    background: var(--bg-overlay, rgba(0, 0, 0, 0.03));
+    border: 1px solid var(--border-subtle, #e5e5e5);
+    border-radius: 10px;
+    font-size: 13px;
+    animation: summarySlideIn 0.2s ease-out;
+}
+
+@keyframes summarySlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.summary-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.summary-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+    font-size: 12px;
+    color: var(--text-secondary, #666);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.summary-label i,
+.summary-label svg {
+    width: 14px;
+    height: 14px;
+}
+
+.summary-menu-wrapper {
+    position: relative;
+}
+
+.summary-menu-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--text-secondary, #666);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.summary-menu-btn:hover {
+    background: rgba(0, 0, 0, 0.08);
+    color: var(--text-primary, #222);
+}
+
+.summary-menu-btn i,
+.summary-menu-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+.summary-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    min-width: 180px;
+    background: var(--bg-card, #ffffff);
+    border: 1px solid var(--border-subtle, #e5e5e5);
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+    padding: 4px;
+    z-index: 1000;
+    animation: dropdownFadeIn 0.1s ease;
+}
+
+@keyframes dropdownFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.summary-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    color: var(--text-primary, #222);
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.1s ease;
+}
+
+.summary-menu-item:hover {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+.summary-menu-item i,
+.summary-menu-item svg {
+    width: 16px;
+    height: 16px;
+    color: var(--text-secondary, #666);
+    flex-shrink: 0;
+}
+
+.summary-menu-danger {
+    color: #ef4444;
+}
+
+.summary-menu-danger i,
+.summary-menu-danger svg {
+    color: #ef4444;
+}
+
+.summary-tldr {
+    color: var(--text-primary, #222);
+    line-height: 1.5;
+    margin-bottom: 8px;
+}
+
+.summary-expand-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    margin-bottom: 8px;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--accent-primary, #10a37f);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.summary-expand-btn:hover {
+    background: rgba(16, 163, 127, 0.1);
+}
+
+.summary-expand-btn i,
+.summary-expand-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+.summary-full {
+    color: var(--text-primary, #222);
+    line-height: 1.6;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-subtle, #e5e5e5);
+    white-space: pre-wrap;
+}
+
+.summary-full.collapsed {
+    display: none;
+}
+
+@media (prefers-color-scheme: dark) {
+    .summary-container {
+        background: rgba(255, 255, 255, 0.03);
+    }
+
+    .summary-menu-btn:hover {
+        background: rgba(255, 255, 255, 0.1);
+    }
+
+    .summary-menu-item:hover {
+        background: rgba(255, 255, 255, 0.08);
+    }
+}

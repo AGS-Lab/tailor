@@ -79,6 +79,14 @@ export function handleEvent(evt) {
     const customEvent = new CustomEvent(eventType, { detail });
     window.dispatchEvent(customEvent);
 
+    // Handle notifications
+    if (eventType === 'NOTIFY') {
+        const { message, severity } = evt.data || {};
+        if (message) {
+            window.ui.showToast(message, severity);
+        }
+    }
+
     // Handle UI Commands from Backend
     if (eventType === 'UI_COMMAND') {
         console.log('[handleEvent] UI_COMMAND received:', evt.data);
@@ -183,8 +191,193 @@ export function handleEvent(evt) {
                 }
                 break;
 
+            // ===== GENERIC PLUGIN UI INJECTION =====
+            // These handlers allow plugins to dynamically inject HTML/CSS
+
+            case 'inject_css':
+                // Inject CSS styles for a plugin
+                // data: { plugin_id, css }
+                injectPluginCSS(data.plugin_id, data.css);
+                break;
+
+            case 'inject_html':
+                // Inject HTML into a target element
+                // data: { id, target, position, html }
+                // position: 'beforeend' (default), 'afterbegin', 'beforebegin', 'afterend'
+                injectPluginHTML(data.id, data.target, data.position || 'beforeend', data.html);
+                break;
+
+            case 'remove_html':
+                // Remove an injected HTML element
+                // data: { id } or { selector }
+                removePluginHTML(data.id, data.selector);
+                break;
+
+            case 'update_html':
+                // Update content of an existing element
+                // data: { id, html } or { selector, html }
+                updatePluginHTML(data.id, data.selector, data.html);
+                break;
+
             default:
                 console.warn('[handleEvent] Unknown UI action:', data.action);
         }
     }
 }
+
+// ===== PLUGIN UI INJECTION HELPERS =====
+
+/**
+ * Inject CSS styles for a plugin
+ * @param {string} pluginId - Unique plugin identifier
+ * @param {string} css - CSS styles to inject
+ */
+function injectPluginCSS(pluginId, css) {
+    if (!pluginId || !css) {
+        console.warn('[UI] inject_css requires plugin_id and css');
+        return;
+    }
+
+    const styleId = `plugin-css-${pluginId}`;
+
+    // Remove existing style if present (for hot reload)
+    const existing = document.getElementById(styleId);
+    if (existing) {
+        existing.remove();
+    }
+
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.textContent = css;
+    document.head.appendChild(style);
+
+    console.log(`[UI] Injected CSS for plugin: ${pluginId}`);
+}
+/**
+ * Inject HTML into a target element
+ * @param {string} id - Unique ID for the injected element
+ * @param {string} target - CSS selector for target element
+ * @param {string} position - Insert position (beforeend, afterbegin, beforebegin, afterend)
+ * @param {string} html - HTML to inject
+ */
+function injectPluginHTML(id, target, position, html) {
+    if (!target || !html) {
+        console.warn('[UI] inject_html requires target and html');
+        return;
+    }
+
+    const targetEl = document.querySelector(target);
+    if (!targetEl) {
+        console.warn(`[UI] Target element not found: ${target}`);
+        return;
+    }
+
+    // Check if element with this ID already exists
+    if (id) {
+        const existing = document.getElementById(id);
+        if (existing) {
+            console.log(`[UI] Element ${id} already exists, skipping`);
+            return;
+        }
+    }
+
+    // Check if this is a script injection
+    if (html.trim().startsWith('<script')) {
+        // Extract script content and execute it properly
+        const scriptMatch = html.match(/<script[^>]*>([\s\S]*?)<\/script>/i);
+        if (scriptMatch) {
+            const script = document.createElement('script');
+            if (id) script.id = id;
+            script.textContent = scriptMatch[1];
+            document.head.appendChild(script);
+            console.log(`[UI] Executed script${id ? ` (id: ${id})` : ''}`);
+            return;
+        }
+    }
+
+    // Insert HTML
+    targetEl.insertAdjacentHTML(position, html);
+
+    // Execute any scripts in the inserted content
+    executeScriptsIn(targetEl);
+
+    // Initialize Lucide icons in injected content
+    initializeLucideIcons();
+
+    console.log(`[UI] Injected HTML${id ? ` (id: ${id})` : ''} into ${target}`);
+}
+
+/**
+ * Execute script tags in an element (scripts inserted via innerHTML don't auto-execute)
+ */
+function executeScriptsIn(container) {
+    const scripts = container.querySelectorAll('script');
+    scripts.forEach(oldScript => {
+        const newScript = document.createElement('script');
+        // Copy attributes
+        Array.from(oldScript.attributes).forEach(attr => {
+            newScript.setAttribute(attr.name, attr.value);
+        });
+        // Copy content
+        newScript.textContent = oldScript.textContent;
+        // Replace old with new (this causes execution)
+        oldScript.parentNode.replaceChild(newScript, oldScript);
+    });
+}
+
+
+/**
+ * Remove an injected HTML element
+ * @param {string} id - Element ID to remove
+ * @param {string} selector - CSS selector to remove (fallback)
+ */
+function removePluginHTML(id, selector) {
+    let el = null;
+
+    if (id) {
+        el = document.getElementById(id);
+    } else if (selector) {
+        el = document.querySelector(selector);
+    }
+
+    if (el) {
+        el.remove();
+        console.log(`[UI] Removed element: ${id || selector}`);
+    } else {
+        console.warn(`[UI] Element not found: ${id || selector}`);
+    }
+}
+
+/**
+ * Update content of an existing element
+ * @param {string} id - Element ID
+ * @param {string} selector - CSS selector (fallback)
+ * @param {string} html - New HTML content
+ */
+function updatePluginHTML(id, selector, html) {
+    let el = null;
+
+    if (id) {
+        el = document.getElementById(id);
+    } else if (selector) {
+        el = document.querySelector(selector);
+    }
+
+    if (el) {
+        el.innerHTML = html;
+        initializeLucideIcons();
+        console.log(`[UI] Updated element: ${id || selector}`);
+    } else {
+        console.warn(`[UI] Element not found for update: ${id || selector}`);
+    }
+}
+
+/**
+ * Initialize Lucide icons in recently added content
+ */
+function initializeLucideIcons() {
+    if (window.lucide) {
+        setTimeout(() => window.lucide.createIcons(), 0);
+    }
+}
+
