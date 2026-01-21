@@ -7,51 +7,9 @@ pub struct DependencyChecker;
 impl DependencyChecker {
     /// Check and install dependencies for a vault
     pub async fn check_and_install(vault_path: &str) -> Result<()> {
-        let vault_path = PathBuf::from(vault_path);
-        
-        // Check if plugins directory exists
-        let plugins_dir = vault_path.join("plugins");
-        if !plugins_dir.exists() {
-            println!("No plugins directory found in vault, skipping dependency check");
-            return Ok(());
-        }
-
-        // Check for requirements.txt
-        let requirements_file = plugins_dir.join("requirements.txt");
-        if !requirements_file.exists() {
-            println!("No requirements.txt found, skipping dependency installation");
-            return Ok(());
-        }
-
-        // Create lib directory if it doesn't exist
-        let lib_dir = vault_path.join("lib");
-        std::fs::create_dir_all(&lib_dir)
-            .context("Failed to create lib directory")?;
-
-        println!("Installing dependencies for vault: {}", vault_path.display());
-        println!("Requirements file: {}", requirements_file.display());
-        println!("Target directory: {}", lib_dir.display());
-
-        // Run pip install
-        let output = Command::new(Self::get_pip_executable()?)
-            .arg("install")
-            .arg("-t")
-            .arg(&lib_dir)
-            .arg("-r")
-            .arg(&requirements_file)
-            .arg("--upgrade")
-            .output()
-            .context("Failed to run pip install")?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            eprintln!("pip install failed: {}", stderr);
-            anyhow::bail!("Failed to install dependencies");
-        }
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        println!("Dependencies installed:\n{}", stdout);
-
+        // Dependency management is now handled by pixi at the project level.
+        // We no longer install per-vault requirements.txt.
+        println!("Skipping per-vault dependency check for: {} (handled by pixi)", vault_path);
         Ok(())
     }
 

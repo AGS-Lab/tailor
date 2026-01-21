@@ -67,8 +67,10 @@ async def test_memory_plugin_integrated():
     assert len(memories) == 2
     assert memories[0]["role"] == "user"
     assert memories[0]["content"] == "My name is AutoTest"
+    assert "time_marker" in memories[0]
     assert memories[1]["role"] == "assistant"
     assert memories[1]["content"] == "Hello AutoTest"
+    assert "time_marker" in memories[1]
     
     # 2. Send second message (Memory should inject context)
     response2 = await brain.chat_send(message="What is my name?", chat_id="chat_default")
