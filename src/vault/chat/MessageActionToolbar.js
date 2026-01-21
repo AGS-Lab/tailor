@@ -554,7 +554,10 @@ function getProviderIcon(provider) {
 /**
  * Show toast notification
  */
-function showToast(message, type = 'success') {
+/**
+ * Show toast notification
+ */
+export function showToast(message, type = 'success') {
     // Check if toast container exists
     let container = document.getElementById('toast-container');
     if (!container) {

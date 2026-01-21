@@ -1,0 +1,26 @@
+{
+    "name": "summarizer",
+    "displayName": "Message Summarizer",
+    "version": "1.0.0",
+    "description": "Intelligently summarizes long LLM responses into concise key points",
+    "author": {
+        "name": "Tailor Team",
+        "url": "https://github.com/AGS-Lab/tailor"
+    },
+    "main": "main.py",
+    "keywords": [
+        "summary",
+        "summarize",
+        "tldr",
+        "condense",
+        "key-points"
+    ],
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/AGS-Lab/tailor"
+    },
+    "tailor": {
+        "minVersion": "1.0.0"
+    }
+}
