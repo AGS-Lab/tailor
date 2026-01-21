@@ -101,10 +101,9 @@ class Plugin(PluginBase):
         # But if we are appending, we just add the NEW interaction.
         # We assume ctx.history was used for context but we are the system of record.
         
-        timestamp = datetime.now().strftime("%Y%m%d%H%M")
         time_marker = time.time()
-        full_history.append({"role": "user", "content": ctx.message, "timestamp": timestamp, "time_marker": time_marker})
-        full_history.append({"role": "assistant", "content": ctx.response, "timestamp": timestamp, "time_marker": time_marker})
+        full_history.append({"role": "user", "content": ctx.message, "time_marker": time_marker})
+        full_history.append({"role": "assistant", "content": ctx.response, "time_marker": time_marker})
         
         self._save_chat_memory(chat_file, full_history)
         
