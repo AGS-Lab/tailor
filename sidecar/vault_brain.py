@@ -676,23 +676,23 @@ class VaultBrain:
             return {"status": "error", "error": "message is required"}
         
         # Backend State Management: Fetch history from Memory plugin if available
+        # Generate chat_id if not provided (Backend Authority)
+        if not chat_id:
+            chat_id = f"chat_{int(time.time())}"
+            
+        # Backend State Management: Fetch history
+        # Use generic command 'chat.get_history' provided by plugins
+        # This allows Memory (linear) or ChatBranches (branched) to provide context
         if chat_id:
-            memory_plugin = self.plugins.get("memory")
-            if memory_plugin and hasattr(memory_plugin, "get_chat_history"):
-                try:
-                    # Fetch stored history
-                    res = await memory_plugin.get_chat_history(chat_id=chat_id)
-                    if res.get("status") == "success":
-                        stored_history = res.get("history", [])
-                        # Use stored history. 
-                        # Note: We prioritize backend state. Incoming 'history' is ignored if backend has data.
-                        # However, for robustness, if backend is empty but frontend sends history, maybe we use it?
-                        # For now, strict backend authority is cleaner.
-                        history = stored_history
-                except Exception as e:
-                    logger.warning(f"Failed to fetch history from memory: {e}")
+            try:
+                res = await self.execute_command("chat.get_history", chat_id=chat_id)
+                if res.get("status") == "success":
+                    history = res.get("history", [])
+            except Exception:
+                # No plugin provides history or command failed - ignore
+                pass
 
-        # Generate stream_id if streaming and not provided
+        # Generate stream_id if streaming (Backend Authority)
         if stream and not stream_id:
             stream_id = utils.generate_id("stream_")
         
@@ -721,6 +721,7 @@ class VaultBrain:
                 
                 return {
                     "status": "success",
+                    "chat_id": chat_id, # Return authoritative chat_id
                     "response": context.response,
                     "model": context.metadata.get("model", "unknown"),
                     "usage": context.metadata.get("usage", {}),
@@ -806,6 +807,7 @@ class VaultBrain:
                     "stream_id": stream_id,
                     "response": full_response,
                     "status": "success",
+                    "chat_id": chat_id,
                     "message_ids": ctx.metadata.get("generated_ids", {})
                 }
             )
@@ -814,6 +816,7 @@ class VaultBrain:
                 "status": "success",
                 "streaming": True,
                 "stream_id": stream_id,
+                "chat_id": chat_id,
                 "response": full_response,
                 "model": "stream-model",
                 "usage": {},
@@ -1001,7 +1004,7 @@ class VaultBrain:
             # 3. Clear plugin state
             self.plugins.clear()
             self.commands.clear()
-            self.subscribers.clear()
+            self.events = EventBus()
             
             # 4. Reload config
             self.config = self._load_config()

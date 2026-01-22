@@ -86,31 +86,7 @@ function registerCoreActions() {
 
     // Delete action - removed as it's rarely needed and clutters the UI
 
-    // Branch action
-    registerAction({
-        id: 'branch',
-        icon: 'git-branch',
-        label: 'Branch',
-        position: 50,
-        type: 'button',
-        location: 'message-actionbar',
-        handler: async (message, _, context) => {
-            try {
-                const historyUpToMessage = context?.history?.slice(0, (context?.index || 0) + 1) || [];
-                window.dispatchEvent(new CustomEvent('chat:createBranch', {
-                    detail: {
-                        branchFrom: message,
-                        history: historyUpToMessage,
-                        messageId: message.id
-                    }
-                }));
-                showToast('Branch created');
-            } catch (e) {
-                console.error('[Toolbar] Branch failed:', e);
-                showToast('Failed to branch', 'error');
-            }
-        }
-    });
+    // Branch action - Moved to chat_branches plugin
 
     // Regenerate action
     registerAction({
@@ -307,9 +283,34 @@ function createActionButton(action, message, context) {
             await showDropdown(btn, action, message, context);
         });
     } else {
-        btn.addEventListener('click', (e) => {
+        btn.addEventListener('click', async (e) => {
             e.stopPropagation();
-            action.handler(message, null, context);
+            if (action.handler) {
+                action.handler(message, null, context);
+            } else if (action.command) {
+                try {
+                    if (action.command.startsWith('event:')) {
+                        const eventName = action.command.substring(6);
+                        window.dispatchEvent(new CustomEvent(eventName, {
+                            detail: {
+                                message: message,
+                                context: context,
+                                messageId: message.id
+                            }
+                        }));
+                    } else {
+                        // Backend command
+                        await request(action.command, {
+                            message_id: message.id,
+                            chat_id: window.activeChatId,
+                            context: context
+                        });
+                    }
+                } catch (err) {
+                    console.error('Command execution failed:', err);
+                    showToast('Action failed', 'error');
+                }
+            }
         });
     }
 

@@ -1,0 +1,9 @@
+{
+    "name": "chat_branches",
+    "version": "0.1.0",
+    "description": "Advanced branching logic for chat history.",
+    "main": "main.py",
+    "capabilities": [
+        "commands"
+    ]
+}

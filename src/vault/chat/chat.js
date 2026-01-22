@@ -278,21 +278,24 @@ async function sendMessage() {
     // Create assistant message placeholder
     const assistantMsgEl = addMessage('assistant', '', true);
 
-    // Generate stream ID for this request
-    const streamId = `stream_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    // Generate stream ID for this request (Backend authority, but we can pass null to let backend generate)
+    const streamId = null; // Let backend generate it
 
     // Store active stream info (for streaming mode)
     if (enableStreaming) {
-        activeStreamId = streamId;
+        // We don't have stream_id yet, will get it from START event
         activeStreamElement = assistantMsgEl;
+        // activeStreamId will be set in CHAT_STREAM_START
     }
 
     // Ensure we have a chat ID for this conversation
+    // Backend Authority: Send null if new chat, backend will generate and return it
     if (!activeChatId) {
-        activeChatId = `chat_${Math.floor(Date.now() / 1000)}`;
+        // activeChatId = `chat_${Math.floor(Date.now() / 1000)}`;
+        // Don't generate locally
     }
     // Expose globally for plugins
-    window.activeChatId = activeChatId;
+    // window.activeChatId = activeChatId; // Will update after response
 
     try {
         const res = await request('chat.send', {
@@ -307,7 +310,10 @@ async function sendMessage() {
         const result = res.result?.result || res.result || {};
 
         if (result.status === 'success') {
-            const response = result.response || 'No response';
+            if (result.chat_id) {
+                activeChatId = result.chat_id;
+                window.activeChatId = activeChatId;
+            }
 
             // For streaming, the response is already shown via events
             // For non-streaming, update the message now
@@ -364,11 +370,11 @@ async function sendMessage() {
 /**
  * Add a message to the chat
  */
-function addMessage(role, content, isLoading = false) {
+function addMessage(role, content, isLoading = false, id = null) {
     const messagesEl = document.getElementById('chat-messages');
     if (!messagesEl) return null;
 
-    const messageId = `msg-${++messageIdCounter}`;
+    const messageId = id || `msg-${++messageIdCounter}`;
     const messageIndex = conversationHistory.length;
 
     const msgEl = document.createElement('div');
@@ -563,7 +569,9 @@ function setupToolbarEventListeners() {
 
     // Handle create branch
     window.addEventListener('chat:createBranch', async (e) => {
-        const { branchFrom, history, messageId } = e.detail;
+        const { branchFrom, history, messageId, message } = e.detail;
+
+        console.log('[Chat] Branch event received:', { messageId, message, activeChatId });
 
         if (!activeChatId) {
             console.error('[Chat] Cannot branch: No active chat ID');
@@ -574,27 +582,30 @@ function setupToolbarEventListeners() {
             setStatus('Branching...');
 
             // Call backend to create branch using Message ID (V3)
-            const res = await request('memory.create_branch', {
+            // Try 'branch.create' (new plugin)
+            const res = await request('branch.create', {
                 chat_id: activeChatId,
-                message_id: messageId // V3 linking
+                message_id: messageId,
+                name: null // Optional name
             });
 
-            const result = res.result || {};
+            console.log('[Chat] Branch response:', res);
+
+            // Graceful degradation / Error handling
+            if (res.error) {
+                console.error("Branch creation failed:", res.error);
+                if (res.error.code === -32601) {
+                    showToast("Branching plugin disabled", "error");
+                } else {
+                    showToast(res.error.message || "Failed to create branch", "error");
+                }
+                return;
+            }
+
+            const result = res.result || res; // Handle wrapped or unwrapped
+            console.log('[Chat] Branch result:', result);
 
             if (result.status === 'success') {
-                // ... (inside createBranch handler)
-                // Update local state with backend source of truth
-                conversationHistory = result.history || [];
-
-                addSystemMessage(`Switched to branch: "${result.branch}"`);
-
-                // Re-render messages using helper
-                renderConversation(conversationHistory);
-
-                setStatus('Ready');
-            } else {
-                // ...
-
                 /**
                  * Render conversation history with branch dividers
                  */
@@ -615,7 +626,6 @@ function setupToolbarEventListeners() {
                         // Check for branch change
                         if (msg.source_branch && lastBranchId && msg.source_branch !== lastBranchId) {
                             // Visual divider with click interaction
-                            // Using system message styling but with distinct content
                             const dividerId = msg.source_branch.substring(0, 8);
                             addSystemMessage(
                                 `<div class="branch-divider-content" data-branch-id="${msg.source_branch}" style="cursor: pointer; opacity:0.7; font-size: 0.8em;">
@@ -628,13 +638,23 @@ function setupToolbarEventListeners() {
 
                         if (msg.source_branch) lastBranchId = msg.source_branch;
 
-                        const msgEl = addMessage(msg.role, msg.content);
+                        const msgEl = addMessage(msg.role, msg.content, false, msg.id);
                         if (msgEl) {
                             msgEl.dataset.messageIndex = idx;
-                            if (msg.id) msgEl.dataset.messageId = msg.id;
                         }
                     });
                 }
+
+                // Update local state with backend source of truth
+                conversationHistory = result.history || [];
+
+                addSystemMessage(`Switched to branch: "${result.branch}"`);
+
+                // Re-render messages using helper
+                renderConversation(conversationHistory);
+
+                setStatus('Ready');
+            } else {
                 console.error('[Chat] Branch error:', result.error);
                 addSystemMessage(`Failed to create branch: ${result.error}`, 'chat-message-error');
                 setStatus('Error');
@@ -733,16 +753,26 @@ function setupStreamEventListeners() {
 
     // Handle stream start event
     window.addEventListener('CHAT_STREAM_START', (e) => {
+        const { stream_id, message } = e.detail || {};
+        if (stream_id) {
+            activeStreamId = stream_id;
+        }
         setStatus('Streaming...');
     });
 
     // Handle stream end event
     window.addEventListener('CHAT_STREAM_END', async (e) => {
-        const { stream_id, response, status, error } = e.detail || {};
+        const { stream_id, response, status, error, chat_id } = e.detail || {};
 
         // Verify this is for the active stream
         if (stream_id !== activeStreamId || !activeStreamElement) {
             return;
+        }
+
+        // Update activeChatId from backend (fixes duplicate chat creation)
+        if (chat_id) {
+            activeChatId = chat_id;
+            window.activeChatId = chat_id;
         }
 
         if (status === 'success') {

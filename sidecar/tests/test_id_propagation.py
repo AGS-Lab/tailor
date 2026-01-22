@@ -84,6 +84,13 @@ async def test_id_propagation():
     assert data["message_ids"]["user_message_id"] == "uuid-user-123"
     assert data["message_ids"]["assistant_message_id"] == "uuid-assist-123"
 
+    # TEST 3: Metadata generation (chat_id)
+    # Call without chat_id, expect one returned
+    res = await brain.chat_send(message="New Chat", stream=False)
+    assert res["status"] == "success"
+    assert "chat_id" in res
+    assert res["chat_id"].startswith("chat_")
+
 if __name__ == "__main__":
     asyncio.run(test_id_propagation())
     print("Test passed!")

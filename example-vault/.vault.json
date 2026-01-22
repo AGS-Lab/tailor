@@ -41,6 +41,9 @@
         },
         "memory": {
             "enabled": true
+        },
+        "chat_branches": {
+            "enabled": true
         }
     }
 }

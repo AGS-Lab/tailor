@@ -5,7 +5,7 @@
  */
 
 import { SidebarManager, PanelManager, ToolbarManager, ModalManager, ToolboxManager } from './managers/index.js';
-import { registerAction, refreshComposerToolbar, showToast } from './chat/index.js';
+import { registerAction, unregisterAction, refreshComposerToolbar, showToast } from './chat/index.js';
 import { initLayout, initResize, log } from './layout.js';
 import { autoConnect, request } from './connection.js';
 import { loadPlugins, handleEvent } from './plugins.js';
@@ -29,6 +29,10 @@ export function initVault() {
 
     // Public API for Plugins
     window.ui = {
+        showToast,
+        registerAction, // Expose for plugins
+        unregisterAction,
+
         // Sidebar
         registerSidebarView: (id, icon, title) => sidebar.registerView(id, icon, title),
         setSidebarContent: (id, html) => sidebar.setContent(id, html),
@@ -55,8 +59,8 @@ export function initVault() {
         // Action Toolbar (for plugin extensibility)
         // Supports location: 'message-actionbar' or 'composer-actionbar'
         registerAction: (action) => {
-            // Wrap the command as a handler if provided
-            if (action.command && !action.handler) {
+            // Wrap the command as a handler if provided (unless it's a client-side event)
+            if (action.command && !action.handler && !action.command.startsWith('event:')) {
                 action.handler = async (message, itemId, context) => {
                     try {
                         await request(action.command, {
