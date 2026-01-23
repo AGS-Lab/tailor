@@ -442,11 +442,16 @@ sequenceDiagram
 **Step-by-Step:**
 
 1. **UI**: User types "Hello" → calls `invoke('send_to_sidecar', {...})`
-2. **Rust**: Forwards to WebSocket `ws://localhost:9001`
-3. **WebSocket Server**: Receives `chat.send_message` command
-4. **VaultBrain**: Handler processes with LangGraph (currently echoes)
-5. **Response**: `{"response": "Echo: Hello", "status": "success"}`
-6. **WebSocket** → **Rust** → **UI**: Displays response
+2. **WebSocket Server**: Receives `chat.send` command
+3. **VaultBrain**: 
+   - Starts `DefaultPipeline` (or GraphPipeline)
+   - Calls `LLMService` to generate response
+4. **Streaming**:
+   - Emits `chat:stream_start`
+   - Emits `chat:token` for each token
+   - Emits `chat:stream_end` when done
+5. **UI**: Updates chat window in real-time
+6. **Memory**: `Memory` plugin listens for output and saves to disk
 
 ---
 
@@ -555,47 +560,36 @@ emitter.global_event("SYSTEM_ALERT", {...})
 
 ---
 
-## **Data Flow: JSON-RPC Communication**
+### **Data Flow: JSON-RPC Communication**
 
 ### **Command (Rust → Python)**
 ```json
 {
   "jsonrpc": "2.0",
-  "method": "chat.send_message",
+  "method": "chat.send",  
   "params": {
-    "message": "Hello, world!"
+    "message": "Hello, world!",
+    "stream": true,
+    "chat_id": "chat_123"
   },
   "id": "cmd_123"
 }
 ```
 
-### **Response (Python → Rust)**
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "response": "Echo: Hello, world!",
-    "status": "success"
-  },
-  "id": "cmd_123"
-}
-```
-
-### **Event (Python → Rust)**
+### **Stream Event (Python → Rust → UI)**
 ```json
 {
   "jsonrpc": "2.0",
   "method": "trigger_event",
   "params": {
-    "event_type": "NOTIFY",
+    "event_type": "chat:token",
     "scope": "window",
     "data": {
-      "message": "Plugin loaded!",
-      "severity": "success"
-    },
-    "timestamp": 1234567890.123
-  },
-  "id": "evt_1"
+      "stream_id": "stream_abc",
+      "token": "Hello",
+      "accumulated": "Hello"
+    }
+  }
 }
 ```
 
@@ -653,22 +647,17 @@ tailor/
 - Multi-window vault management
 - Isolated Python sidecars per vault
 - WebSocket JSON-RPC communication
-- Plugin loading + tick loop system
-- Event emission API (notify, progress, state)
-- Event routing (window/vault/global scopes)
-- Dependency auto-installation
-- **Command Registry System** (VSCode/Obsidian-style)
-  - `register_command()` for plugin command registration
-  - `execute_command()` for calling commands
-  - Plugin-to-plugin communication via commands
+- **LLM Integration**: `LLMService` supporting local (Ollama) and cloud models
+- **Streaming Pipeline**: Real-time token streaming to frontend
+- **Memory System**: `Memory` plugin with file-based persistence
+- **Plugin System**: Directory-based plugins with full lifecycle
+- **Command Registry**: VSCode-style command pattern
 
-### **🚧 Placeholders/TODO:**
-- **LangGraph Integration**: Currently just a dict in `vault_brain.py`
-- **Memory System**: Directory created but no actual memory storage
-- **Rust WebSocket Client**: `send_to_sidecar` in `ipc_router.rs` needs implementation
-- **Full Chat Processing**: `handle_chat` currently echoes instead of using LLM
-- **Window UI**: Each vault window needs actual UI (currently just shows launcher)
-- **Command Palette UI**: Build command palette/picker using `brain.get_commands()`
+### **🚧 In Progress:**
+- **LangGraph Enhancements**: Moving from dict-based graph to full LangGraph
+- **Advanced UI**: React/Vue migration for complex interfaces
+- **Plugin Marketplace**: Discovery system
+- **Hot Reload**: Reload plugins without restarting sidecar
 
 ---
 

@@ -2,16 +2,24 @@
 
 ## Quick Start (Windows)
 
-### Step 1: Install Rust
+### Step 1: Install Dependencies (Pixi)
 
-Rust is required to compile the Tauri backend.
+Tailor uses **pixi** to manage both Python and Node.js dependencies.
 
 ```powershell
-# Option A: Using winget (Windows 11/10)
-winget install --id Rustlang.Rustup
+# Install Pixi (if not installed)
+iwr -useb https://pixi.sh/install.ps1 | iex
 
-# Option B: Manual download
-# Visit https://rustup.rs/ and run the installer
+# Install project dependencies
+pixi install
+```
+
+### Step 2: Install Rust
+
+Rust is required to compile the Tauri backend.
+```powershell
+winget install Rustlang.Rustup
+refreshenv
 ```
 
 **Important**: After installation, restart your terminal or run:
