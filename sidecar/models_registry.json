@@ -1,5 +1,5 @@
 {
-    "version": "2.1.0",
+    "version": "3.0.0",
     "categories": {
         "thinking": {
             "name": "Thinking",
@@ -7,10 +7,28 @@
             "icon": "brain",
             "fallback": "fast",
             "recommended": [
-                "gpt-4o",
-                "claude-3-5-sonnet-20241022",
-                "gemini-1.5-pro",
-                "mistral-large-latest"
+                "openai/gpt-5",
+                "openai/gpt-4o",
+                "openai/gpt-4-turbo",
+                "openai/o1-preview",
+                "openai/o1-mini",
+                "anthropic/claude-4-5-opus",
+                "anthropic/claude-4-5-sonnet",
+                "anthropic/claude-3-5-sonnet-20241022",
+                "anthropic/claude-3-opus-20240229",
+                "gemini/gemini-3-pro",
+                "gemini/gemini-3",
+                "gemini/gemini-2.0-flash-thinking-exp",
+                "gemini/gemini-1.5-pro",
+                "mistral/mistral-large-latest",
+                "mistral/mistral-large-2411",
+                "groq/llama-3.3-70b-versatile",
+                "groq/llama-3.1-70b-versatile",
+                "groq/mixtral-8x7b-32768",
+                "openrouter/anthropic/claude-3.5-sonnet",
+                "openrouter/openai/gpt-4o",
+                "openrouter/meta-llama/llama-3.1-405b-instruct",
+                "openrouter/meta-llama/llama-3.3-70b-instruct:free"
             ],
             "ollama_keywords": [
                 "llama",
@@ -26,10 +44,22 @@
             "icon": "zap",
             "fallback": null,
             "recommended": [
-                "gpt-4o-mini",
-                "claude-3-5-haiku-20241022",
-                "gemini-2.0-flash-exp",
-                "mistral-small-latest"
+                "openai/gpt-5-mini",
+                "openai/gpt-4o-mini",
+                "openai/gpt-3.5-turbo",
+                "anthropic/claude-4-5-haiku",
+                "anthropic/claude-3-5-haiku-20241022",
+                "gemini/gemini-2.5-flash-lite-preview-09-2025",
+                "anthropic/claude-3-haiku-20240307",
+                "gemini/gemini-3-flash",
+                "gemini/gemini-2.0-flash",
+                "gemini/gemini-1.5-flash",
+                "gemini/gemini-1.5-flash-8b",
+                "mistral/mistral-small-latest",
+                "mistral/mistral-small-2409",
+                "groq/llama-3.1-8b-instant",
+                "groq/gemma2-9b-it",
+                "openrouter/meta-llama/llama-3.1-8b-instruct"
             ],
             "ollama_keywords": [
                 "llama",
@@ -45,9 +75,23 @@
             "icon": "eye",
             "fallback": "thinking",
             "recommended": [
-                "gpt-4o",
-                "claude-3-5-sonnet-20241022",
-                "gemini-1.5-pro"
+                "openai/gpt-5",
+                "openai/gpt-4o",
+                "openai/gpt-4o-mini",
+                "openai/gpt-4-turbo",
+                "anthropic/claude-4-5-opus",
+                "anthropic/claude-4-5-sonnet",
+                "anthropic/claude-3-5-sonnet-20241022",
+                "anthropic/claude-3-opus-20240229",
+                "gemini/gemini-3-pro-preview",
+                "gemini/gemini-3",
+                "gemini/gemini-2.0-flash-exp",
+                "gemini/gemini-1.5-pro",
+                "gemini/gemini-1.5-flash",
+                "groq/llama-3.2-90b-vision-preview",
+                "groq/llama-3.2-11b-vision-preview",
+                "openrouter/openai/gpt-4o",
+                "openrouter/anthropic/claude-3.5-sonnet"
             ],
             "ollama_keywords": [
                 "llava",
@@ -60,9 +104,24 @@
             "icon": "code",
             "fallback": "thinking",
             "recommended": [
-                "claude-3-5-sonnet-20241022",
-                "gpt-4o",
-                "codestral-latest"
+                "anthropic/claude-4-5-opus",
+                "anthropic/claude-4-5-sonnet",
+                "openai/gpt-5",
+                "openai/gpt-4o",
+                "openai/gpt-4-turbo",
+                "openai/o1-preview",
+                "openai/o1-mini",
+                "anthropic/claude-3-5-sonnet-20241022",
+                "anthropic/claude-3-opus-20240229",
+                "gemini/gemini-3-pro",
+                "gemini/gemini-2.0-flash-exp",
+                "gemini/gemini-1.5-pro",
+                "mistral/codestral-latest",
+                "mistral/mistral-large-latest",
+                "groq/llama-3.3-70b-versatile",
+                "groq/llama-3.1-70b-versatile",
+                "openrouter/anthropic/claude-3.5-sonnet",
+                "openrouter/deepseek/deepseek-coder"
             ],
             "ollama_keywords": [
                 "codellama",
@@ -77,9 +136,11 @@
             "icon": "hash",
             "fallback": null,
             "recommended": [
-                "text-embedding-3-large",
-                "text-embedding-004",
-                "mistral-embed"
+                "openai/text-embedding-3-large",
+                "openai/text-embedding-3-small",
+                "openai/text-embedding-ada-002",
+                "gemini/text-embedding-004",
+                "mistral/mistral-embed"
             ],
             "ollama_keywords": []
         },
@@ -89,7 +150,9 @@
             "icon": "mic",
             "fallback": null,
             "recommended": [
-                "whisper-1"
+                "openai/whisper-1",
+                "groq/whisper-large-v3",
+                "groq/whisper-large-v3-turbo"
             ],
             "ollama_keywords": []
         }

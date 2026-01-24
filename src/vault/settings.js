@@ -478,6 +478,11 @@ window.setCategoryModel = async function (category, model) {
         if (result.status === 'success') {
             categoryConfig[category] = model;
             console.log(`[Settings] Set ${category} model to ${model}`);
+
+            // Emit event so model selector can refresh
+            window.dispatchEvent(new CustomEvent('model-categories-updated', {
+                detail: { category, model }
+            }));
         } else {
             alert('Error: ' + (result.error || 'Failed to save model configuration'));
         }

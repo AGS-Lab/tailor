@@ -209,6 +209,8 @@ class LLMService:
         """
         Get all models available to the user grouped by provider.
         
+        Only returns models from providers that have API keys configured.
+        
         Returns:
             Dict mapping provider IDs to lists of available models
         """
@@ -233,30 +235,53 @@ class LLMService:
                     model_to_categories[model_id] = []
                 model_to_categories[model_id].append(cat_id)
             
-        # Group by provider (heuristic based on model name)
+        # Group by provider (parse from model ID)
         for model_id in used_models:
-            # Simple heuristic for provider
-            if "gpt" in model_id or "text-embedding" in model_id or "whisper" in model_id:
+            provider = "unknown"
+            
+            # 1. Check for explicit provider prefix (preferred)
+            if "/" in model_id:
+                parts = model_id.split("/", 1)
+                provider = parts[0]
+                
+                # Normalize provider names if needed (e.g. 'google' -> 'gemini' for consistency with keys)
+                if provider == "google":
+                    provider = "gemini"
+            
+            # 2. Fallback heuristics for legacy models without prefix
+            elif "gpt" in model_id or "text-embedding" in model_id or "whisper" in model_id or "o1" in model_id:
                 provider = "openai"
             elif "claude" in model_id:
                 provider = "anthropic"
             elif "gemini" in model_id:
-                provider = "google"
+                provider = "gemini"
             elif "mistral" in model_id or "codestral" in model_id:
                 provider = "mistral"
-            elif "llama" in model_id:
-                provider = "groq" # Defaulting Llama to Groq for now
-            else:
-                provider = "unknown"
+            elif "groq" in model_id:
+                provider = "groq" 
+            elif "openrouter" in model_id:
+                provider = "openrouter"
+            
+            # FILTER: Only include models from providers with configured API keys
+            if provider not in configured_providers and provider != "unknown":
+                continue  # Skip this model
 
             # Get specs from LiteLLM data if available
             specs = litellm_data.get(model_id, {})
             
+            # Prepare ModelInfo
+            # Strip provider prefix from ID since it's stored separately in provider field
+            # This prevents double-prefixing in frontend (e.g. 'openai/openai/gpt-4o')
+            clean_id = model_id
+            if "/" in model_id:
+                _, rest = model_id.split("/", 1)
+                clean_id = rest
+            
             categories = model_to_categories.get(model_id, [])
 
             model_info = ModelInfo(
-                id=model_id,
-                name=model_id, # Can improve with formatted name
+                id=clean_id,
+                name=clean_id, # Display name (without provider prefix)
                 provider=provider,
                 categories=categories,
                 context_window=specs.get("max_input_tokens") or specs.get("max_tokens"),
@@ -267,7 +292,7 @@ class LLMService:
                 available[provider] = []
             available[provider].append(model_info)
         
-        # Add Ollama models
+        # Add Ollama models (always available as they are local)
         ollama_models = await self.detect_ollama()
         if ollama_models:
             ollama_list = []
@@ -369,12 +394,63 @@ class LLMService:
             **kwargs
         }
         
-        self._logger.debug(f"Completing with model: {litellm_model}")
+        # Apply model-specific parameter restrictions (guardrails)
+        params = self._apply_model_guardrails(model_id, params)
+        
+        self._logger.debug(f"Completing with model: {litellm_model}, params: {params}")
         
         if stream:
             return self._stream_completion(litellm_model, messages, params)
         else:
             return await self._sync_completion(litellm_model, messages, params)
+    
+    def _apply_model_guardrails(self, model_id: str, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Apply model-specific parameter restrictions.
+        
+        Some models have restrictions on what parameters they accept:
+        - GPT-5/o1 models only support temperature=1
+        - Some models don't support certain parameters
+        """
+        model_lower = model_id.lower()
+        
+        # GPT-5 and o1 models only support temperature=1
+        if any(prefix in model_lower for prefix in ['gpt-5', 'o1-', 'o1_']):
+            if params.get('temperature', 1.0) != 1.0:
+                self._logger.info(f"Model {model_id} only supports temperature=1, adjusting")
+                params['temperature'] = 1.0
+            # These models also don't support top_p, presence_penalty, frequency_penalty
+            for unsupported in ['top_p', 'presence_penalty', 'frequency_penalty']:
+                if unsupported in params:
+                    self._logger.debug(f"Removing unsupported param {unsupported} for {model_id}")
+                    del params[unsupported]
+        
+        return params
+    
+    def get_model_restrictions(self, model_id: str) -> Dict[str, Any]:
+        """
+        Get parameter restrictions for a model.
+        
+        Used by frontend to show appropriate UI controls.
+        """
+        model_lower = model_id.lower()
+        
+        restrictions = {
+            "temperature": {"min": 0, "max": 2, "default": 0.7, "locked": False},
+            "max_tokens": {"min": 1, "max": 128000, "default": 4096},
+            "top_p": {"min": 0, "max": 1, "default": 1.0, "supported": True},
+            "presence_penalty": {"min": -2, "max": 2, "default": 0, "supported": True},
+            "frequency_penalty": {"min": -2, "max": 2, "default": 0, "supported": True}
+        }
+        
+        # GPT-5 and o1 models have temperature locked to 1
+        if any(prefix in model_lower for prefix in ['gpt-5', 'o1-', 'o1_']):
+            restrictions["temperature"] = {"min": 1, "max": 1, "default": 1, "locked": True, "locked_reason": "This model only supports temperature=1"}
+            restrictions["top_p"]["supported"] = False
+            restrictions["presence_penalty"]["supported"] = False
+            restrictions["frequency_penalty"]["supported"] = False
+        
+        return restrictions
     
     async def _sync_completion(
         self,
@@ -431,23 +507,41 @@ class LLMService:
         """
         Format a model ID for LiteLLM.
         
-        If already in 'provider/model' format, return as-is.
-        Otherwise, try to infer the provider.
+        LiteLLM uses specific provider prefixes:
+        - openai/gpt-4o, openai/o1-preview
+        - anthropic/claude-3-5-sonnet-20241022
+        - gemini/gemini-1.5-pro (NOT google/)
+        - mistral/mistral-large-latest
+        - groq/llama-3.1-8b
+        - ollama/llama3
         """
+        # If already contains a provider prefix, validate/fix it
         if "/" in model_id:
+            provider, model = model_id.split("/", 1)
+            # Fix common mistakes
+            if provider == "google":
+                return f"gemini/{model}"
             return model_id
+            
+        # Check if it's an Ollama model
+        if self._ollama_models:
+            for m in self._ollama_models:
+                if m.name == model_id or m.name.startswith(model_id):
+                    return f"ollama/{model_id}"
         
-        # Heuristic for provider prefixes
-        if "gpt" in model_id or "text-embedding" in model_id or "whisper" in model_id:
+        # Legacy heuristics for old configs without prefix
+        # Can eventually be removed once all configs are updated
+        model_lower = model_id.lower()
+        
+        if "gpt" in model_lower or "text-embedding" in model_lower or "whisper" in model_lower or "o1" in model_lower:
             return f"openai/{model_id}"
-        elif "claude" in model_id:
+        elif "claude" in model_lower:
             return f"anthropic/{model_id}"
-        elif "gemini" in model_id:
-            return f"google/{model_id}"
-        elif "mistral" in model_id or "codestral" in model_id:
+        elif "gemini" in model_lower:
+            return f"gemini/{model_id}"
+        elif "mistral" in model_lower or "codestral" in model_lower:
             return f"mistral/{model_id}"
-        elif "llama" in model_id and "ollama" not in model_id:
-             # Default Llama to Groq unless it's Ollama
+        elif "llama" in model_lower:
             return f"groq/{model_id}"
 
         # Check if it's an Ollama model
@@ -478,6 +572,94 @@ class LLMService:
     def get_categories_info(self) -> Dict[str, Dict[str, Any]]:
         """Get metadata about all categories."""
         return self._registry.get("categories", {})
+    
+    async def get_model_info(self, model_id: str) -> Dict[str, Any]:
+        """
+        Get detailed information about a specific model.
+        
+        Args:
+            model_id: Model ID in format 'provider/model' or just 'model'
+            
+        Returns:
+            Dictionary with model details including pricing and specs
+        """
+        # Normalize model ID to provider/model format
+        normalized_id = self._format_model_for_litellm(model_id)
+        
+        # Extract provider and model name
+        if "/" in normalized_id:
+            provider, model_name = normalized_id.split("/", 1)
+        else:
+            provider = "unknown"
+            model_name = normalized_id
+        
+        # Get pricing from litellm.model_cost
+        litellm_data = litellm.model_cost.get(model_name, {})
+        
+        # Determine categories for this model
+        categories = []
+        for cat_id, cat_info in self._registry.get("categories", {}).items():
+            if model_name in cat_info.get("recommended", []):
+                categories.append(cat_id)
+        
+        # Check if it's an Ollama model
+        is_local = provider == "ollama"
+        if not is_local and self._ollama_models:
+            for om in self._ollama_models:
+                if om.name == model_name:
+                    is_local = True
+                    categories = self._get_ollama_categories(model_name)
+                    break
+        
+        # Build capabilities list
+        capabilities = []
+        if "vision" in categories:
+            capabilities.append("Vision")
+        if "code" in categories:
+            capabilities.append("Code")
+        if "audio" in categories:
+            capabilities.append("Audio")
+        if not capabilities:
+            capabilities.append("Text")
+        
+        # Extract pricing (cost per 1M tokens)
+        pricing = {
+            "input": None,
+            "output": None
+        }
+        
+        if litellm_data and not is_local:
+            # LiteLLM stores pricing in different formats
+            if "input_cost_per_token" in litellm_data:
+                pricing["input"] = litellm_data["input_cost_per_token"] * 1_000_000
+            elif "input_cost_per_million_tokens" in litellm_data:
+                pricing["input"] = litellm_data["input_cost_per_million_tokens"]
+            
+            if "output_cost_per_token" in litellm_data:
+                pricing["output"] = litellm_data["output_cost_per_token"] * 1_000_000
+            elif "output_cost_per_million_tokens" in litellm_data:
+                pricing["output"] = litellm_data["output_cost_per_million_tokens"]
+        
+        # Get context window
+        context_window = None
+        if litellm_data:
+            context_window = (
+                litellm_data.get("max_input_tokens") or 
+                litellm_data.get("max_tokens") or
+                litellm_data.get("context_window")
+            )
+        
+        return {
+            "id": model_id,
+            "normalized_id": normalized_id,
+            "name": model_name,
+            "provider": provider,
+            "categories": categories,
+            "context_window": context_window,
+            "pricing": pricing,
+            "capabilities": capabilities,
+            "is_local": is_local
+        }
 
 
 # Module-level singleton

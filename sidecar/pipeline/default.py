@@ -185,10 +185,16 @@ class DefaultPipeline:
         
         messages.append({"role": "user", "content": message})
         
+        # Get category/model from metadata (allows override from chat.send)
+        # Priority: metadata model > metadata category > pipeline config category
+        model = meta.get("model")
+        category = meta.get("category", self.config.category)
+        
         try:
             async for token in await self.llm_service.complete(
                 messages=messages,
-                category=self.config.category,
+                category=category,
+                model=model,  # Pass specific model if provided
                 stream=True
             ):
                 yield token

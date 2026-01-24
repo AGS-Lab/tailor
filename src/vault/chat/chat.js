@@ -7,6 +7,8 @@
 
 import { request } from '../connection.js';
 import { createToolbar, registerAction, refreshComposerToolbar } from './MessageActionToolbar.js';
+import { getModelSelector } from './ModelSelector.js';
+import './model-selector.css';
 
 // Chat state
 let conversationHistory = [];
@@ -14,6 +16,7 @@ let isWaitingForResponse = false;
 let currentCategory = 'fast';
 let messageIdCounter = 0;
 let activeChatId = null;
+let modelSelector = null;  // Model selector instance
 
 // Streaming state
 let activeStreamId = null;
@@ -53,6 +56,9 @@ export function initChat(containerEl) {
 
     // Initialize composer toolbar with registered actions
     refreshComposerToolbar();
+
+    // Initialize model selector
+    initializeModelSelector();
 
     // Add welcome message with a specific class for removal later
     addSystemMessage('Welcome! Type a message to start chatting.', 'welcome-message');
@@ -168,12 +174,15 @@ function getChatHTML() {
                     ></textarea>
                     <div id="composer-toolbar" class="composer-action-toolbar">
                         <div class="toolbar-actions">
-                            <!-- Plugin actions will be inserted here -->
+                            <!-- Plugin actions will be inserted here (far left) -->
                         </div>
-                        <div class="toolbar-send">
-                            <button class="chat-send-btn" id="chat-send" title="Send Message">
-                                <i data-lucide="arrow-up"></i>
-                            </button>
+                        <div class="toolbar-right">
+                            <div id="model-selector-wrapper" class="model-selector-wrapper"></div>
+                            <div class="toolbar-send">
+                                <button class="chat-send-btn" id="chat-send" title="Send Message">
+                                    <i data-lucide="arrow-up"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -301,11 +310,25 @@ async function sendMessage() {
     // Expose globally for plugins
     // window.activeChatId = activeChatId; // Will update after response
 
+    // Get current model selection from model selector
+    let selectedModel = null;
+    let selectedCategory = currentCategory;
+
+    if (modelSelector) {
+        const selection = modelSelector.getCurrentSelection();
+        if (selection.type === 'specific' && selection.actualModel) {
+            selectedModel = selection.actualModel;
+        } else if (selection.type === 'category') {
+            selectedCategory = selection.value;
+        }
+    }
+
     try {
         const res = await request('chat.send', {
             message: message,
             history: [], // Backend manages history now
-            category: currentCategory,
+            category: selectedCategory,
+            model: selectedModel,  // Pass specific model if selected
             stream: enableStreaming,
             stream_id: streamId,
             chat_id: activeChatId
@@ -534,6 +557,60 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML.replace(/\n/g, '<br>');
+}
+
+/**
+ * Initialize the model selector component
+ */
+async function initializeModelSelector() {
+    const wrapper = document.getElementById('model-selector-wrapper');
+    if (!wrapper) {
+        console.warn('[Chat] Model selector wrapper not found');
+        return;
+    }
+
+    modelSelector = getModelSelector();
+    await modelSelector.init(wrapper);
+
+    // Setup keyboard shortcut for cycling categories (Cmd/Ctrl + M)
+    document.addEventListener('keydown', handleModelSelectorKeyboard);
+}
+
+/**
+ * Handle keyboard shortcuts for model selector
+ */
+function handleModelSelectorKeyboard(e) {
+    // Cmd/Ctrl + M: Cycle through categories
+    if ((e.metaKey || e.ctrlKey) && e.key === 'm') {
+        e.preventDefault();
+        cycleModelCategory();
+    }
+}
+
+/**
+ * Cycle through model categories
+ */
+async function cycleModelCategory() {
+    if (!modelSelector) return;
+
+    const categories = ['fast', 'thinking', 'code', 'vision'];
+    const current = modelSelector.getCurrentSelection();
+
+    // Only cycle if currently on a category (not a specific model)
+    if (current.type !== 'category') return;
+
+    const currentIndex = categories.indexOf(current.value);
+    const nextIndex = (currentIndex + 1) % categories.length;
+    const nextCategory = categories[nextIndex];
+
+    await modelSelector.selectCategory(nextCategory);
+
+    // Briefly highlight the selector for visual feedback
+    const selector = document.querySelector('.model-selector-btn');
+    if (selector) {
+        selector.classList.add('highlight-pulse');
+        setTimeout(() => selector.classList.remove('highlight-pulse'), 500);
+    }
 }
 
 /**

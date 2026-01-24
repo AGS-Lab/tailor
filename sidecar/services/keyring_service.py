@@ -34,9 +34,9 @@ PROVIDERS = {
         "env_var": "ANTHROPIC_API_KEY",
         "validation_url": "https://api.anthropic.com/v1/messages",
     },
-    "google": {
-        "name": "Google AI",
-        "env_var": "GOOGLE_API_KEY",
+    "gemini": {
+        "name": "Google Gemini",
+        "env_var": "GEMINI_API_KEY",  # LiteLLM uses GEMINI_API_KEY
         "validation_url": "https://generativelanguage.googleapis.com/v1beta/models",
     },
     "mistral": {
@@ -48,6 +48,11 @@ PROVIDERS = {
         "name": "Groq",
         "env_var": "GROQ_API_KEY",
         "validation_url": "https://api.groq.com/openai/v1/models",
+    },
+    "openrouter": {
+        "name": "OpenRouter",
+        "env_var": "OPENROUTER_API_KEY",
+        "validation_url": "https://openrouter.ai/api/v1/models",
     },
 }
 
