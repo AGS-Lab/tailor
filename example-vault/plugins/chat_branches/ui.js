@@ -1,7 +1,8 @@
 /**
  * Chat Branches Plugin - Frontend Module
  * 
- * Handles branch UI rendering and event management independently from core chat.
+ * Handles branch UI rendering and event management.
+ * Uses Tailor design system tokens from theme.css.
  */
 (function () {
     'use strict';
@@ -35,7 +36,6 @@
         if (isRendering || !lastMetadata) return;
 
         const { history } = e.detail;
-        console.log('[ChatBranches] History rendered, injecting branch UI...');
 
         try {
             isRendering = true;
@@ -70,7 +70,6 @@
                         b.parent_branch === parentId
                     );
 
-                    // SORTING FIX: Ensure we handle missing IDs or different structures safely
                     siblings.sort((a, b) => (a.id || '').localeCompare(b.id || ''));
 
                     if (siblings.length > 1 || currentBranchId) {
@@ -93,7 +92,7 @@
 
             if (children.length > 0) {
                 children.sort((a, b) => (a.id || '').localeCompare(b.id || ''));
-                const forwardTabs = createForwardTabsElement(children);
+                const forwardTabs = createBranchTabsElement(children, null, true);
                 messagesEl.appendChild(forwardTabs);
                 messagesEl.scrollTop = messagesEl.scrollHeight;
             }
@@ -102,18 +101,26 @@
         if (window.lucide) window.lucide.createIcons();
     }
 
-    function createBranchTabsElement(siblings, activeBranchId) {
+    /**
+     * Create a row of branch tabs
+     */
+    function createBranchTabsElement(siblings, activeBranchId, isForward = false) {
         const div = document.createElement('div');
         div.className = 'chat-message chat-message-system branch-divider';
-        div.style.margin = '10px 0';
-        div.style.padding = '5px 0';
-        div.style.borderTop = '1px solid rgba(255,255,255,0.05)';
+
+        // Use theme variables for styling
+        div.style.margin = isForward ? 'var(--spacing-md) 0' : 'var(--spacing-sm) 0';
+        div.style.padding = 'var(--spacing-sm) 0';
+        div.style.borderTop = isForward ? 'none' : '1px solid var(--border-subtle)';
 
         const tabsHtml = siblings.map(b => {
             const isActive = b.id === activeBranchId;
             const name = b.display_name || (b.id ? b.id.substring(0, 8) : 'branch');
-            const bg = isActive ? 'var(--color-accent, #3b82f6)' : 'rgba(255,255,255,0.05)';
-            const color = isActive ? 'white' : 'var(--text-muted, #888)';
+
+            // Theming based on active state
+            const bg = isActive ? 'var(--accent-primary)' : 'var(--bg-input)';
+            const color = isActive ? '#ffffff' : 'var(--text-secondary)';
+            const border = isActive ? 'none' : '1px solid var(--border-subtle)';
 
             return `
                 <button 
@@ -122,23 +129,28 @@
                     style="
                         background: ${bg};
                         color: ${color};
-                        border: 1px solid ${isActive ? 'transparent' : 'rgba(255,255,255,0.1)'};
-                        border-radius: 4px;
-                        padding: 3px 10px;
-                        margin-right: 6px;
-                        font-size: 0.85em;
+                        border: ${border};
+                        border-radius: 100px;
+                        padding: 4px 12px;
+                        margin: 4px;
+                        font-size: 12px;
+                        font-weight: 500;
+                        font-family: var(--font-main);
                         cursor: ${isActive ? 'default' : 'pointer'};
-                        transition: opacity 0.2s;
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 6px;
+                        transition: all 0.2s;
                     "
                     ${isActive ? 'disabled' : ''}
                 >
-                    <i data-lucide="git-branch" style="width:14px; height:14px; vertical-align:middle; margin-right:4px;"></i>
-                    ${escapeHtml(name)}
+                    <i data-lucide="git-branch" style="width:14px; height:14px;"></i>
+                    <span>${escapeHtml(name)}</span>
                 </button>
             `;
         }).join('');
 
-        div.innerHTML = `<div class="message-content" style="display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px;">${tabsHtml}</div>`;
+        div.innerHTML = `<div class="message-content" style="display: flex; flex-wrap: wrap; align-items: center; justify-content: center; opacity: 0.9;">${tabsHtml}</div>`;
 
         div.querySelectorAll('.branch-tab-btn').forEach(btn => {
             if (!btn.disabled && btn.dataset.branchId) {
@@ -148,55 +160,19 @@
                         detail: { branchId: btn.dataset.branchId }
                     }));
                 });
-            }
-        });
 
-        return div;
-    }
-
-    function createForwardTabsElement(children) {
-        const div = document.createElement('div');
-        div.className = 'chat-message chat-message-system branch-divider';
-        div.style.marginTop = '15px';
-
-        const tabsHtml = children.map(b => {
-            const name = b.display_name || (b.id ? b.id.substring(0, 8) : 'branch');
-            return `
-                <button 
-                    class="branch-tab-btn"
-                    data-branch-id="${b.id || ''}"
-                    style="
-                        background: rgba(255,255,255,0.05);
-                        color: var(--text-muted, #888);
-                        border: 1px solid rgba(255,255,255,0.1);
-                        border-radius: 4px;
-                        padding: 3px 10px;
-                        margin-right: 6px;
-                        font-size: 0.85em;
-                        cursor: pointer;
-                    "
-                >
-                    <i data-lucide="git-branch" style="width:14px; height:14px; vertical-align:middle; margin-right:4px;"></i>
-                    ${escapeHtml(name)}
-                </button>
-            `;
-        }).join('');
-
-        div.innerHTML = `
-            <div class="message-content" style="text-align: center;">
-                <div style="font-size: 0.8em; opacity: 0.6; margin-bottom: 8px;">Explore other paths:</div>
-                <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px;">
-                    ${tabsHtml}
-                </div>
-            </div>`;
-
-        div.querySelectorAll('.branch-tab-btn').forEach(btn => {
-            if (btn.dataset.branchId) {
-                btn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    window.dispatchEvent(new CustomEvent('chat:switchBranch', {
-                        detail: { branchId: btn.dataset.branchId }
-                    }));
+                // Add hover effect via JS since we are injecting style
+                btn.addEventListener('mouseenter', () => {
+                    if (!btn.disabled) {
+                        btn.style.background = 'var(--bg-hover)';
+                        btn.style.borderColor = 'var(--accent-primary)';
+                    }
+                });
+                btn.addEventListener('mouseleave', () => {
+                    if (!btn.disabled) {
+                        btn.style.background = 'var(--bg-input)';
+                        btn.style.borderColor = 'var(--border-subtle)';
+                    }
                 });
             }
         });
@@ -228,7 +204,7 @@
             if (result.status === 'success') {
                 window.chatModule.loadHistory(activeChatId);
             } else {
-                alert('Branch creation failed: ' + result.error);
+                console.error('[ChatBranches] Branch creation failed:', result.error);
             }
         } catch (err) { console.error(err); }
     });
@@ -251,5 +227,5 @@
         } catch (err) { console.error(err); }
     });
 
-    console.log('[ChatBranches] Registered. Ready to branch! 🚀');
+    console.log('[ChatBranches] Plugin ready. Theme variables applied.');
 })();
