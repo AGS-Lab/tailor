@@ -463,6 +463,15 @@ class VaultBrain:
             "plugins": list(self.plugins.keys())
         }
 
+    @command("system.list_commands", constants.CORE_PLUGIN_NAME)
+    async def list_commands(self) -> Dict[str, Any]:
+        """List all registered commands."""
+        return {
+            "status": "success",
+            "commands": list(self.commands.keys())
+        }
+
+
 
 
     # =========================================================================
@@ -635,9 +644,99 @@ class VaultBrain:
             ]
         }
 
+    @command("settings.get_model_info", constants.CORE_PLUGIN_NAME)
+    async def get_model_info(self, model_id: str = "", **kwargs) -> Dict[str, Any]:
+        """Get detailed information about a specific model including pricing and specs."""
+        # Handle nested params
+        if not model_id:
+            p = kwargs.get("p") or kwargs.get("params")
+            if isinstance(p, dict):
+                model_id = p.get("model_id", model_id)
+        
+        if not model_id:
+            return {"status": "error", "error": "model_id is required"}
+        
+        try:
+            model_info = await self._llm_service.get_model_info(model_id)
+            return {
+                "status": "success",
+                "model": model_info
+            }
+        except Exception as e:
+            logger.error(f"Failed to get model info: {e}")
+            return {"status": "error", "error": str(e)}
+
     # =========================================================================
     # Chat Commands (Core - replaces LLM plugin)
     # =========================================================================
+
+    @command("chat.set_model", constants.CORE_PLUGIN_NAME)
+    async def chat_set_model(
+        self,
+        chat_id: str = "",
+        model_id: str = "",
+        category: str = "",
+        **kwargs
+    ) -> Dict[str, Any]:
+        """
+        Set the active model for a specific chat.
+        
+        Args:
+            chat_id: The chat ID
+            model_id: Specific model ID (e.g., 'openai/gpt-4o') - takes precedence
+            category: Category name (e.g., 'thinking') - used if model_id not provided
+        """
+        # Handle nested params
+        if not chat_id:
+            p = kwargs.get("p") or kwargs.get("params")
+            if isinstance(p, dict):
+                chat_id = p.get("chat_id", chat_id)
+                model_id = p.get("model_id", model_id)
+                category = p.get("category", category)
+        
+        if not chat_id:
+            return {"status": "error", "error": "chat_id is required"}
+        
+        if not model_id and not category:
+            return {"status": "error", "error": "Either model_id or category is required"}
+        
+        try:
+            # Store in memory plugin if available
+            # Use a generic command that Memory plugin should implement
+            try:
+                await self.execute_command(
+                    "chat.set_metadata",
+                    chat_id=chat_id,
+                    key="model_override",
+                    value={"model_id": model_id, "category": category}
+                )
+            except:
+                # If memory plugin doesn't exist, just log
+                # Frontend will still pass the model in each request
+                logger.debug("Memory plugin not available for model persistence")
+            
+            # Get model info for response
+            selected_model = model_id if model_id else self._llm_service.get_model_for_category(category)
+            
+            model_info = None
+            if selected_model:
+                try:
+                    model_info = await self._llm_service.get_model_info(selected_model)
+                except:
+                    pass
+            
+            return {
+                "status": "success",
+                "chat_id": chat_id,
+                "model_id": model_id,
+                "category": category,
+                "selected_model": selected_model,
+                "model_info": model_info
+            }
+        except Exception as e:
+            logger.error(f"Failed to set chat model: {e}")
+            return {"status": "error", "error": str(e)}
+
 
     @command("chat.send", constants.CORE_PLUGIN_NAME)
     async def chat_send(
@@ -675,12 +774,30 @@ class VaultBrain:
         if not message:
             return {"status": "error", "error": "message is required"}
         
-        # Backend State Management: Fetch history from Memory plugin if available
         # Generate chat_id if not provided (Backend Authority)
         if not chat_id:
             chat_id = f"chat_{int(time.time())}"
             
-        # Backend State Management: Fetch history
+        # Backend State Management: Check for chat-specific model override
+        model_override = None
+        if chat_id:
+            try:
+                metadata_res = await self.execute_command("chat.get_metadata", chat_id=chat_id, key="model_override")
+                if metadata_res.get("status") == "success":
+                    model_override = metadata_res.get("value")
+            except:
+                pass  # No override set or memory plugin not available
+        
+        # Determine which model/category to use
+        # Priority: 1. Explicit model param 2. Chat override 3. Category default
+        if not kwargs.get("model"):
+            if model_override:
+                if model_override.get("model_id"):
+                    kwargs["model"] = model_override["model_id"]
+                elif model_override.get("category"):
+                    category = model_override["category"]
+            
+        # Backend State Management: Fetch history from Memory plugin if available
         # Use generic command 'chat.get_history' provided by plugins
         # This allows Memory (linear) or ChatBranches (branched) to provide context
         if chat_id:
@@ -704,7 +821,8 @@ class VaultBrain:
                     history=history,
                     category=category,
                     stream_id=stream_id,
-                    chat_id=chat_id
+                    chat_id=chat_id,
+                    model=kwargs.get("model")  # Pass specific model if provided
                 )
             else:
                 # Non-streaming mode: wait for full response
@@ -737,7 +855,8 @@ class VaultBrain:
         history: List[Dict[str, str]],
         category: str,
         stream_id: str,
-        chat_id: str = None
+        chat_id: str = None,
+        model: str = None
     ) -> Dict[str, Any]:
         """
         Stream chat response tokens via WebSocket events.
@@ -759,8 +878,11 @@ class VaultBrain:
                 }
             )
             
-            # Prepare metadata for pipeline
-            metadata = {}
+            # Prepare metadata for pipeline (including model/category)
+            metadata = {
+                "category": category,
+                "model": model  # May be None, pipeline will use category
+            }
             if chat_id:
                 metadata["chat_id"] = chat_id
             

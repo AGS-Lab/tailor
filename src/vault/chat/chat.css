@@ -448,6 +448,16 @@
     display: flex;
     align-items: center;
     gap: 4px;
+    flex: 1;
+    /* Take up available space, pushing right items to the right */
+}
+
+.composer-action-toolbar .toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+    /* Push to the right */
 }
 
 .composer-action-toolbar .toolbar-action-btn {
