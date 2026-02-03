@@ -8,7 +8,6 @@
 import { request } from '../connection.js';
 import { createToolbar, registerAction, refreshComposerToolbar } from './MessageActionToolbar.js';
 import { getModelSelector } from './ModelSelector.js';
-import './model-selector.css';
 
 // Chat state
 let conversationHistory = [];

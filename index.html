@@ -5,9 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tailor - Dashboard</title>
-    <link rel="stylesheet" href="src/styles/theme.css">
-    <link rel="stylesheet" href="src/styles/dashboard.css">
-    <link rel="stylesheet" href="src/styles/pages.css">
+    <link rel="stylesheet" href="src/styles/styles.css">
     <!-- Icon Library -->
     <script src="https://unpkg.com/lucide@latest"></script>
 </head>
@@ -29,7 +27,11 @@
         import { initConversations } from './src/pages/conversations.js';
         import { initVaultSettings } from './src/pages/vault-settings.js';
         import { initSettings } from './src/pages/settings.js';
+        import { initThemes, loadSavedTheme } from './src/pages/themes.js';
         import './src/utils/router.js';
+
+        // Load saved theme on startup
+        loadSavedTheme();
 
         // Initialize navigation
         const navContainer = document.getElementById('main-nav-container');
@@ -41,6 +43,7 @@
         window.router.register('conversations', initConversations);
         window.router.register('vault-settings', initVaultSettings);
         window.router.register('settings', initSettings);
+        window.router.register('themes', initThemes);
 
         // Start router and load initial page
         const initialRoute = window.location.hash.slice(1) || 'dashboard';

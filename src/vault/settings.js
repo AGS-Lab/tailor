@@ -6,7 +6,6 @@
  */
 
 import { request } from './connection.js';
-import './settings.css';
 
 // State for settings
 let providersStatus = {};

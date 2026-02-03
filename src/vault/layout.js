@@ -7,7 +7,6 @@
 import { GoldenLayout } from 'golden-layout';
 import 'golden-layout/dist/css/goldenlayout-base.css';
 import 'golden-layout/dist/css/themes/goldenlayout-light-theme.css';
-import '../styles/splitters.css';
 
 /**
  * Default layout configuration
@@ -137,7 +136,7 @@ export function initLayout() {
         container.element.innerHTML = `
             <div class="panel-container" style="background: transparent; box-shadow: none; border: none;">
                 <div class="scrollable" style="padding: 16px;">
-                    <div style="background: #ffffff; border-radius: 12px; border: 1px solid var(--border-subtle); padding: 16px; box-shadow: var(--shadow-sm);">
+                    <div style="background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border-subtle); padding: 16px; box-shadow: var(--shadow-sm);">
                         <div style="margin-bottom: 16px;">
                             <label class="text-label" style="display:block; margin-bottom:8px; color: var(--accent-primary);">Command</label>
                             <textarea id="cmd-input" rows="1" class="w-full" style="padding: 10px 12px; font-family: var(--font-mono); font-size: 13px; resize: none; overflow: hidden; height: auto; min-height: 42px;" placeholder="e.g. demo.hello"></textarea>

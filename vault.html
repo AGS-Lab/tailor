@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vault</title>
-    <link rel="stylesheet" href="src/styles/theme.css">
+    <link rel="stylesheet" href="src/styles/styles.css">
     <!-- Icon Library -->
     <script src="https://unpkg.com/lucide@latest"></script>
 </head>
@@ -49,6 +49,10 @@
 
     <script type="module">
         import { initVault } from './src/vault/main.js';
+        import { loadSavedTheme } from './src/pages/themes.js';
+
+        // Load saved theme first (synchronous CSS variable application)
+        loadSavedTheme();
 
         // Initialize vault when DOM is ready
         if (document.readyState === 'loading') {

@@ -44,6 +44,9 @@
         },
         "chat_branches": {
             "enabled": true
+        },
+        "summarizer": {
+            "enabled": true
         }
     }
 }
