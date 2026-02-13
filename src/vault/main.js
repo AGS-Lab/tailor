@@ -9,7 +9,7 @@ import { registerAction, unregisterAction, refreshComposerToolbar, showToast } f
 import { initLayout, initResize, log } from './layout.js';
 import { autoConnect, request } from './connection.js';
 import { loadPlugins, handleEvent } from './plugins.js';
-import { initSettings } from './settings.js';
+import { initSettings, loadAndApplySettings } from './settings.js';
 import { initPluginStore } from './plugin-store.js';
 
 
@@ -53,7 +53,7 @@ export function initVault() {
         setStageContent: (html) => toolbox.setContent(html), // Back-compat
 
         // Modal dialogs
-        showModal: (title, html, width) => modal.show(title, html, width),
+        showModal: (title, html, width, height) => modal.show(title, html, width, height),
         closeModal: () => modal.close(),
 
         // Action Toolbar (for plugin extensibility)
@@ -99,6 +99,7 @@ export function initVault() {
 
     // Initialize UI buttons
     initSettings();
+    loadAndApplySettings();
     initPluginStore();
 
     // Auto-connect to WebSocket and load plugins

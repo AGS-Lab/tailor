@@ -143,6 +143,20 @@ export const settingsApi = {
     },
 
     /**
+     * Get effective settings (Global + Vault)
+     */
+    async getEffectiveSettings(vaultPath) {
+        return await invoke('get_effective_settings', { vaultPath });
+    },
+
+    /**
+     * Get settings schema
+     */
+    async getSettingsSchema() {
+        return await invoke('get_settings_schema', {});
+    },
+
+    /**
      * Get API keys
      */
     async getApiKeys() {

@@ -8,6 +8,8 @@
 let themes = [];
 let currentThemeId = localStorage.getItem('tailor-theme') || 'default';
 
+import { settingsApi } from '../services/api.js';
+
 /**
  * Initialize the themes page
  */
@@ -154,7 +156,19 @@ function hexToRgb(hex) {
 /**
  * Apply a theme
  */
-function applyTheme(themeId) {
+export async function applyTheme(themeId) {
+    if (!themes.length) {
+        // Try to load themes if not loaded
+        try {
+            const response = await fetch('/theme-registry.json');
+            const data = await response.json();
+            themes = data.themes || [];
+        } catch (e) {
+            console.error('[Themes] Failed to auto-load themes:', e);
+            return;
+        }
+    }
+
     const theme = themes.find(t => t.id === themeId);
     if (!theme) return;
 
@@ -185,6 +199,19 @@ function applyTheme(themeId) {
     localStorage.setItem('tailor-theme', themeId);
     currentThemeId = themeId;
 
+    // Save to Backend (Global Settings)
+    try {
+        // We need to fetch current global settings first to avoid overwriting other keys?
+        // Actually saveGlobalSettings overwrites the file in current impl.
+        // Let's fetch first.
+        const currentGlobal = await settingsApi.getGlobalSettings();
+        currentGlobal.theme = themeId;
+        await settingsApi.saveGlobalSettings(currentGlobal);
+        console.log(`[Themes] Saved theme to backend: ${themeId}`);
+    } catch (e) {
+        console.error('[Themes] Failed to save theme to backend:', e);
+    }
+
     // Re-render to update active states
     const grid = document.getElementById('themes-grid');
     if (grid) {
@@ -197,7 +224,7 @@ function applyTheme(themeId) {
 /**
  * Reset to default theme
  */
-function resetTheme() {
+export function resetTheme() {
     applyTheme('default');
 }
 

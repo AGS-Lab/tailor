@@ -22,7 +22,8 @@
                 "width": 1200,
                 "height": 800,
                 "resizable": true,
-                "center": true
+                "center": true,
+                "decorations": false
             }
         ],
         "security": {
@@ -34,7 +35,12 @@
                     ],
                     "permissions": [
                         "dialog:allow-open",
-                        "core:default"
+                        "core:default",
+                        "core:window:allow-minimize",
+                        "core:window:allow-toggle-maximize",
+                        "core:window:allow-close",
+                        "core:window:allow-start-dragging",
+                        "core:window:allow-is-maximized"
                     ]
                 }
             ]

@@ -5,39 +5,98 @@
  * Includes API key management and model category selection.
  */
 
-import { request } from './connection.js';
+import { autoConnect, request } from './connection.js';
+import { settingsApi } from '../services/api.js';
 
 // State for settings
 let providersStatus = {};
 let availableModels = {};
 let categoryConfig = {};
 let categoriesInfo = {};
+let cachedSettings = null;
 
 // Navigation items configuration
-const NAV_ITEMS = [
-    { id: 'general', icon: 'settings', label: 'General' },
-    { id: 'plugins', icon: 'puzzle', label: 'Plugins' },
-    { id: 'api-keys', icon: 'key', label: 'API Keys' },
-    { id: 'models', icon: 'brain', label: 'Model Categories' }
+// Fixed items that are not in settings.toml
+const FIXED_NAV_ITEMS = [
+    { id: 'api-keys', label: 'API Keys', icon: 'key' },
+    { id: 'models', label: 'Model Categories', icon: 'brain-circuit' }
 ];
+
+// Import theme functions
+import { applyTheme, loadSavedTheme, initThemes } from '../pages/themes.js';
 
 /**
  * Initialize the settings button
  */
+/**
+ * Load settings from backend and apply them to the UI on startup
+ */
+export async function loadAndApplySettings() {
+    try {
+        const params = new URLSearchParams(window.location.search);
+        const vaultPath = params.get('vault') || params.get('path') || '';
+        const settings = await settingsApi.getEffectiveSettings(vaultPath);
+        if (settings) {
+            cachedSettings = settings;
+            applySettings(settings);
+        }
+    } catch (e) {
+        console.warn('[Settings] Could not load settings on startup:', e);
+    }
+}
+
 export function initSettings() {
     if (window.lucide) window.lucide.createIcons();
+
+    // Listen for settings changes to apply them live
+    window.addEventListener('settings-changed', (e) => {
+        applySettings(e.detail.settings);
+    });
 
     const settingsBtn = document.getElementById('vault-settings-btn');
     if (!settingsBtn) return;
 
     settingsBtn.addEventListener('click', async () => {
         console.log('[Settings] Opening vault settings');
+        cachedSettings = null; // Reset cache on open to fetch fresh
 
         const params = new URLSearchParams(window.location.search);
         const vaultPath = params.get('vault') || params.get('path') || '';
 
+        // Fetch settings first to generate tabs
+        try {
+            cachedSettings = await settingsApi.getEffectiveSettings(vaultPath);
+        } catch (e) {
+            console.error("Failed to load settings for menu generation", e);
+            cachedSettings = {};
+        }
+
+        // Generate Dynamic Tabs
+        const dynamicTabs = [];
+
+        Object.keys(cachedSettings).forEach(key => {
+            const val = cachedSettings[key];
+            if (val && typeof val === 'object' && !Array.isArray(val) && key !== 'settings') {
+                // Capitalize label
+                const label = key.charAt(0).toUpperCase() + key.slice(1);
+                let icon = 'box';
+                if (key === 'editor') icon = 'edit-3';
+                if (key === 'plugins') icon = 'package';
+                if (key === 'appearance') icon = 'palette';
+
+                dynamicTabs.push({ id: key, label, icon, isDynamic: true });
+            }
+        });
+
+        // Always ensure General is first
+        const allNavItems = [
+            { id: 'general', label: 'General', icon: 'settings', isDynamic: true },
+            ...dynamicTabs.sort((a, b) => a.label.localeCompare(b.label)), // Sort dynamic tabs
+            ...FIXED_NAV_ITEMS
+        ];
+
         if (window.ui && window.ui.showModal) {
-            const navItemsHtml = NAV_ITEMS.map((item, idx) => `
+            const navItemsHtml = allNavItems.map((item, idx) => `
                 <button class="settings-nav-item-modal ${idx === 0 ? 'active' : ''}" data-section="${item.id}">
                     <i data-lucide="${item.icon}"></i>
                     <span>${item.label}</span>
@@ -51,39 +110,29 @@ export function initSettings() {
                         ${navItemsHtml}
                     </div>
                     <div id="settings-modal-content" class="settings-modal-content">
-                        <h3>General Settings</h3>
-                        <p>Configure your vault settings and preferences.</p>
-                        <div class="setting-item">
-                            <label>Vault Path</label>
-                            <div class="setting-value">
-                                <i data-lucide="folder"></i>
-                                ${vaultPath}
-                            </div>
-                        </div>
-                        <button class="btn btn-secondary" onclick="window.request('system.client_ready', {}); window.ui.closeModal();">
-                            <i data-lucide="refresh-cw"></i>
-                            Reload Application
-                        </button>
+                        <!-- Content loaded dynamically -->
                     </div>
                 </div>
             `;
-            window.ui.showModal('Vault Settings', settingsHtml, '850px');
+
+            window.ui.showModal('Vault Settings', settingsHtml, '70%', '70vh');
 
             setTimeout(() => {
                 if (window.lucide) window.lucide.createIcons();
-                setupSettingsNavigation();
+                setupSettingsNavigation(allNavItems, vaultPath);
+                // Load default
+                renderSettingsSection(document.getElementById('settings-modal-content'), 'general', cachedSettings, vaultPath);
             }, 50);
         } else {
-            if (window.log) window.log('Settings modal not available', 'info');
             alert('Vault settings are being loaded...');
         }
     });
 }
 
 /**
- * Setup settings navigation between sections
+ * Setup settings navigation
  */
-function setupSettingsNavigation() {
+function setupSettingsNavigation(navItemsList, vaultPath) {
     const navItems = document.querySelectorAll('.settings-nav-item-modal');
     const contentEl = document.getElementById('settings-modal-content');
 
@@ -93,7 +142,7 @@ function setupSettingsNavigation() {
         item.addEventListener('click', () => {
             navItems.forEach(i => i.classList.remove('active'));
             item.classList.add('active');
-            renderSettingsSection(contentEl, item.dataset.section);
+            renderSettingsSection(contentEl, item.dataset.section, cachedSettings, vaultPath);
         });
     });
 }
@@ -101,57 +150,227 @@ function setupSettingsNavigation() {
 /**
  * Render settings section content
  */
-async function renderSettingsSection(container, section) {
-    const params = new URLSearchParams(window.location.search);
-    const vaultPath = params.get('vault') || params.get('path') || '';
+async function renderSettingsSection(container, section, settings, vaultPath) {
+    if (!container) return;
 
-    switch (section) {
-        case 'general':
-            container.innerHTML = `
-                <h3>General Settings</h3>
-                <p style="color: var(--text-secondary); margin-bottom: 20px;">
-                    Configure your vault settings here.
-                </p>
-                <div style="display: flex; flex-direction: column; gap: 12px;">
-                    <div class="setting-item">
-                        <strong>Vault Path:</strong>
-                        <code style="background: var(--surface-color); padding: 4px 8px; border-radius: 4px;">${vaultPath}</code>
-                    </div>
-                    <button class="btn btn-secondary" onclick="window.request('system.client_ready', {}); window.ui.closeModal();">
-                        <i data-lucide="refresh-cw"></i>
-                        Reload
-                    </button>
-                </div>
-            `;
-            break;
-
-        case 'plugins':
-            container.innerHTML = `
-                <h3>Plugins</h3>
-                <p style="color: var(--text-secondary); margin-bottom: 20px;">
-                    Manage your installed plugins. Click the Plugin Store button in the activity bar for the full plugin manager.
-                </p>
-                <button class="btn btn-primary" onclick="document.getElementById('plugin-store-btn').click(); window.ui.closeModal();">
-                    <i data-lucide="package-plus"></i>
-                    Open Plugin Manager
-                </button>
-            `;
-            break;
-
-        case 'api-keys':
-            await renderApiKeysSection(container);
-            break;
-
-        case 'models':
-            await renderModelsSection(container);
-            break;
-
-        default:
-            container.innerHTML = '<p>Section not found.</p>';
+    // Handle Fixed Sections
+    if (section === 'api-keys') {
+        await renderApiKeysSection(container);
+        return;
     }
+    if (section === 'models') {
+        await renderModelsSection(container);
+        return;
+    }
+
+    // Handle Dynamic Sections
+    container.innerHTML = `
+        <div class="settings-header">
+            <h3>${section.charAt(0).toUpperCase() + section.slice(1)} Settings</h3>
+            <p class="settings-description">
+                Configure your ${section} settings.
+            </p>
+        </div>
+        <div id="dynamic-settings-form" style="display: flex; flex-direction: column; gap: 24px; margin-top: 20px;"></div>
+    `;
+
+    const formContainer = container.querySelector('#dynamic-settings-form');
+
+    // Determine data to render
+    let sectionData = {};
+    if (section === 'general') {
+        // Filter functionality primitives
+        Object.keys(settings).forEach(key => {
+            const val = settings[key];
+            if (typeof val !== 'object' || val === null || Array.isArray(val)) {
+                sectionData[key] = val;
+            }
+        });
+
+        // Add Vault Path as read-only
+        formContainer.innerHTML += `
+             <div class="setting-item">
+                <label>Vault Path</label>
+                <div class="setting-value">
+                    <code style="background: var(--surface-color); padding: 4px 8px; border-radius: 4px;">${vaultPath}</code>
+                </div>
+            </div>
+        `;
+    } else {
+        sectionData = settings[section] || {};
+    }
+
+    renderDynamicForm(formContainer, sectionData, [section], settings);
 
     if (window.lucide) window.lucide.createIcons();
 }
+
+/**
+ * Recursively render form fields
+ * path: Array of keys to reach current level (e.g. ['editor'])
+ */
+function renderDynamicForm(container, data, path, fullSettings) {
+    if (!data || Object.keys(data).length === 0) {
+        container.innerHTML += `<p class="text-secondary">No settings available.</p>`;
+        return;
+    }
+
+    Object.keys(data).forEach(key => {
+        const val = data[key];
+        const currentPath = [...path, key]; // Full path for updates
+        const fieldId = currentPath.join('.');
+
+        const itemDiv = document.createElement('div');
+        itemDiv.className = 'settings-group'; // Wrapper
+
+        if (typeof val === 'boolean') {
+            itemDiv.innerHTML = `
+                <div class="settings-item">
+                    <label>${formatLabel(key)}</label>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="${fieldId}" ${val ? 'checked' : ''}>
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+            `;
+            // Bind
+            setTimeout(() => {
+                const el = document.getElementById(fieldId);
+                if (el) el.addEventListener('change', (e) => updateSetting(fullSettings, currentPath, e.target.checked));
+            }, 0);
+
+        } else if (typeof val === 'number') {
+            itemDiv.innerHTML = `
+                 <div class="settings-item">
+                    <label>${formatLabel(key)}</label>
+                    <input type="number" class="filter-select" id="${fieldId}" value="${val}">
+                </div>
+            `;
+            setTimeout(() => {
+                const el = document.getElementById(fieldId);
+                if (el) el.addEventListener('change', (e) => updateSetting(fullSettings, currentPath, Number(e.target.value)));
+            }, 0);
+
+        } else if (typeof val === 'string') {
+            // Heuristic for Themes or Enums?
+            // If key is 'theme', force a dropdown
+            if (key === 'theme') {
+                // Hardcoded theme options for now, or fetch?
+                // Let's stick to system/light/dark
+                itemDiv.innerHTML = `
+                    <div class="settings-item">
+                        <label>Theme</label>
+                        <select class="filter-select" id="${fieldId}">
+                            <option value="system" ${val === 'system' ? 'selected' : ''}>System Default</option>
+                            <option value="light" ${val === 'light' ? 'selected' : ''}>Light</option>
+                            <option value="dark" ${val === 'dark' ? 'selected' : ''}>Dark</option>
+                        </select>
+                    </div>
+                `;
+                setTimeout(() => {
+                    const el = document.getElementById(fieldId);
+                    if (el) el.addEventListener('change', (e) => updateSetting(fullSettings, currentPath, e.target.value));
+                }, 0);
+            } else {
+                itemDiv.innerHTML = `
+                     <div class="settings-item">
+                        <label>${formatLabel(key)}</label>
+                        <input type="text" class="filter-select" id="${fieldId}" value="${val}">
+                    </div>
+                `;
+                setTimeout(() => {
+                    const el = document.getElementById(fieldId);
+                    if (el) el.addEventListener('change', (e) => updateSetting(fullSettings, currentPath, e.target.value));
+                }, 0);
+            }
+        } else if (typeof val === 'object' && val !== null) {
+            // Nested object (subsection)
+            itemDiv.className = 'settings-subsection';
+            itemDiv.style.marginLeft = '10px';
+            itemDiv.style.borderLeft = '2px solid var(--border-subtle)';
+            itemDiv.style.paddingLeft = '10px';
+
+            itemDiv.innerHTML = `<h4 style="margin: 10px 0;">${formatLabel(key)}</h4>`;
+
+            // Recurse
+            const subContainer = document.createElement('div');
+            renderDynamicForm(subContainer, val, currentPath, fullSettings);
+            itemDiv.appendChild(subContainer);
+        }
+
+        container.appendChild(itemDiv);
+    });
+}
+
+function formatLabel(key) {
+    // camelCase to Words
+    return key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+}
+
+async function updateSetting(settings, path, value) {
+    // Deep set
+    let current = settings;
+    for (let i = 0; i < path.length - 1; i++) {
+        const key = path[i];
+        if (key === 'general') continue; // Virtual root
+        if (!current[key]) current[key] = {};
+        current = current[key];
+    }
+
+    // Handle 'general' stripping
+    const lastKey = path[path.length - 1];
+
+    // Correct way:
+    // path is ['general', 'theme'] -> settings['theme']
+    // path is ['editor', 'fontSize'] -> settings['editor']['fontSize']
+
+    let target = settings;
+    if (path[0] === 'general') {
+        // Root primitives
+        target[lastKey] = value;
+    } else {
+        // Follow path
+        let c = settings;
+        for (let i = 0; i < path.length - 1; i++) {
+            c = c[path[i]];
+        }
+        c[lastKey] = value;
+    }
+
+    // Save
+    try {
+        const params = new URLSearchParams(window.location.search);
+        const vaultPath = params.get('vault') || params.get('path') || '';
+        await settingsApi.saveVaultSettings(settings);
+
+        // Notify app
+        window.dispatchEvent(new CustomEvent('settings-changed', { detail: { settings } }));
+        console.log('[Settings] Saved:', path.join('.'), value);
+
+    } catch (e) {
+        console.error('Failed to save settings:', e);
+        alert('Failed to save settings');
+    }
+}
+
+/**
+ * Apply settings to the UI
+ */
+function applySettings(settings) {
+    if (!settings) return;
+
+    // Apply theme
+    if (settings.theme) {
+        // theme logic is handled by pages/themes.js via event listener?
+        // or we call applyTheme here if imported?
+        // settings.js imports applyTheme from themes.js
+        applyTheme(settings.theme);
+    }
+}
+
+// -------------------------------------------------------------------------
+// Existing Fixed Sections (API Keys, Models) - Reserved
+// -------------------------------------------------------------------------
 
 /**
  * Render API Keys section
@@ -192,301 +411,205 @@ function renderApiKeysList() {
 
     if (!listEl) return;
 
-    loadingEl.style.display = 'none';
+    if (loadingEl) loadingEl.style.display = 'none';
     listEl.style.display = 'block';
 
-    let html = '<div class="api-keys-grid">';
+    const providers = Object.entries(providersStatus);
 
-    for (const [providerId, info] of Object.entries(providersStatus)) {
-        const isConfigured = info.configured;
-        const statusClass = isConfigured ? 'status-configured' : 'status-not-configured';
-        const statusText = isConfigured ? 'Configured' : 'Not configured';
-
-        html += `
-            <div class="api-key-card">
-                <div class="api-key-header">
-                    <span class="provider-name">${info.name}</span>
-                    <span class="provider-status ${statusClass}">${statusText}</span>
-                </div>
-                <div class="api-key-body">
-                    ${isConfigured ? `
-                        <div class="api-key-actions">
-                            <button class="btn btn-sm btn-secondary" onclick="verifyApiKey('${providerId}')">
-                                <i data-lucide="check-circle"></i> Verify
-                            </button>
-                            <button class="btn btn-sm btn-danger" onclick="deleteApiKey('${providerId}')">
-                                <i data-lucide="trash-2"></i> Remove
-                            </button>
-                        </div>
-                    ` : `
-                        <div class="api-key-input-group">
-                            <input type="password" id="api-key-${providerId}" placeholder="Enter API key..." class="api-key-input">
-                            <button class="btn btn-sm btn-primary" onclick="saveApiKey('${providerId}')">
-                                <i data-lucide="save"></i> Save
-                            </button>
-                        </div>
-                    `}
-                </div>
-            </div>
-        `;
+    if (providers.length === 0) {
+        listEl.innerHTML = '<p>No providers found.</p>';
+        return;
     }
 
-    // Add Ollama detection card
-    html += `
-        <div class="api-key-card ollama-card">
-            <div class="api-key-header">
-                <span class="provider-name">Ollama (Local)</span>
-                <span class="provider-status" id="ollama-status">Checking...</span>
-            </div>
-            <div class="api-key-body">
-                <button class="btn btn-sm btn-secondary" onclick="detectOllama()">
-                    <i data-lucide="search"></i> Detect Ollama
-                </button>
-                <div id="ollama-models" style="margin-top: 10px; display: none;"></div>
-            </div>
+    listEl.innerHTML = `
+        <div class="models-grid" style="grid-template-columns: 1fr;">
+            ${providers.map(([id, info]) => `
+                <div class="model-card">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <div style="
+                                width: 40px; 
+                                height: 40px; 
+                                border-radius: 8px; 
+                                background: ${info.configured ? 'rgba(76, 175, 80, 0.1)' : 'var(--surface-color)'}; 
+                                display: flex; 
+                                align-items: center; 
+                                justify-content: center;
+                                color: ${info.configured ? '#4caf50' : 'var(--text-secondary)'};
+                            ">
+                                <i data-lucide="${info.configured ? 'check-circle' : 'key'}"></i>
+                            </div>
+                            <div>
+                                <h4 style="margin: 0 0 4px 0;">${info.name || id}</h4>
+                                <span class="badge ${info.configured ? 'badge-primary' : 'badge-secondary'}">
+                                    ${info.configured ? 'Configured' : 'Not Configured'}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="setting-item">
+                        <div class="setting-value" style="display: flex; gap: 8px;">
+                            <input type="password" 
+                                id="key-${id}" 
+                                placeholder="Enter API Key" 
+                                value="${info.configured ? '••••••••••••••••' : ''}"
+                                style="flex: 1; font-family: monospace;"
+                            >
+                            <button class="btn btn-secondary" onclick="saveApiKey('${id}')">
+                                <i data-lucide="save"></i>
+                                Save
+                            </button>
+                            ${info.configured ? `
+                                <button class="btn btn-icon danger" onclick="deleteApiKey('${id}')" title="Delete Key">
+                                    <i data-lucide="trash-2"></i>
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>
+            `).join('')}
         </div>
     `;
 
-    html += '</div>';
-    listEl.innerHTML = html;
+    // Expose functions globally for onclick
+    window.saveApiKey = async (providerId) => {
+        const input = document.getElementById(`key-${providerId}`);
+        const key = input.value;
+
+        if (!key) {
+            alert('Please enter an API key');
+            return;
+        }
+
+        try {
+            await request('settings.set_provider_key', {
+                provider: providerId,
+                key: key
+            });
+
+            // Reload status
+            await renderApiKeysSection(document.getElementById('settings-modal-content'));
+            alert('API key saved successfully');
+        } catch (e) {
+            alert(`Failed to save key: ${e.message}`);
+        }
+    };
+
+    window.deleteApiKey = async (providerId) => {
+        if (!confirm('Are you sure you want to delete this API key?')) return;
+
+        try {
+            await request('settings.delete_provider_key', {
+                provider: providerId
+            });
+
+            // Reload status
+            await renderApiKeysSection(document.getElementById('settings-modal-content'));
+        } catch (e) {
+            alert(`Failed to delete key: ${e.message}`);
+        }
+    };
 
     if (window.lucide) window.lucide.createIcons();
-
-    // Check Ollama status
-    detectOllama();
 }
 
-// Global functions for button handlers
-window.saveApiKey = async function (provider) {
-    const input = document.getElementById(`api-key-${provider}`);
-    const apiKey = input?.value?.trim();
-
-    if (!apiKey) {
-        alert('Please enter an API key');
-        return;
-    }
-
-    try {
-        const res = await request('settings.store_api_key', { provider, api_key: apiKey });
-
-        const result = res.result?.result || res.result || {};
-
-        if (result.status === 'success') {
-            providersStatus[provider] = { ...providersStatus[provider], configured: true };
-            renderApiKeysList();
-        } else {
-            alert('Error: ' + (result.error || 'Failed to save API key'));
-        }
-    } catch (e) {
-        alert('Error: ' + e.message);
-    }
-};
-
-window.deleteApiKey = async function (provider) {
-    if (!confirm(`Remove API key for ${providersStatus[provider]?.name || provider}?`)) {
-        return;
-    }
-
-    try {
-        const res = await request('settings.delete_api_key', { provider });
-
-        const result = res.result?.result || res.result || {};
-
-        if (result.status === 'success') {
-            providersStatus[provider] = { ...providersStatus[provider], configured: false };
-            renderApiKeysList();
-        } else {
-            alert('Error: ' + (result.error || 'Failed to delete API key'));
-        }
-    } catch (e) {
-        alert('Error: ' + e.message);
-    }
-};
-
-window.verifyApiKey = async function (provider) {
-    const card = document.querySelector(`.api-key-card`);
-
-    try {
-        const res = await request('settings.verify_api_key', { provider });
-
-        const result = res.result?.result || res.result || {};
-
-        if (result.valid) {
-            alert(`✅ ${providersStatus[provider]?.name} API key is valid!`);
-        } else {
-            alert(`❌ ${providersStatus[provider]?.name} API key verification failed: ${result.error || 'Invalid key'}`);
-        }
-    } catch (e) {
-        alert('Error: ' + e.message);
-    }
-};
-
-window.detectOllama = async function () {
-    const statusEl = document.getElementById('ollama-status');
-    const modelsEl = document.getElementById('ollama-models');
-
-    if (!statusEl) return;
-
-    statusEl.textContent = 'Checking...';
-    statusEl.className = 'provider-status';
-
-    try {
-        const res = await request('settings.detect_ollama', {});
-
-        const result = res.result?.result || res.result || {};
-
-        if (result.available) {
-            statusEl.textContent = 'Running';
-            statusEl.className = 'provider-status status-configured';
-
-            if (modelsEl && result.models?.length) {
-                modelsEl.style.display = 'block';
-                modelsEl.innerHTML = `
-                    <p style="font-size: 0.85rem; color: var(--text-secondary);">
-                        ${result.models.length} model(s) available:
-                    </p>
-                    <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px;">
-                        ${result.models.map(m => `
-                            <span class="tag">${m.name}</span>
-                        `).join('')}
-                    </div>
-                `;
-            }
-        } else {
-            statusEl.textContent = 'Not running';
-            statusEl.className = 'provider-status status-not-configured';
-            if (modelsEl) modelsEl.style.display = 'none';
-        }
-    } catch (e) {
-        statusEl.textContent = 'Error';
-        statusEl.className = 'provider-status status-not-configured';
-    }
-};
-
 /**
- * Render Model Categories section
+ * Render Models Config Section
  */
 async function renderModelsSection(container) {
     container.innerHTML = `
         <h3>Model Categories</h3>
         <p style="color: var(--text-secondary); margin-bottom: 20px;">
-            Assign models to each category. Plugins use these categories to access the appropriate model.
+            Select which models to use for different tasks.
         </p>
         <div id="models-loading" style="text-align: center; padding: 20px;">
-            <p>Loading models...</p>
+            <p>Loading configuration...</p>
         </div>
-        <div id="models-config" style="display: none;"></div>
+        <div id="models-config-form" style="display: none;"></div>
     `;
 
     try {
-        // Load available models
-        const modelsRes = await request('settings.get_available_models', {});
-        availableModels = modelsRes.result?.result?.models || modelsRes.result?.models || {};
+        // Fetch config and available models
+        const [configRes, modelsRes] = await Promise.all([
+            request('settings.get_model_config', {}),
+            request('settings.list_models', {})
+        ]);
 
-        // Load category config
-        const catRes = await request('settings.get_model_categories', {});
-        const catResult = catRes.result?.result || catRes.result || {};
-        categoriesInfo = catResult.categories_info || {};
-        categoryConfig = catResult.configured || {};
+        categoryConfig = configRes.result || {};
+        const modelsData = modelsRes.result || {};
+        availableModels = modelsData.models || {};
+        categoriesInfo = modelsData.categories || {};
 
-        renderModelsCategoryConfig();
+        renderModelsForm();
+
     } catch (e) {
         container.querySelector('#models-loading').innerHTML = `
-            <p style="color: var(--error-color);">Error loading models: ${e.message}</p>
+            <p style="color: var(--error-color);">Error loading model config: ${e.message}</p>
         `;
     }
 }
 
-/**
- * Render model category configuration
- */
-function renderModelsCategoryConfig() {
+function renderModelsForm() {
     const loadingEl = document.getElementById('models-loading');
-    const configEl = document.getElementById('models-config');
+    const formEl = document.getElementById('models-config-form');
 
-    if (!configEl) return;
+    if (!formEl) return;
 
-    loadingEl.style.display = 'none';
-    configEl.style.display = 'block';
+    if (loadingEl) loadingEl.style.display = 'none';
+    formEl.style.display = 'flex';
+    formEl.style.flexDirection = 'column';
+    formEl.style.gap = '20px';
 
-    // Build flat list of all available models
-    const allModels = [];
-    for (const [providerId, models] of Object.entries(availableModels)) {
-        for (const model of models) {
-            allModels.push({
-                ...model,
-                provider: providerId,
-                fullId: `${providerId}/${model.id}`
-            });
-        }
-    }
+    // Group models by provider for select options
+    const modelOptions = Object.entries(availableModels).map(([id, info]) => {
+        return `<option value="${id}">${info.name} (${info.provider})</option>`;
+    }).join('');
 
-    let html = '<div class="category-config-grid">';
+    const categories = [
+        { id: 'chat_model', label: 'Chat & Reasoning', desc: 'Main model used for conversation and planning' },
+        { id: 'fast_model', label: 'Fast / Tool Use', desc: 'Smaller model for quick tasks and tool execution' },
+        { id: 'embedding_model', label: 'Embeddings', desc: 'Model used for semantic search and memory' }
+    ];
 
-    for (const [categoryId, info] of Object.entries(categoriesInfo)) {
-        const currentModel = categoryConfig[categoryId] || '';
-        const categoryModels = allModels.filter(m => m.categories.includes(categoryId));
+    formEl.innerHTML = categories.map(cat => {
+        const currentVal = categoryConfig[cat.id];
 
-        html += `
-            <div class="category-config-card">
-                <div class="category-header">
-                    <div class="category-title">
-                        <i data-lucide="${info.icon || 'cpu'}"></i>
-                        <span>${info.name || categoryId}</span>
-                    </div>
-                    <span class="category-description">${info.description || ''}</span>
-                </div>
-                <div class="category-body">
-                    <select id="category-${categoryId}" class="category-select" onchange="setCategoryModel('${categoryId}', this.value)">
-                        <option value="">Not configured</option>
-                        ${categoryModels.map(m => `
-                            <option value="${m.fullId}" ${currentModel === m.fullId ? 'selected' : ''}>
-                                ${m.name} (${m.provider})
+        return `
+            <div class="setting-item">
+                <label>
+                    ${cat.label}
+                    <span style="font-weight: normal; color: var(--text-secondary); font-size: 0.9em; display: block; margin-top: 4px;">
+                        ${cat.desc}
+                    </span>
+                </label>
+                <div class="setting-value">
+                    <select id="cat-${cat.id}" class="filter-select" onchange="updateModelCategory('${cat.id}', this.value)">
+                        <option value="">Select a model...</option>
+                        ${Object.entries(availableModels).map(([id, info]) => `
+                            <option value="${id}" ${currentVal === id ? 'selected' : ''}>
+                                ${info.name} (${info.provider})
                             </option>
                         `).join('')}
                     </select>
                 </div>
             </div>
         `;
-    }
+    }).join('');
 
-    html += '</div>';
+    // Expose update function
+    window.updateModelCategory = async (category, modelId) => {
+        if (!modelId) return;
 
-    if (Object.keys(availableModels).length === 0) {
-        html = `
-            <div class="empty-state">
-                <i data-lucide="alert-circle"></i>
-                <p>No models available. Configure API keys first.</p>
-            </div>
-        `;
-    }
-
-    configEl.innerHTML = html;
-
-    if (window.lucide) window.lucide.createIcons();
-}
-
-window.setCategoryModel = async function (category, model) {
-    if (!model) return;
-
-    try {
-        const res = await request('settings.set_model_category', { category, model });
-
-        const result = res.result?.result || res.result || {};
-
-        if (result.status === 'success') {
-            categoryConfig[category] = model;
-            console.log(`[Settings] Set ${category} model to ${model}`);
-
-            // Emit event so model selector can refresh
-            window.dispatchEvent(new CustomEvent('model-categories-updated', {
-                detail: { category, model }
-            }));
-        } else {
-            alert('Error: ' + (result.error || 'Failed to save model configuration'));
+        try {
+            await request('settings.set_model_category', {
+                category: category,
+                model_id: modelId
+            });
+            console.log(`Updated ${category} to ${modelId}`);
+        } catch (e) {
+            console.error('Failed to update model category:', e);
+            alert('Failed to update model setting');
         }
-    } catch (e) {
-        alert('Error: ' + e.message);
-    }
-};
-
+    };
+}

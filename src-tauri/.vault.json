@@ -1,0 +1,11 @@
+{
+  "settings": {
+    "autoUpdate": false,
+    "editor": {
+      "fontFamily": "Fira Code, monospace",
+      "fontSize": 15,
+      "wordWrap": "on"
+    },
+    "theme": "dark"
+  }
+}

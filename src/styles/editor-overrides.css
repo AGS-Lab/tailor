@@ -1,0 +1,10 @@
+/* Editor Font Overrides */
+.monaco-editor,
+.code-editor,
+textarea.editor-input,
+#chat-area,
+pre,
+code {
+    font-size: var(--editor-font-size) !important;
+    font-family: var(--editor-font-family) !important;
+}

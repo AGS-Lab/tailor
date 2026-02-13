@@ -2,7 +2,11 @@ use std::collections::HashMap;
 use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use anyhow::{Result, Context};
+use anyhow::{Result, Context, anyhow};
+use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
+use futures::{SinkExt, StreamExt};
+use url::Url;
+
 
 pub struct SidecarProcess {
     pub child: Child,
@@ -212,6 +216,62 @@ impl SidecarManager {
         }
 
         anyhow::bail!("Python not found in PATH")
+    }
+
+    /// Send a command to the sidecar via WebSocket
+    pub async fn send_command(
+        &self,
+        window_label: &str,
+        method: &str,
+        params: serde_json::Value,
+    ) -> Result<serde_json::Value> {
+        // 1. Get port
+        let port = self.get_ws_port(window_label)
+            .await
+            .ok_or_else(|| anyhow!("Sidecar not found for window: {}", window_label))?;
+
+        // 2. Connect
+        let url = Url::parse(&format!("ws://127.0.0.1:{}", port))
+            .context("Invalid WebSocket URL")?;
+
+        let (mut ws_stream, _) = connect_async(url.to_string())
+            .await
+            .context("Failed to connect to sidecar WebSocket")?;
+
+
+        // 3. Construct JSON-RPC Request
+        let request_id = uuid::Uuid::new_v4().to_string();
+        let request = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": method,
+            "params": params,
+            "id": request_id
+        });
+
+        // 4. Send Request
+        let request_text = serde_json::to_string(&request)?;
+        ws_stream.send(Message::Text(request_text)).await
+            .context("Failed to send WebSocket message")?;
+
+        // 5. Await Response
+        // We expect a single response for the request
+        while let Some(msg) = ws_stream.next().await {
+            let msg = msg.context("WebSocket stream error")?;
+            match msg {
+                Message::Text(text) => {
+                    let response: serde_json::Value = serde_json::from_str(&text)
+                        .context("Failed to parse sidecar response")?;
+                    
+                    if response.get("id").and_then(|id| id.as_str()) == Some(&request_id) {
+                         return Ok(response);
+                    }
+                }
+                Message::Close(_) => break,
+                _ => {}
+            }
+        }
+
+        Err(anyhow!("Connection closed without valid response"))
     }
 }
 

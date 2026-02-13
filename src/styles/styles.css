@@ -43,6 +43,11 @@
     /* === TYPOGRAPHY === */
     --font-main: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+    /* Editor Defaults */
+    --editor-font-size: 14px;
+    --editor-font-family: var(--font-mono);
+
     --font-weight-light: 300;
     --font-weight-normal: 400;
     --font-weight-medium: 500;
@@ -103,6 +108,63 @@
 
 ::-webkit-scrollbar-corner {
     background: transparent;
+}
+
+/* ========================================
+   CUSTOM TITLEBAR
+   ======================================== */
+#titlebar {
+    height: 36px;
+    background: var(--bg-sidebar);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 8px 0 16px;
+    user-select: none;
+    -webkit-user-select: none;
+    flex-shrink: 0;
+    z-index: 1000;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.titlebar-title {
+    font-family: var(--font-main);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    letter-spacing: 0.03em;
+    pointer-events: none;
+}
+
+.titlebar-buttons {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.titlebar-btn {
+    width: 32px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    padding: 0;
+}
+
+.titlebar-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.titlebar-btn-close:hover {
+    background: #e03131;
+    color: #ffffff;
 }
 
 body {
@@ -294,8 +356,8 @@ input:focus {
    ======================================== */
 .app-container {
     display: flex;
-    width: 100vw;
-    height: 100vh;
+    width: 100%;
+    flex: 1;
     overflow: hidden;
     background: var(--bg-app);
 }
@@ -1550,6 +1612,7 @@ body .lm_splitter.lm_horizontal:hover::after {
     line-height: 1.4;
     display: -webkit-box;
     -webkit-line-clamp: 2;
+    line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
 }
@@ -2994,6 +3057,83 @@ body .lm_splitter.lm_horizontal:hover::after {
     color: var(--accent-success);
 }
 
+/* ========================================
+   15. VAULT SETTINGS MODAL
+   ======================================== */
+.vault-settings-modal {
+    display: flex;
+    height: 100%;
+    overflow: hidden;
+}
+
+.settings-nav-modal {
+    width: 200px;
+    background: var(--bg-secondary);
+    border-right: 1px solid var(--border-subtle);
+    display: flex;
+    flex-direction: column;
+    padding: 12px;
+    gap: 4px;
+    flex-shrink: 0;
+    overflow-y: auto;
+}
+
+.settings-nav-item-modal {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0.9rem;
+    width: 100%;
+    text-align: left;
+}
+
+.settings-nav-item-modal:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.settings-nav-item-modal.active {
+    background: rgba(0, 135, 108, 0.1);
+    color: var(--accent-primary);
+    font-weight: 500;
+}
+
+.settings-nav-item-modal i {
+    width: 18px;
+    height: 18px;
+}
+
+.settings-nav-header {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    padding: 0 12px;
+    margin-top: 8px;
+}
+
+.settings-modal-content {
+    flex: 1;
+    padding: 24px;
+    overflow-y: auto;
+    background: var(--bg-app);
+    height: 100%;
+}
+
+.settings-modal-content h3 {
+    margin-top: 0;
+    margin-bottom: 8px;
+}
+
+
 .toast-error svg,
 .toast-error i {
     color: var(--accent-error);
@@ -3438,6 +3578,93 @@ input:checked+.toggle-slider:before {
     .themes-grid {
         grid-template-columns: 1fr;
     }
+}
+
+/* Toggle Switch */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 36px;
+    height: 20px;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--border-subtle);
+    transition: .4s;
+    border-radius: 20px;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 16px;
+    width: 16px;
+    left: 2px;
+    bottom: 2px;
+    background-color: white;
+    transition: .4s;
+    border-radius: 50%;
+}
+
+input:checked+.slider {
+    background-color: var(--accent-primary);
+}
+
+input:focus+.slider {
+    box-shadow: 0 0 1px var(--accent-primary);
+}
+
+input:checked+.slider:before {
+    transform: translateX(16px);
+}
+
+/* Rounded sliders (already handled above but keeping class for compat) */
+.slider.round {
+    border-radius: 20px;
+}
+
+.slider.round:before {
+    border-radius: 50%;
+}
+
+/* Settings Row Layout */
+.setting-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+}
+
+.setting-info {
+    flex: 1;
+    margin-right: 16px;
+}
+
+.setting-desc {
+    font-size: 0.85em;
+    color: var(--text-secondary);
+    margin: 4px 0 0 0;
+}
+
+.dynamic-setting-item {
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.dynamic-setting-item:last-child {
+    border-bottom: none;
 }
 
 /* Theme Card */

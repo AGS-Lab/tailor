@@ -43,7 +43,7 @@ pub async fn open_vault(
 
     // Register vault in registry
     let vault_path_buf = PathBuf::from(&vault_path);
-    let config_path = vault_path_buf.join(".vault.json");
+    let config_path = vault_path_buf.join(".vault.toml");
     
     let mut name = vault_path_buf.file_name()
         .map(|n| n.to_string_lossy().to_string())
@@ -52,7 +52,7 @@ pub async fn open_vault(
 
     if config_path.exists() {
         if let Ok(contents) = fs::read_to_string(&config_path) {
-            if let Ok(config) = serde_json::from_str::<serde_json::Value>(&contents) {
+            if let Ok(config) = toml::from_str::<serde_json::Value>(&contents) {
                  if let Some(n) = config.get("name").and_then(|v| v.as_str()) {
                      name = n.to_string();
                  }
@@ -84,30 +84,16 @@ pub async fn open_vault(
 #[tauri::command]
 pub async fn send_to_sidecar(
     window_label: String,
-    command: serde_json::Value,
+    method: String,
+    params: serde_json::Value,
     state: State<'_, AppState>,
 ) -> Result<serde_json::Value, String> {
-    println!("Sending command to sidecar '{}': {:?}", window_label, command);
+    // println!("Sending command to sidecar '{}': {}", window_label, method);
 
-    // Get WebSocket port
-    let ws_port = state.sidecar_manager
-        .get_ws_port(&window_label)
+    state.sidecar_manager
+        .send_command(&window_label, &method, params)
         .await
-        .ok_or_else(|| format!("Sidecar not found for window: {}", window_label))?;
-
-    // In a full implementation, you would:
-    // 1. Connect to WebSocket at ws://localhost:{ws_port}
-    // 2. Send JSON-RPC command
-    // 3. Wait for response
-    // For now, return a placeholder
-
-    // TODO: Implement WebSocket client communication
-    println!("Would send to ws://localhost:{}", ws_port);
-
-    Ok(serde_json::json!({
-        "status": "pending",
-        "message": "WebSocket communication not yet implemented"
-    }))
+        .map_err(|e| format!("Sidecar error: {}", e))
 }
 
 /// Close a vault window and terminate its sidecar
@@ -191,15 +177,15 @@ pub async fn list_vaults(app: AppHandle) -> Result<Vec<VaultListItem>, String> {
     if registry_path.exists() {
         if let Ok(contents) = fs::read_to_string(&registry_path) {
                 if let Ok(registry) = serde_json::from_str::<Vec<VaultListItem>>(&contents) {
-                    // Validate that vaults still exist and load info from .vault.json
+                    // Validate that vaults still exist and load info from .vault.toml
                     for mut vault in registry {
                         let vault_path = PathBuf::from(&vault.path);
                         if vault_path.exists() {
-                            // Try to load vault info from .vault.json
-                            let config_path = vault_path.join(".vault.json");
+                            // Try to load vault info from .vault.toml
+                            let config_path = vault_path.join(".vault.toml");
                             if config_path.exists() {
                                 if let Ok(config_contents) = fs::read_to_string(&config_path) {
-                                    if let Ok(config) = serde_json::from_str::<serde_json::Value>(&config_contents) {
+                                    if let Ok(config) = toml::from_str::<serde_json::Value>(&config_contents) {
                                         if let Some(name) = config.get("name").and_then(|v| v.as_str()) {
                                             vault.name = name.to_string();
                                         }
@@ -223,7 +209,7 @@ pub async fn list_vaults(app: AppHandle) -> Result<Vec<VaultListItem>, String> {
 #[tauri::command]
 pub async fn get_vault_info(vault_path: String) -> Result<serde_json::Value, String> {
     let path = PathBuf::from(&vault_path);
-    let config_path = path.join(".vault.json");
+    let config_path = path.join(".vault.toml");
     
     if !config_path.exists() {
         return Err("Vault config file not found".to_string());
@@ -232,7 +218,7 @@ pub async fn get_vault_info(vault_path: String) -> Result<serde_json::Value, Str
     let contents = fs::read_to_string(&config_path)
         .map_err(|e| format!("Failed to read vault config: {}", e))?;
     
-    let config: serde_json::Value = serde_json::from_str(&contents)
+    let config: serde_json::Value = toml::from_str(&contents)
         .map_err(|e| format!("Failed to parse vault config: {}", e))?;
     
     Ok(config)
@@ -246,17 +232,17 @@ pub async fn update_plugin_config(
     config: serde_json::Value,
 ) -> Result<(), String> {
     let path = PathBuf::from(&vault_path);
-    let config_path = path.join(".vault.json");
+    let config_path = path.join(".vault.toml");
     
     // Read existing config
     let contents = if config_path.exists() {
         fs::read_to_string(&config_path)
             .map_err(|e| format!("Failed to read vault config: {}", e))?
     } else {
-        r#"{"plugins": {}}"#.to_string()
+        r#"[plugins]"#.to_string()
     };
     
-    let mut vault_config: serde_json::Value = serde_json::from_str(&contents)
+    let mut vault_config: serde_json::Value = toml::from_str(&contents)
         .map_err(|e| format!("Failed to parse vault config: {}", e))?;
     
     // Ensure plugins object exists
@@ -281,7 +267,7 @@ pub async fn update_plugin_config(
     }
     
     // Write back
-    let updated = serde_json::to_string_pretty(&vault_config)
+    let updated = toml::to_string_pretty(&vault_config)
         .map_err(|e| format!("Failed to serialize config: {}", e))?;
     
     fs::write(&config_path, updated)
@@ -343,7 +329,7 @@ pub async fn create_vault(
     // Get current timestamp in ISO 8601 format
     let created_iso = chrono::Utc::now().to_rfc3339();
     
-    // Create .vault.json file
+    // Create .vault.toml file
     let vault_config = serde_json::json!({
         "id": vault_id,
         "name": name,
@@ -352,11 +338,11 @@ pub async fn create_vault(
         "created": created_iso
     });
     
-    let config_path = vault_path.join(".vault.json");
-    let config_json = serde_json::to_string_pretty(&vault_config)
+    let config_path = vault_path.join(".vault.toml");
+    let config_toml = toml::to_string_pretty(&vault_config)
         .map_err(|e| format!("Failed to serialize vault config: {}", e))?;
     
-    fs::write(&config_path, config_json)
+    fs::write(&config_path, config_toml)
         .map_err(|e| format!("Failed to write vault config: {}", e))?;
     
     println!("Created vault: {} at {}", name, path);
@@ -427,8 +413,29 @@ pub async fn get_plugin_details(_plugin_id: String) -> Result<serde_json::Value,
 
 /// Install plugin to vault
 #[tauri::command]
-pub async fn install_plugin(_vault_path: String, _plugin_repo: String, _plugin_name: String) -> Result<(), String> {
-    Err("Plugin installation not yet implemented".to_string())
+pub async fn install_plugin(
+    _vault_path: String, 
+    plugin_repo: String, 
+    plugin_name: String,
+    window: tauri::Window,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let window_label = window.label();
+    
+    // Bridge to Python: plugins.install
+    state.sidecar_manager
+        .send_command(
+            window_label, 
+            "plugins.install", 
+            serde_json::json!({
+                "repo_url": plugin_repo,
+                "plugin_name": plugin_name
+            })
+        )
+        .await
+        .map_err(|e| format!("Failed to install plugin: {}", e))?;
+        
+    Ok(())
 }
 
 /// Get installed plugins for a vault
@@ -457,45 +464,284 @@ pub async fn get_installed_plugins(vault_path: String) -> Result<Vec<serde_json:
     Ok(plugins)
 }
 
+fn merge_json(a: &mut serde_json::Value, b: serde_json::Value) {
+    match (a, b) {
+        (serde_json::Value::Object(a), serde_json::Value::Object(b)) => {
+            for (k, v) in b {
+                merge_json(a.entry(k).or_insert(serde_json::Value::Null), v);
+            }
+        }
+        (a, b) => *a = b,
+    }
+}
+
+/// Get effective settings (merged global + vault)
+#[tauri::command]
+pub async fn get_effective_settings(
+    vault_path: String,
+    app: AppHandle,
+) -> Result<serde_json::Value, String> {
+    // 1. Get Global Settings
+    let app_data_dir = app.path().app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+    let global_settings_path = app_data_dir.join("settings.toml");
+    
+    let mut settings = if global_settings_path.exists() {
+        let content = fs::read_to_string(&global_settings_path)
+            .map_err(|e| format!("Global settings read error: {}", e))?;
+        toml::from_str(&content)
+             .map_err(|e| format!("Global settings parse error: {}", e))?
+    } else {
+        serde_json::json!({
+            "theme": "system",
+            "autoUpdate": false,
+            "editor": {
+                "fontSize": 14,
+                "fontFamily": "Fira Code, monospace",
+                "wordWrap": "on"
+            }
+        })
+    };
+
+    // 2. Get Vault Settings
+    let vault_path_buf = PathBuf::from(&vault_path);
+    let vault_config_path = vault_path_buf.join(".vault.toml");
+    
+    if vault_config_path.exists() {
+        let content = fs::read_to_string(&vault_config_path);
+        
+        match content {
+            Ok(c) => {
+                match toml::from_str::<serde_json::Value>(&c) {
+                    Ok(vault_config) => {
+                        if let Some(vault_settings) = vault_config.get("settings") {
+                            // 3. Merge (Vault overrides Global)
+                            merge_json(&mut settings, vault_settings.clone());
+                        }
+                    },
+                    Err(e) => {
+                         println!("Warning: Failed to parse vault config, ignoring: {}", e);
+                    }
+                }
+            },
+            Err(e) => {
+                 println!("Warning: Failed to read vault config, ignoring: {}", e);
+            }
+        }
+    }
+
+    Ok(settings)
+}
+
+/// Get settings schema for UI generation
+#[tauri::command]
+pub async fn get_settings_schema() -> Result<serde_json::Value, String> {
+    Ok(serde_json::json!([
+        {
+            "id": "appearance",
+            "title": "Appearance",
+            "settings": [
+                {
+                    "key": "theme",
+                    "type": "select",
+                    "label": "Theme",
+                    "description": "Application color scheme",
+                    "options": [
+                        { "value": "system", "label": "System Default" },
+                        { "value": "light", "label": "Light" },
+                        { "value": "dark", "label": "Dark" }
+                    ],
+                    "default": "system"
+                }
+            ]
+        },
+        {
+            "id": "editor",
+            "title": "Editor",
+            "settings": [
+                {
+                    "key": "editor.fontSize",
+                    "type": "number",
+                    "label": "Font Size",
+                    "description": "Editor font size in pixels",
+                    "default": 14,
+                    "min": 8,
+                    "max": 32
+                },
+                {
+                    "key": "editor.fontFamily",
+                    "type": "text",
+                    "label": "Font Family",
+                    "description": "Font family for the editor (monospace recommended)",
+                    "default": "Fira Code, monospace"
+                },
+                {
+                    "key": "editor.wordWrap",
+                    "type": "select",
+                    "label": "Word Wrap",
+                    "description": "Wrap lines that exceed the viewport width",
+                    "options": [
+                        { "value": "off", "label": "Off" },
+                        { "value": "on", "label": "On" },
+                        { "value": "wordWrapColumn", "label": "Wrap at Column" },
+                        { "value": "bounded", "label": "Bounded" }
+                    ],
+                    "default": "on"
+                },
+                {
+                    "key": "editor.minimap.enabled",
+                    "type": "boolean",
+                    "label": "Minimap",
+                    "description": "Show the minimap",
+                    "default": true
+                }
+            ]
+        }
+    ]))
+}
+
 /// Get global settings
 #[tauri::command]
-pub async fn get_global_settings() -> Result<serde_json::Value, String> {
-    Ok(serde_json::json!({
-        "theme": "dark",
-        "autoUpdate": false,
-    }))
+pub async fn get_global_settings(app: AppHandle) -> Result<serde_json::Value, String> {
+    let app_data_dir = app.path().app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+        
+    let settings_path = app_data_dir.join("settings.toml");
+    
+    if settings_path.exists() {
+        let content = fs::read_to_string(&settings_path)
+            .map_err(|e| format!("Failed to read settings: {}", e))?;
+        toml::from_str(&content)
+            .map_err(|e| format!("Failed to parse settings: {}", e))
+    } else {
+        // Default settings
+        Ok(serde_json::json!({
+            "theme": "system",
+            "autoUpdate": false,
+        }))
+    }
 }
 
 /// Save global settings
 #[tauri::command]
-pub async fn save_global_settings(settings: serde_json::Value) -> Result<(), String> {
-    println!("Saving global settings: {:?}", settings);
+pub async fn save_global_settings(settings: serde_json::Value, app: AppHandle) -> Result<(), String> {
+    let app_data_dir = app.path().app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+        
+    fs::create_dir_all(&app_data_dir)
+        .map_err(|e| format!("Failed to create app data dir: {}", e))?;
+        
+    let settings_path = app_data_dir.join("settings.toml");
+    let content = toml::to_string_pretty(&settings)
+         .map_err(|e| format!("Failed to serialize settings: {}", e))?;
+         
+    fs::write(&settings_path, content)
+        .map_err(|e| format!("Failed to write settings: {}", e))?;
+        
     Ok(())
 }
 
 /// Get vault settings
 #[tauri::command]
-pub async fn get_vault_settings(_vault_path: String) -> Result<serde_json::Value, String> {
-    Ok(serde_json::json!({}))
+pub async fn get_vault_settings(vault_path: String) -> Result<serde_json::Value, String> {
+    let path = PathBuf::from(&vault_path);
+    let config_path = path.join(".vault.toml");
+    
+    if !config_path.exists() {
+        return Ok(serde_json::json!({}));
+    }
+    
+    let content = fs::read_to_string(&config_path)
+        .map_err(|e| format!("Failed to read vault config: {}", e))?;
+        
+    let config: serde_json::Value = toml::from_str(&content)
+        .map_err(|e| format!("Failed to parse vault config: {}", e))?;
+        
+    Ok(config.get("settings").cloned().unwrap_or(serde_json::json!({})))
 }
 
 /// Save vault settings
 #[tauri::command]
 pub async fn save_vault_settings(vault_path: String, settings: serde_json::Value) -> Result<(), String> {
-    println!("Saving vault settings for {}: {:?}", vault_path, settings);
+    let path = PathBuf::from(&vault_path);
+    let config_path = path.join(".vault.toml");
+    
+    let mut config = if config_path.exists() {
+        let content = fs::read_to_string(&config_path)
+            .map_err(|e| format!("Failed to read vault config: {}", e))?;
+        toml::from_str(&content)
+            .map_err(|e| format!("Failed to parse vault config: {}", e))?
+    } else {
+        serde_json::json!({})
+    };
+    
+    // Ensure config is an object
+    if !config.is_object() {
+        config = serde_json::json!({});
+    }
+    
+    // Update settings key
+    if let serde_json::Value::Object(ref mut map) = config {
+        map.insert("settings".to_string(), settings);
+    }
+    
+    let content = toml::to_string_pretty(&config)
+        .map_err(|e| format!("Failed to serialize config: {}", e))?;
+        
+    fs::write(&config_path, content)
+        .map_err(|e| format!("Failed to write vault config: {}", e))?;
+        
     Ok(())
 }
 
 /// Get API keys
 #[tauri::command]
-pub async fn get_api_keys() -> Result<serde_json::Value, String> {
-    Ok(serde_json::json!({}))
+pub async fn get_api_keys(
+    window: tauri::Window,
+    state: State<'_, AppState>,
+) -> Result<serde_json::Value, String> {
+    let window_label = window.label();
+    
+    // Bridge to Python: settings.list_providers
+    let result = state.sidecar_manager
+        .send_command(
+            window_label,
+            "settings.list_providers",
+            serde_json::json!({})
+        )
+        .await
+        .map_err(|e| format!("Failed to get API keys: {}", e))?;
+    
+    // Extract actual keys from result (Python returns {status: success, data: {...}})
+    if let Some(data) = result.get("data") {
+        Ok(data.clone())
+    } else {
+        Ok(serde_json::json!({}))
+    }
 }
 
 /// Save API key
 #[tauri::command]
-pub async fn save_api_key(key_name: String, _key_value: String) -> Result<(), String> {
-    println!("Saving API key: {}", key_name);
+pub async fn save_api_key(
+    key_name: String,
+    key_value: String,
+    window: tauri::Window,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let window_label = window.label();
+    
+    state.sidecar_manager
+        .send_command(
+            window_label,
+            "settings.set_provider_key",
+            serde_json::json!({
+                "provider": key_name,
+                "key": key_value
+            })
+        )
+        .await
+        .map_err(|e| format!("Failed to save API key: {}", e))?;
+        
     Ok(())
 }
 
@@ -508,14 +754,66 @@ pub async fn delete_api_key(key_name: String) -> Result<(), String> {
 
 /// Search conversations
 #[tauri::command]
-pub async fn search_conversations(_query: String, _filters: serde_json::Value) -> Result<Vec<serde_json::Value>, String> {
-    Ok(vec![])
+pub async fn search_conversations(
+    query: String, 
+    _filters: serde_json::Value,
+    window: tauri::Window,
+    state: State<'_, AppState>,
+) -> Result<Vec<serde_json::Value>, String> {
+    let window_label = window.label();
+
+    // Bridge to Python: memory.search (or similar)
+    // Note: The memory plugin needs to implement this.
+    // For now, we'll try to call it, and if it fails, return empty.
+    
+    let result = state.sidecar_manager
+        .send_command(
+            window_label,
+            "memory.search", 
+            serde_json::json!({
+                "query": query
+            })
+        )
+        .await;
+
+    match result {
+        Ok(res) => {
+             if let Some(data) = res.get("data").and_then(|d| d.as_array()) {
+                 return Ok(data.clone());
+             }
+             Ok(vec![])
+        },
+        Err(e) => {
+            println!("Search conversations failed (plugin method missing?): {}", e);
+            Ok(vec![])
+        }
+    }
 }
 
 /// Get conversation details
 #[tauri::command]
-pub async fn get_conversation(_vault_path: String, _conversation_id: String) -> Result<serde_json::Value, String> {
-    Err("Conversation loading not yet implemented".to_string())
+pub async fn get_conversation(
+    _vault_path: String,
+    conversation_id: String,
+    window: tauri::Window,
+    state: State<'_, AppState>,
+) -> Result<serde_json::Value, String> {
+    let window_label = window.label();
+    
+    // Bridge to Python: memory.load_chat (Plugin)
+    let result = state.sidecar_manager
+        .send_command(
+            window_label,
+            "memory.load_chat",
+            serde_json::json!({
+                "chat_id": conversation_id
+            })
+        )
+        .await
+        .map_err(|e| format!("Failed to load conversation: {}", e))?;
+        
+    // Return the full result (VaultBrain wraps it in status/data)
+    Ok(result)
 }
 
 /// Delete conversation

@@ -24,6 +24,7 @@ class Plugin(PluginBase):
         self.brain.register_command("branch.create", self.create_branch, self.name)
         self.brain.register_command("branch.switch", self.switch_branch, self.name)
         self.brain.register_command("branch.list", self.list_branches, self.name)
+        self.brain.register_command("branch.delete", self.delete_branch, self.name)
         
     async def on_load(self) -> None:
         """Load plugin."""
@@ -360,6 +361,84 @@ class Plugin(PluginBase):
                 "branches": branches_meta
             }
         except Exception as e:
+            return {"status": "error", "error": str(e)}
+
+    async def delete_branch(self, chat_id: str = "", branch_id: str = "", **kwargs) -> Dict[str, Any]:
+        """Delete a branch."""
+        if not chat_id:
+            p = kwargs.get("p") or kwargs.get("params", {})
+            chat_id = p.get("chat_id")
+            branch_id = p.get("branch_id", branch_id)
+
+        if not chat_id or not branch_id:
+            return {"status": "error", "error": "chat_id and branch_id are required"}
+
+        try:
+            result = await self.brain.execute_command("memory.load_chat", chat_id=chat_id)
+            if result.get("status") != "success":
+                return result
+
+            data = result.get("data", {})
+            messages = data.get("messages", [])
+            branches_meta = data.get("branches", {})
+
+            # Validate branch exists
+            if branch_id not in branches_meta:
+                return {"status": "error", "error": f"Branch '{branch_id}' not found"}
+
+            branch_info = branches_meta[branch_id]
+
+            # Prevent deleting root branches (no parent)
+            if branch_info.get("parent_branch") is None:
+                return {"status": "error", "error": "Cannot delete the root branch"}
+
+            # Prevent deleting branches that have children
+            children = [bid for bid, bdata in branches_meta.items()
+                        if bdata.get("parent_branch") == branch_id]
+            if children:
+                return {"status": "error", "error": f"Cannot delete branch with children: {', '.join(children)}. Delete children first."}
+
+            # Remove messages that belong ONLY to this branch
+            surviving_messages = []
+            for msg in messages:
+                msg_branches = msg.get("branches", [])
+                if branch_id in msg_branches:
+                    msg_branches = [b for b in msg_branches if b != branch_id]
+                    if not msg_branches:
+                        # Message was exclusive to this branch, remove it
+                        continue
+                    msg["branches"] = msg_branches
+                surviving_messages.append(msg)
+
+            data["messages"] = surviving_messages
+
+            # Remove branch metadata
+            del branches_meta[branch_id]
+
+            # Save back
+            await self.brain.execute_command("memory.save_chat", chat_id=chat_id, data=data)
+
+            # If deleted branch was active, switch to parent
+            parent_branch = branch_info.get("parent_branch", "main")
+            if self.active_branches.get(chat_id) == branch_id:
+                self.active_branches[chat_id] = parent_branch
+
+            self.logger.info(f"Deleted branch '{branch_id}' from chat '{chat_id}'")
+
+            # Rebuild history for the new active branch
+            active = self.active_branches.get(chat_id, parent_branch)
+            history = await self._get_filtered_history(chat_id, active)
+
+            return {
+                "status": "success",
+                "deleted_branch": branch_id,
+                "active_branch": active,
+                "history": history
+            }
+        except Exception as e:
+            import traceback
+            tb = traceback.format_exc()
+            self.logger.error(f"Error deleting branch: {e}\n{tb}")
             return {"status": "error", "error": str(e)}
 
     async def get_history(self, chat_id: str = "", branch: str = None, **kwargs) -> Dict[str, Any]:

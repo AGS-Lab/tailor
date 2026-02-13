@@ -24,6 +24,7 @@ class Plugin(PluginBase):
         """Register memory commands."""
         self.brain.register_command("memory.load_chat", self.load_chat, self.name)
         self.brain.register_command("memory.save_chat", self.save_chat, self.name)
+        self.brain.register_command("memory.search", self.search_chats, self.name)
         self.brain.register_command("chat.get_history", self.get_chat_history, self.name)
         
     async def on_load(self) -> None:
@@ -102,6 +103,61 @@ class Plugin(PluginBase):
             "chat_id": chat_id,
             "history": messages
         }
+
+    async def search_chats(self, query: str = "", **kwargs) -> Dict[str, Any]:
+        """Search or list chats."""
+        if not query:
+            p = kwargs.get("p") or kwargs.get("params", {})
+            query = p.get("query", "")
+        
+        matches = []
+        try:
+            for chat_file in self.memory_dir.glob("*.json"):
+                try:
+                    with open(chat_file, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    
+                    messages = data.get("messages", [])
+                    if not messages:
+                        continue
+                        
+                    # Basic metadata
+                    chat_id = chat_file.stem
+                    last_msg = messages[-1]
+                    # Handle legacy/missing time markers
+                    try:
+                        timestamp = float(last_msg.get("time_marker", 0))
+                    except (ValueError, TypeError):
+                        timestamp = chat_file.stat().st_mtime
+
+                    preview = str(last_msg.get("content", ""))[:100]
+                    
+                    # Filter
+                    if query:
+                        # naive search: check if query in any message content
+                        found = False
+                        for msg in messages:
+                            if query.lower() in str(msg.get("content", "")).lower():
+                                found = True
+                                break
+                        if not found:
+                            continue
+                    
+                    matches.append({
+                        "id": chat_id,
+                        "timestamp": timestamp,
+                        "preview": preview,
+                        "message_count": len(messages)
+                    })
+                except Exception:
+                    continue
+            
+            # Sort by timestamp desc
+            matches.sort(key=lambda x: x["timestamp"], reverse=True)
+            
+            return {"status": "success", "data": matches}
+        except Exception as e:
+            return {"status": "error", "error": str(e)}
 
     # =========================================================================
     # Event Handlers

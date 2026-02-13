@@ -73,7 +73,7 @@ export class ModalManager {
         }
     }
 
-    show(title, html, width = '500px') {
+    show(title, html, width = '500px', height = null) {
         console.log(`[ModalManager] Showing modal: ${title}`);
         this._ensureModal();
 
@@ -85,6 +85,11 @@ export class ModalManager {
         titleEl.textContent = title;
         contentEl.innerHTML = html;
         modal.style.width = width;
+        if (height) {
+            modal.style.height = height;
+        } else {
+            modal.style.height = 'auto';
+        }
         overlay.style.display = 'flex';
         this.isOpen = true;
 

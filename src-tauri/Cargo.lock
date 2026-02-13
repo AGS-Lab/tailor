@@ -3490,6 +3490,8 @@ dependencies = [
  "tauri-plugin-shell",
  "tokio",
  "tokio-tungstenite",
+ "toml 0.8.2",
+ "url",
  "uuid",
 ]
 

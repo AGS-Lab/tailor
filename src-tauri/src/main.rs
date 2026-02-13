@@ -67,6 +67,8 @@ fn main() {
             ipc_router::delete_conversation,
             ipc_router::get_plugin_template,
             ipc_router::validate_plugin,
+            ipc_router::get_effective_settings,
+            ipc_router::get_settings_schema,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

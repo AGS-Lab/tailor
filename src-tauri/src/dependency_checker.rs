@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 use std::process::Command;
-use anyhow::{Result, Context};
+use anyhow::Result;
 
 pub struct DependencyChecker;
 
@@ -13,27 +13,6 @@ impl DependencyChecker {
         Ok(())
     }
 
-    /// Get pip executable
-    fn get_pip_executable() -> Result<String> {
-        #[cfg(target_os = "windows")]
-        let pip_candidates = vec!["pip.exe", "pip3.exe"];
-        
-        #[cfg(not(target_os = "windows"))]
-        let pip_candidates = vec!["pip3", "pip"];
-
-        for candidate in pip_candidates {
-            if let Ok(output) = Command::new(candidate)
-                .arg("--version")
-                .output()
-            {
-                if output.status.success() {
-                    return Ok(candidate.to_string());
-                }
-            }
-        }
-
-        anyhow::bail!("pip not found in PATH")
-    }
 
     /// Check if dependencies need updating
     #[allow(dead_code)]

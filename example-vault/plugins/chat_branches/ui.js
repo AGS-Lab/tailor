@@ -11,6 +11,7 @@
 
     // State
     let lastMetadata = null;
+    let currentActiveBranch = null;
     let isRendering = false;
 
     /**
@@ -26,6 +27,11 @@
             });
             lastMetadata = transformed;
             console.log('[ChatBranches] Metadata cached:', Object.keys(lastMetadata).length, 'branches');
+        }
+        // Track active branch from backend response
+        if (result && result.active_branch) {
+            currentActiveBranch = result.active_branch;
+            console.log('[ChatBranches] Active branch:', currentActiveBranch);
         }
     });
 
@@ -53,6 +59,24 @@
     function injectBranchUI(history, branchesMetadata) {
         const messagesEl = document.getElementById('chat-messages');
         if (!messagesEl) return;
+
+        // Handle empty history (new/empty branch) - still show branch tabs
+        if (!history || history.length === 0) {
+            if (currentActiveBranch && branchesMetadata[currentActiveBranch]) {
+                const activeMeta = branchesMetadata[currentActiveBranch];
+                const parentId = activeMeta.parent_branch;
+                const siblings = Object.values(branchesMetadata).filter(b =>
+                    b.parent_branch === parentId
+                );
+                if (siblings.length > 1) {
+                    siblings.sort((a, b) => (a.id || '').localeCompare(b.id || ''));
+                    const tabs = createBranchTabsElement(siblings, currentActiveBranch);
+                    messagesEl.appendChild(tabs);
+                }
+            }
+            if (window.lucide) window.lucide.createIcons();
+            return;
+        }
 
         let lastBranchId = history[0]?.source_branch || null;
 
@@ -116,11 +140,30 @@
         const tabsHtml = siblings.map(b => {
             const isActive = b.id === activeBranchId;
             const name = b.display_name || (b.id ? b.id.substring(0, 8) : 'branch');
+            const isRoot = b.parent_branch === null || b.parent_branch === undefined;
+            const canDelete = !isRoot;
 
             // Theming based on active state
             const bg = isActive ? 'var(--accent-primary)' : 'var(--bg-input)';
             const color = isActive ? '#ffffff' : 'var(--text-secondary)';
             const border = isActive ? 'none' : '1px solid var(--border-subtle)';
+
+            const deleteBtn = canDelete ? `
+                <span 
+                    class="branch-delete-btn"
+                    data-delete-branch-id="${b.id || ''}"
+                    title="Delete branch"
+                    style="
+                        margin-left: 2px;
+                        cursor: pointer;
+                        opacity: 0.6;
+                        font-size: 14px;
+                        line-height: 1;
+                        display: inline-flex;
+                        align-items: center;
+                    "
+                >&times;</span>
+            ` : '';
 
             return `
                 <button 
@@ -146,15 +189,19 @@
                 >
                     <i data-lucide="git-branch" style="width:14px; height:14px;"></i>
                     <span>${escapeHtml(name)}</span>
+                    ${deleteBtn}
                 </button>
             `;
         }).join('');
 
         div.innerHTML = `<div class="message-content" style="display: flex; flex-wrap: wrap; align-items: center; justify-content: center; opacity: 0.9;">${tabsHtml}</div>`;
 
+        // Bind switch events
         div.querySelectorAll('.branch-tab-btn').forEach(btn => {
             if (!btn.disabled && btn.dataset.branchId) {
                 btn.addEventListener('click', (e) => {
+                    // Don't switch if they clicked the delete button
+                    if (e.target.closest('.branch-delete-btn')) return;
                     e.preventDefault();
                     window.dispatchEvent(new CustomEvent('chat:switchBranch', {
                         detail: { branchId: btn.dataset.branchId }
@@ -175,6 +222,33 @@
                     }
                 });
             }
+        });
+
+        // Bind delete events
+        div.querySelectorAll('.branch-delete-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const branchId = btn.dataset.deleteBranchId;
+                if (!branchId) return;
+
+                const name = branchId.substring(0, 8);
+                if (confirm(`Delete branch "${name}"? Messages unique to this branch will be removed.`)) {
+                    window.dispatchEvent(new CustomEvent('chat:deleteBranch', {
+                        detail: { branchId }
+                    }));
+                }
+            });
+
+            // Hover effect for delete btn
+            btn.addEventListener('mouseenter', () => {
+                btn.style.opacity = '1';
+                btn.style.color = 'var(--text-error, #ff4444)';
+            });
+            btn.addEventListener('mouseleave', () => {
+                btn.style.opacity = '0.6';
+                btn.style.color = 'inherit';
+            });
         });
 
         return div;
@@ -225,6 +299,32 @@
                 window.chatModule.loadHistory(activeChatId);
             }
         } catch (err) { console.error(err); }
+    });
+
+    window.addEventListener('chat:deleteBranch', async (e) => {
+        const { branchId } = e.detail;
+        const activeChatId = window.chatModule?.activeChatId;
+
+        if (!activeChatId || !branchId) return;
+
+        try {
+            const res = await window.request('branch.delete', {
+                chat_id: activeChatId,
+                branch_id: branchId
+            });
+            const result = res.result || res;
+            if (result.status === 'success') {
+                console.log('[ChatBranches] Branch deleted:', branchId);
+                window.chatModule.loadHistory(activeChatId);
+            } else {
+                console.error('[ChatBranches] Branch deletion failed:', result.error);
+                if (window.ui && window.ui.showToast) {
+                    window.ui.showToast(result.error || 'Failed to delete branch', 'error');
+                }
+            }
+        } catch (err) {
+            console.error('[ChatBranches] Delete error:', err);
+        }
     });
 
     console.log('[ChatBranches] Plugin ready. Theme variables applied.');
