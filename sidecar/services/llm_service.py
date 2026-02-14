@@ -21,6 +21,9 @@ from loguru import logger
 import litellm
 from litellm import acompletion
 
+# Suppress debug info (e.g. "Provider List" link) but keep errors
+litellm.suppress_debug_info = True
+
 try:
     import httpx
     HTTPX_AVAILABLE = True

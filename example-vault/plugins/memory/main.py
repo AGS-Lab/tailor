@@ -1,4 +1,6 @@
+import asyncio
 import json
+import os
 import time
 import uuid
 from pathlib import Path
@@ -25,6 +27,8 @@ class Plugin(PluginBase):
         self.brain.register_command("memory.load_chat", self.load_chat, self.name)
         self.brain.register_command("memory.save_chat", self.save_chat, self.name)
         self.brain.register_command("memory.search", self.search_chats, self.name)
+        self.brain.register_command("memory.delete_chat", self.delete_chat, self.name)
+        self.brain.register_command("memory.rename_chat", self.rename_chat, self.name)
         self.brain.register_command("chat.get_history", self.get_chat_history, self.name)
         
     async def on_load(self) -> None:
@@ -132,19 +136,31 @@ class Plugin(PluginBase):
 
                     preview = str(last_msg.get("content", ""))[:100]
                     
+                    # Title: stored title, or first user message as fallback
+                    title = data.get("title", "")
+                    if not title:
+                        for msg in messages:
+                            if msg.get("role") == "user":
+                                title = str(msg.get("content", ""))[:60]
+                                break
+                    if not title:
+                        title = "Untitled Chat"
+                    
                     # Filter
                     if query:
-                        # naive search: check if query in any message content
-                        found = False
-                        for msg in messages:
-                            if query.lower() in str(msg.get("content", "")).lower():
-                                found = True
-                                break
+                        query_lower = query.lower()
+                        found = query_lower in title.lower()
+                        if not found:
+                            for msg in messages:
+                                if query_lower in str(msg.get("content", "")).lower():
+                                    found = True
+                                    break
                         if not found:
                             continue
                     
                     matches.append({
                         "id": chat_id,
+                        "title": title,
                         "timestamp": timestamp,
                         "preview": preview,
                         "message_count": len(messages)
@@ -157,6 +173,56 @@ class Plugin(PluginBase):
             
             return {"status": "success", "data": matches}
         except Exception as e:
+            return {"status": "error", "error": str(e)}
+
+    async def delete_chat(self, chat_id: str = "", **kwargs) -> Dict[str, Any]:
+        """Delete a chat file."""
+        if not chat_id:
+            p = kwargs.get("p") or kwargs.get("params", {})
+            chat_id = p.get("chat_id")
+            
+        if not chat_id:
+            return {"status": "error", "error": "chat_id required"}
+            
+        chat_file = self._get_chat_path(chat_id)
+        if not chat_file.exists():
+            return {"status": "error", "error": "Chat not found"}
+            
+        try:
+            os.remove(chat_file)
+            self.logger.info(f"Deleted chat: {chat_id}")
+            return {"status": "success"}
+        except Exception as e:
+            self.logger.error(f"Failed to delete chat {chat_id}: {e}")
+            return {"status": "error", "error": str(e)}
+
+    async def rename_chat(self, chat_id: str = "", title: str = "", **kwargs) -> Dict[str, Any]:
+        """Rename a chat by setting its title metadata."""
+        if not chat_id or not title:
+            p = kwargs.get("p") or kwargs.get("params", {})
+            chat_id = chat_id or p.get("chat_id", "")
+            title = title or p.get("title", "")
+            
+        if not chat_id or not title:
+            return {"status": "error", "error": "chat_id and title required"}
+            
+        chat_file = self._get_chat_path(chat_id)
+        if not chat_file.exists():
+            return {"status": "error", "error": "Chat not found"}
+            
+        try:
+            with open(chat_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            
+            data["title"] = title
+            
+            with open(chat_file, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+            
+            self.logger.info(f"Renamed chat {chat_id} to: {title}")
+            return {"status": "success"}
+        except Exception as e:
+            self.logger.error(f"Failed to rename chat {chat_id}: {e}")
             return {"status": "error", "error": str(e)}
 
     # =========================================================================
@@ -215,3 +281,75 @@ class Plugin(PluginBase):
             "assistant_message_id": assistant_msg["id"],
             "chat_id": chat_id
         }
+        
+        # Auto-title: generate once after first exchange
+        if self.config.get("auto_title", True) and not data.get("title"):
+            asyncio.create_task(self._auto_generate_title(chat_id, data))
+
+    # =========================================================================
+    # Auto Title Generation
+    # =========================================================================
+
+    async def _auto_generate_title(self, chat_id: str, data: dict) -> None:
+        """Generate a chat title from the first user+assistant exchange."""
+        try:
+            messages = data.get("messages", [])
+            if len(messages) < 2:
+                return
+
+            # Use just the first user message and assistant response
+            user_msg = messages[0].get("content", "")[:300]
+            assistant_msg = messages[1].get("content", "")[:300]
+
+            llm_messages = [
+                {
+                    "role": "system",
+                    "content": (
+                        "You generate concise chat titles.\n"
+                        "Task: Create a clear, specific 3–6 word title summarizing the main topic.\n\n"
+                        "Rules:\n"
+                        "- Capture the core subject, not conversational filler.\n"
+                        "- Be specific, not generic (avoid 'Discussion' or 'Question').\n"
+                        "- Use Title Case.\n"
+                        "- No punctuation.\n"
+                        "- No quotation marks.\n"
+                        "- No emojis.\n"
+                        "- Do not invent information.\n"
+                        "- Output ONLY the title text."
+                    )
+                },
+                {
+                    "role": "user",
+                    "content": f"User: {user_msg}\nAssistant: {assistant_msg}"
+                }
+            ]
+
+            from sidecar.services.llm_service import get_llm_service
+            llm = get_llm_service()
+            if not llm:
+                return
+
+            response = await llm.complete(
+                messages=llm_messages,
+                category="fast",
+                max_tokens=20,
+                temperature=0.3
+            )
+
+            title = response.content.strip().strip('"\'.-').strip()
+            if not title or len(title) < 2:
+                return
+            if len(title) > 50:
+                title = title[:47] + "..."
+
+            chat_file = self._get_chat_path(chat_id)
+            if chat_file.exists():
+                with open(chat_file, "r", encoding="utf-8") as f:
+                    current_data = json.load(f)
+                current_data["title"] = title
+                with open(chat_file, "w", encoding="utf-8") as f:
+                    json.dump(current_data, f, indent=2)
+                self.logger.info(f"Auto-title: {chat_id} -> '{title}'")
+
+        except Exception as e:
+            self.logger.warning(f"Auto-title failed for {chat_id}: {e}")

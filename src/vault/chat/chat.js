@@ -518,6 +518,7 @@ function addSystemMessage(content, className = '', allowHtml = false) {
 function clearChat() {
     conversationHistory = [];
     activeChatId = null;
+    window.activeChatId = null;  // Also clear global so sidebar sync doesn't re-highlight
 
     const messagesEl = document.getElementById('chat-messages');
     if (messagesEl) {
@@ -894,5 +895,7 @@ window.chatModule = {
     addMessage,
     addSystemMessage,
     renderConversation,
-    get activeChatId() { return activeChatId; }
+    clearChat: () => clearChat(),
+    get activeChatId() { return activeChatId; },
+    set activeChatId(id) { activeChatId = id; window.activeChatId = id; }
 };

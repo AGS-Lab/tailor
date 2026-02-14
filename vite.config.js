@@ -5,6 +5,9 @@ export default defineConfig({
     server: {
         port: 5173,
         strictPort: true,
+        watch: {
+            ignored: ['**/src-tauri/target/**', '**/src-tauri/gen/**', '**/node_modules/**', '**/.git/**'],
+        },
     },
     envPrefix: ['VITE_', 'TAURI_'],
     build: {

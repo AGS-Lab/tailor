@@ -87,6 +87,13 @@
    2. RESET & BASE
    ======================================== */
 
+/* Box Sizing Reset */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
 /* Custom Scrollbars */
 ::-webkit-scrollbar {
     width: 8px;
@@ -493,10 +500,10 @@ input:focus {
     background: var(--bg-panel);
 }
 
-.side-panel-content {
+#side-panel-content {
     flex: 1;
-    overflow-y: auto;
-    padding: 8px;
+    overflow: hidden;
+    min-height: 0;
 }
 
 /* Main Editor Area */
@@ -930,6 +937,7 @@ body .lm_splitter.lm_horizontal:hover::after {
     gap: var(--spacing-xl);
     padding-bottom: var(--spacing-lg);
     border-bottom: 1px solid var(--border-subtle);
+    flex-wrap: wrap;
 }
 
 .dashboard-header-content h1 {
@@ -951,6 +959,37 @@ body .lm_splitter.lm_horizontal:hover::after {
     display: flex;
     gap: var(--spacing-md);
     flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+    .dashboard-container {
+        padding: var(--spacing-lg);
+    }
+
+    .dashboard-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: var(--spacing-md);
+    }
+
+    .dashboard-header-actions {
+        width: 100%;
+    }
+
+    .dashboard-header-actions .btn {
+        flex: 1;
+    }
+
+    .section-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--spacing-md);
+    }
+
+    .vault-filters {
+        width: 100%;
+        overflow-x: auto;
+    }
 }
 
 .dashboard-section {
@@ -2811,10 +2850,13 @@ body .lm_splitter.lm_horizontal:hover::after {
     display: flex;
     flex-direction: column;
     gap: 16px;
+    max-width: 100%;
+    overflow-x: hidden;
 }
 
 .model-search-input {
     width: 100%;
+    box-sizing: border-box;
     padding: 10px 14px;
     background: var(--bg-card);
     border: 1px solid var(--border-subtle);
@@ -2826,6 +2868,7 @@ body .lm_splitter.lm_horizontal:hover::after {
 }
 
 .model-search-input:focus {
+    width: 100%;
     border-color: var(--accent-primary);
 }
 

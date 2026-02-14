@@ -59,6 +59,7 @@ export class SidebarManager {
             // Update if active
             if (this.activeViewId === id) {
                 this.contentEl.innerHTML = html;
+                this._executeScripts(this.contentEl);
             }
         }
     }
@@ -75,6 +76,7 @@ export class SidebarManager {
             const view = this.views.get(id);
             this.titleEl.textContent = view.title;
             this.contentEl.innerHTML = view.content || '<div style="padding:20px; text-align:center; color:var(--text-disabled)">Loading...</div>';
+            this._executeScripts(this.contentEl);
             this.panelEl.classList.add('open');
             this._updateIcons();
         }
@@ -83,6 +85,24 @@ export class SidebarManager {
         setTimeout(() => {
             if (window.myLayout) window.myLayout.updateSize();
         }, 150);
+    }
+
+    /**
+     * Execute <script> tags within an element.
+     * innerHTML doesn't run scripts, so we re-create them as DOM nodes.
+     */
+    _executeScripts(container) {
+        const scripts = container.querySelectorAll('script');
+        scripts.forEach(oldScript => {
+            const newScript = document.createElement('script');
+            // Copy attributes
+            Array.from(oldScript.attributes).forEach(attr => {
+                newScript.setAttribute(attr.name, attr.value);
+            });
+            // Copy content
+            newScript.textContent = oldScript.textContent;
+            oldScript.parentNode.replaceChild(newScript, oldScript);
+        });
     }
 
     _updateIcons() {
