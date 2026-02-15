@@ -130,7 +130,7 @@ emitter.emit(EventType.CUSTOM, {...}, scope=EventScope.GLOBAL)
 
 **Initialization:**
 1. Validates vault path with `utils.path_utils`
-2. Loads and validates `.vault.json` config
+2. Loads and validates `.vault.toml` config
 3. Creates `.memory/` directory safely
 4. Discovers plugins using `discover_plugins()`
 5. Validates plugin structure (main.py exists)
@@ -327,7 +327,7 @@ sequenceDiagram
     Rust->>SM: spawn_sidecar(window_label, vault_path)
     SM->>SM: Allocate port 9001
     SM->>Python: Spawn process: python main.py --vault ... --ws-port 9001
-    Python->>Python: Load .vault.json config
+    Python->>Python: Load .vault.toml config
     Python->>Python: Create .memory/ directory
     Python->>Python: Initialize WebSocketServer(9001)
     Python->>Plugin: Load plugins/example_plugin.py
@@ -353,7 +353,7 @@ sequenceDiagram
    - `SidecarManager` allocates port `9001`
    - Spawns: `python -m sidecar --vault example-vault --ws-port 9001`
 6. **Python Sidecar Starts**:
-   - Loads config from `.vault.json`
+   - Loads config from `.vault.toml`
    - Creates `.memory/` directory
    - Loads `plugins/example_plugin.py`
    - Starts WebSocket server on port `9001`
@@ -629,7 +629,7 @@ tailor/
 │   ├── vault_brain.py            # LangGraph orchestrator
 │   └── requirements.txt
 ├── example-vault/                # Example vault
-│   ├── .vault.json               # Vault metadata
+│   ├── .vault.toml               # Vault metadata
 │   ├── plugins/
 │   │   ├── example_plugin.py     # Demo plugin
 │   │   └── requirements.txt      # Plugin dependencies
@@ -674,7 +674,7 @@ This will:
 3. Launch Tauri application
 
 ### **Testing a Plugin**
-1. Create `my-vault/.vault.json`
+1. Create `my-vault/.vault.toml`
 2. Add `my-vault/plugins/my_plugin.py`
 3. Open vault in Tailor
 4. Watch console for sidecar logs

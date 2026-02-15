@@ -92,7 +92,7 @@ tailor/
 │   │   └── __init__.py
 │   └── requirements.txt
 └── example-vault/                # Example vault
-    ├── .vault.json               # Vault configuration
+    ├── .vault.toml               # Vault configuration
     └── plugins/                  # Vault-specific plugins
         ├── llm/                  # LLM chat plugin
         │   └── main.py           # (inherits from PluginBase)
@@ -108,7 +108,7 @@ A vault is a self-contained directory with the following structure:
 
 ```
 my-vault/
-├── .vault.json              # Vault metadata
+├── .vault.toml              # Vault metadata
 ├── plugins/                 # Plugin directory
 │   ├── requirements.txt     # Shared dependencies
 │   ├── my_plugin/          # Individual plugin

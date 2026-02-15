@@ -7,6 +7,7 @@ Acts as the central Event/Command hub.
 
 import asyncio
 import json
+import tomllib
 import importlib.util
 import time
 import inspect
@@ -259,7 +260,7 @@ class VaultBrain:
                 except Exception as e:
                     logger.error(f"Failed to load settings.json for plugin '{plugin_name}': {e}")
             
-            # 2. Get Overrides from .vault.json (Global Config)
+            # 2. Get Overrides from .vault.toml (Global Config)
             # Structure: { "plugins": { "plugin_name": { "enabled": true, "param": 123 } } }
             vault_apps_config = self.config.get("plugins", {})
             # Handle both "plugins.plugin_name" direct object OR "plugins.enabled" list style legacy
@@ -584,7 +585,7 @@ class VaultBrain:
 
     @command("settings.set_model_category", constants.CORE_PLUGIN_NAME)
     async def set_model_category(self, category: str = "", model: str = "", **kwargs) -> Dict[str, Any]:
-        """Set the model for a category and save to .vault.json."""
+        """Set the model for a category and save to .vault.toml."""
         # Handle nested params
         if not category:
             p = kwargs.get("p") or kwargs.get("params")
@@ -600,6 +601,7 @@ class VaultBrain:
         
         # Save to config
         try:
+            import tomli_w
             config_path = utils.get_vault_config_path(self.vault_path)
             config = self._load_config()
             
@@ -610,8 +612,8 @@ class VaultBrain:
             
             config["llm"]["categories"][category] = model
             
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(config, f, indent=4)
+            with open(config_path, "wb") as f:
+                tomli_w.dump(config, f)
             
             self.config = config
             
@@ -1033,7 +1035,7 @@ class VaultBrain:
     
     @command("plugins.list", constants.CORE_PLUGIN_NAME)
     async def list_plugins(self, **kwargs) -> Dict[str, Any]:
-        """List installed plugins with their enabled state from .vault.json."""
+        """List installed plugins with their enabled state from .vault.toml."""
         plugins = self.plugin_installer.list_installed()
         
         # Enrich with enabled state from config
@@ -1054,7 +1056,7 @@ class VaultBrain:
     
     @command("plugins.toggle", constants.CORE_PLUGIN_NAME)
     async def toggle_plugin(self, plugin_id: str = "", enabled: bool = True, **kwargs) -> Dict[str, Any]:
-        """Toggle plugin enabled state in .vault.json."""
+        """Toggle plugin enabled state in .vault.toml."""
         # Handle nested params
         if not plugin_id:
             p = kwargs.get("p") or kwargs.get("params")
@@ -1216,12 +1218,12 @@ class VaultBrain:
     # =========================================================================
 
     def _load_config(self) -> Dict[str, Any]:
-        """Load .vault.json."""
+        """Load .vault.toml."""
         config_file = utils.get_vault_config_path(self.vault_path)
         if config_file.exists():
             try:
-                with open(config_file, "r", encoding="utf-8") as f:
-                    return json.load(f)
+                with open(config_file, "rb") as f:
+                    return tomllib.load(f)
             except Exception as e:
                 logger.error(f"Config load error: {e}")
                 

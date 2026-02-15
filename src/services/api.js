@@ -70,7 +70,7 @@ export const vaultApi = {
     },
 
     /**
-     * Update plugin configuration in .vault.json
+     * Update plugin configuration in .vault.toml
      */
     async updatePluginConfig(vaultPath, pluginId, config) {
         return await invoke('update_plugin_config', { vaultPath, pluginId, config });
@@ -175,32 +175,6 @@ export const settingsApi = {
      */
     async deleteApiKey(keyName) {
         return await invoke('delete_api_key', { keyName });
-    },
-};
-
-/**
- * Conversation API
- */
-export const conversationApi = {
-    /**
-     * Search conversations
-     */
-    async searchConversations(query, filters = {}) {
-        return await invoke('search_conversations', { query, filters });
-    },
-
-    /**
-     * Get conversation details
-     */
-    async getConversation(vaultPath, conversationId) {
-        return await invoke('get_conversation', { vaultPath, conversationId });
-    },
-
-    /**
-     * Delete conversation
-     */
-    async deleteConversation(vaultPath, conversationId) {
-        return await invoke('delete_conversation', { vaultPath, conversationId });
     },
 };
 

@@ -349,13 +349,10 @@ brain.register_command(
 ```
 
 ### **Keyboard Shortcuts** (Planned)
-```python
-# In .vault.json
-{
-  "keybindings": {
-    "Ctrl+Shift+D": "database.query"
-  }
-}
+```toml
+# In .vault.toml
+[keybindings]
+"Ctrl+Shift+D" = "database.query"
 ```
 
 ### **Permission System** (Planned)

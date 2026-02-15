@@ -224,7 +224,7 @@ pub async fn get_vault_info(vault_path: String) -> Result<serde_json::Value, Str
     Ok(config)
 }
 
-/// Update plugin configuration in .vault.json
+/// Update plugin configuration in .vault.toml
 #[tauri::command]
 pub async fn update_plugin_config(
     vault_path: String,
@@ -749,77 +749,6 @@ pub async fn save_api_key(
 #[tauri::command]
 pub async fn delete_api_key(key_name: String) -> Result<(), String> {
     println!("Deleting API key: {}", key_name);
-    Ok(())
-}
-
-/// Search conversations
-#[tauri::command]
-pub async fn search_conversations(
-    query: String, 
-    _filters: serde_json::Value,
-    window: tauri::Window,
-    state: State<'_, AppState>,
-) -> Result<Vec<serde_json::Value>, String> {
-    let window_label = window.label();
-
-    // Bridge to Python: memory.search (or similar)
-    // Note: The memory plugin needs to implement this.
-    // For now, we'll try to call it, and if it fails, return empty.
-    
-    let result = state.sidecar_manager
-        .send_command(
-            window_label,
-            "memory.search", 
-            serde_json::json!({
-                "query": query
-            })
-        )
-        .await;
-
-    match result {
-        Ok(res) => {
-             if let Some(data) = res.get("data").and_then(|d| d.as_array()) {
-                 return Ok(data.clone());
-             }
-             Ok(vec![])
-        },
-        Err(e) => {
-            println!("Search conversations failed (plugin method missing?): {}", e);
-            Ok(vec![])
-        }
-    }
-}
-
-/// Get conversation details
-#[tauri::command]
-pub async fn get_conversation(
-    _vault_path: String,
-    conversation_id: String,
-    window: tauri::Window,
-    state: State<'_, AppState>,
-) -> Result<serde_json::Value, String> {
-    let window_label = window.label();
-    
-    // Bridge to Python: memory.load_chat (Plugin)
-    let result = state.sidecar_manager
-        .send_command(
-            window_label,
-            "memory.load_chat",
-            serde_json::json!({
-                "chat_id": conversation_id
-            })
-        )
-        .await
-        .map_err(|e| format!("Failed to load conversation: {}", e))?;
-        
-    // Return the full result (VaultBrain wraps it in status/data)
-    Ok(result)
-}
-
-/// Delete conversation
-#[tauri::command]
-pub async fn delete_conversation(vault_path: String, conversation_id: String) -> Result<(), String> {
-    println!("Deleting conversation {} from {}", conversation_id, vault_path);
     Ok(())
 }
 

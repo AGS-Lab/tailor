@@ -178,7 +178,7 @@ MAX_WEBSOCKET_PORT: Final[int] = 9999
 # Path Constants
 # ============================================================================
 
-VAULT_CONFIG_FILE: Final[str] = ".vault.json"
+VAULT_CONFIG_FILE: Final[str] = ".vault.toml"
 """Vault configuration file name."""
 
 MEMORY_DIR: Final[str] = ".memory"

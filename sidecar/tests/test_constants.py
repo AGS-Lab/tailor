@@ -48,5 +48,5 @@ class TestConstants:
     
     def test_vault_config_file(self):
         """Test vault config filename."""
-        assert constants.VAULT_CONFIG_FILE == ".vault.json"
+        assert constants.VAULT_CONFIG_FILE == ".vault.toml"
         assert isinstance(constants.VAULT_CONFIG_FILE, str)

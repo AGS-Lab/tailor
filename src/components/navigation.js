@@ -18,10 +18,6 @@ export function createNavigation() {
                     <i data-lucide="layout-dashboard"></i>
                     <span>Dashboard</span>
                 </div>
-                <div class="nav-item" data-route="conversations">
-                    <i data-lucide="message-square"></i>
-                    <span>Conversations</span>
-                </div>
                 <div class="nav-item" data-route="themes">
                     <i data-lucide="palette"></i>
                     <span>Themes</span>

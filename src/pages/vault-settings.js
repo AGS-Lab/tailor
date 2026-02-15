@@ -213,7 +213,7 @@ async function showSection(section, vaultPath, container) {
                         const pluginId = toggle.dataset.pluginId;
                         const enabled = toggle.checked;
 
-                        // Update .vault.json
+                        // Update .vault.toml
                         try {
                             await vaultApi.updatePluginConfig(vaultPath, pluginId, { enabled });
                             console.log(`Plugin ${pluginId} ${enabled ? 'enabled' : 'disabled'}`);

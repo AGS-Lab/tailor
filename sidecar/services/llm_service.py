@@ -561,7 +561,7 @@ class LLMService:
         """
         Set the model for a category (in memory).
         
-        Note: Call save_config() to persist to .vault.json
+        Note: Call save_config() to persist to .vault.toml
         """
         self._categories[category] = model
     

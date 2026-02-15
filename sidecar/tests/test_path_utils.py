@@ -20,7 +20,7 @@ class TestValidateVaultPath:
         """Test validating an existing vault directory."""
         vault_path = tmp_path / "test_vault"
         vault_path.mkdir()
-        (vault_path / ".vault.json").write_text("{}")
+        (vault_path / ".vault.toml").write_text("")
         
         # Should not raise
         utils.validate_vault_path(vault_path)
@@ -41,7 +41,7 @@ class TestValidateVaultPath:
             utils.validate_vault_path(vault_file)
     
     def test_missing_vault_config(self, tmp_path):
-        """Test validation warns/passes without .vault.json."""
+        """Test validation warns/passes without .vault.toml."""
         vault_path = tmp_path / "vault_no_config"
         vault_path.mkdir()
         

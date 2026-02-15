@@ -34,7 +34,7 @@ class TestVaultBrain:
         """Create a valid vault structure."""
         vault_path = tmp_path / "test_vault"
         vault_path.mkdir()
-        (vault_path / ".vault.json").write_text("{}")
+        (vault_path / ".vault.toml").write_text("")
         return vault_path
 
     @pytest.mark.asyncio
@@ -65,9 +65,9 @@ class TestVaultBrain:
         assert isinstance(brain.config, dict)
         
     @pytest.mark.asyncio
-    async def test_load_config_invalid_json(self, valid_vault, mock_ws_server):
-        """Test loading invalid JSON configuration."""
-        (valid_vault / ".vault.json").write_text("{invalid json")
+    async def test_load_config_invalid_toml(self, valid_vault, mock_ws_server):
+        """Test loading invalid TOML configuration."""
+        (valid_vault / ".vault.toml").write_text("[invalid toml")
         
         brain = VaultBrain(valid_vault, mock_ws_server)
         
@@ -113,7 +113,7 @@ class TestVaultBrain:
         plugin_path.mkdir(parents=True, exist_ok=True)
         (plugin_path / "main.py").touch()
         # Create settings.json to enable plugin
-        (plugin_path / "settings.json").write_text('{"enabled": true, "key": "value"}')
+        (plugin_path / "settings.json").write_text('{"enabled": true, "key": "value"}')  # plugin defaults still use settings.json
 
         brain = VaultBrain(valid_vault, mock_ws_server)
         await brain.initialize()
@@ -194,7 +194,7 @@ class TestCommandRegistry:
         """Create a VaultBrain instance with mocks."""
         vault_path = tmp_path / "test_vault"
         vault_path.mkdir()
-        (vault_path / ".vault.json").write_text("{}")
+        (vault_path / ".vault.toml").write_text("")
         
         ws_server = Mock()
         ws_server.command_handlers = {}

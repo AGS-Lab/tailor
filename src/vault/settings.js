@@ -488,9 +488,9 @@ function renderApiKeysList() {
         }
 
         try {
-            await request('settings.set_provider_key', {
+            await request('settings.store_api_key', {
                 provider: providerId,
-                key: key
+                api_key: key
             });
 
             // Reload status
@@ -505,7 +505,7 @@ function renderApiKeysList() {
         if (!confirm('Are you sure you want to delete this API key?')) return;
 
         try {
-            await request('settings.delete_provider_key', {
+            await request('settings.delete_api_key', {
                 provider: providerId
             });
 
@@ -537,14 +537,25 @@ async function renderModelsSection(container) {
     try {
         // Fetch config and available models
         const [configRes, modelsRes] = await Promise.all([
-            request('settings.get_model_config', {}),
-            request('settings.list_models', {})
+            request('settings.get_model_categories', {}),
+            request('settings.get_available_models', {})
         ]);
 
-        categoryConfig = configRes.result || {};
+        // get_model_categories returns { categories_info, configured }
+        const configData = configRes.result || {};
+        categoriesInfo = configData.categories_info || {};
+        categoryConfig = configData.configured || {};
+
+        // get_available_models returns { models: { provider: [model_list] } }
         const modelsData = modelsRes.result || {};
-        availableModels = modelsData.models || {};
-        categoriesInfo = modelsData.categories || {};
+        // Flatten provider groups into a single { model_id: info } map
+        const rawModels = modelsData.models || {};
+        availableModels = {};
+        for (const [provider, modelList] of Object.entries(rawModels)) {
+            for (const m of modelList) {
+                availableModels[m.id] = { name: m.name, provider, categories: m.categories || [], context_window: m.context_window, is_local: m.is_local };
+            }
+        }
 
         renderModelsForm();
 
@@ -566,19 +577,21 @@ function renderModelsForm() {
     formEl.style.flexDirection = 'column';
     formEl.style.gap = '20px';
 
-    // Group models by provider for select options
-    const modelOptions = Object.entries(availableModels).map(([id, info]) => {
-        return `<option value="${id}">${info.name} (${info.provider})</option>`;
-    }).join('');
+    // Build categories from sidecar's categoriesInfo (from models_registry.json)
+    // Each category has: name, description, icon, fallback, recommended, ollama_keywords
+    const categories = Object.entries(categoriesInfo).map(([id, info]) => ({
+        id,
+        label: info.name || id,
+        desc: info.description || ''
+    }));
 
-    const categories = [
-        { id: 'chat_model', label: 'Chat & Reasoning', desc: 'Main model used for conversation and planning' },
-        { id: 'fast_model', label: 'Fast / Tool Use', desc: 'Smaller model for quick tasks and tool execution' },
-        { id: 'embedding_model', label: 'Embeddings', desc: 'Model used for semantic search and memory' }
-    ];
+    if (categories.length === 0) {
+        formEl.innerHTML = `<p style="color: var(--text-secondary);">No model categories configured.</p>`;
+        return;
+    }
 
     formEl.innerHTML = categories.map(cat => {
-        const currentVal = categoryConfig[cat.id];
+        const currentVal = categoryConfig[cat.id] || '';
 
         return `
             <div class="setting-item">
@@ -609,7 +622,7 @@ function renderModelsForm() {
         try {
             await request('settings.set_model_category', {
                 category: category,
-                model_id: modelId
+                model: modelId
             });
             console.log(`Updated ${category} to ${modelId}`);
         } catch (e) {

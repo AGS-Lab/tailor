@@ -15,7 +15,7 @@ Tailor uses a directory-based plugin system. Each plugin is a self-contained fol
 
 ```
 example-vault/
-├── .vault.json                # Vault metadata
+├── .vault.toml                # Vault metadata
 ├── plugins/   
 │   ├── my_plugin/            # Plugin Directory
 │   │   ├── main.py           # ENTRY POINT (Required)
@@ -111,16 +111,11 @@ def __init__(self, ...):
 
 ### Advanced Configuration
 
-You can also override plugin settings globally in the `.vault.json` file of the vault:
+You can also override plugin settings globally in the `.vault.toml` file of the vault:
 
-```json
-{
-  "plugins": {
-    "my_plugin": {
-      "enabled": false
-    }
-  }
-}
+```toml
+[plugins.my_plugin]
+enabled = false
 ```
 Global overrides take precedence over the plugin's `settings.json`.
 
