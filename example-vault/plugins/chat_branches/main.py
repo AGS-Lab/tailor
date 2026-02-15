@@ -19,6 +19,41 @@ class Plugin(PluginBase):
         super().__init__(plugin_dir, vault_path, config)
         self.active_branches = {}  # {chat_id: active_branch_id}
 
+    @staticmethod
+    def _find_root_branch(data: Dict[str, Any]) -> str | None:
+        """Find the root branch ID (the one with parent_branch=None)."""
+        for bid, bdata in data.get("branches", {}).items():
+            if bdata.get("parent_branch") is None:
+                return bid
+        return None
+
+    @staticmethod
+    def _find_leaf_branch(branch_id: str, data: Dict[str, Any]) -> str:
+        """Walk down the branch tree to find a leaf (no children).
+        
+        If the given branch has children, descend to the first child
+        (by creation time) recursively until reaching a branch with no children.
+        This ensures the active branch is always at the bottom level.
+        """
+        branches = data.get("branches", {})
+        current = branch_id
+        visited = set()  # prevent infinite loops
+        
+        while current and current not in visited:
+            visited.add(current)
+            # Find children of current branch
+            children = [
+                (bid, bdata) for bid, bdata in branches.items()
+                if bdata.get("parent_branch") == current
+            ]
+            if not children:
+                break  # leaf found
+            # Pick the first child by creation time (oldest = continuation)
+            children.sort(key=lambda x: x[1].get("created_at", 0))
+            current = children[0][0]
+        
+        return current
+
     def register_commands(self) -> None:
         """Register branching commands."""
         self.brain.register_command("branch.create", self.create_branch, self.name)
@@ -81,28 +116,31 @@ class Plugin(PluginBase):
         if not chat_id:
             return
         
-        # Get active branch for this chat
-        # enhanced: try to get from memory, or fallback to loading from DB
-        active_branch = self.active_branches.get(chat_id)
-        
-        # Load chat data to check persistence and get allowed branches
+        # Load chat data — the persisted data is source of truth
         result = await self.brain.execute_command("memory.load_chat", chat_id=chat_id)
         if result.get("status") != "success":
             return
         
         data = result.get("data", {})
         
-        # If we don't have an active branch in memory, check the DB
+        # ALWAYS prefer persisted active_branch from data (source of truth),
+        # then fall back to in-memory cache, then find root.
+        active_branch = data.get("active_branch")
+        
         if not active_branch:
-             active_branch = data.get("active_branch")
+            active_branch = self.active_branches.get(chat_id)
              
-        # If still no active branch, default to "main"
         if not active_branch:
-            active_branch = "main"
-            self.active_branches[chat_id] = "main"
+            active_branch = self._find_root_branch(data)
 
         if not active_branch:
-            return  # Should not happen given above default, but safety check
+            return
+        
+        # Always descend to a leaf branch
+        active_branch = self._find_leaf_branch(active_branch, data)
+        
+        # Sync in-memory cache with persisted value
+        self.active_branches[chat_id] = active_branch
         
         # Get generated message IDs
         generated_ids = ctx.metadata.get("generated_ids", {})
@@ -122,8 +160,10 @@ class Plugin(PluginBase):
                 if active_branch not in msg["branches"]:
                     msg["branches"].append(active_branch)
         
-        # Ensure active_branch is persisted
-        data["active_branch"] = active_branch
+        # Do NOT overwrite active_branch — it was already correct in the data
+        # Only set it if it wasn't there before
+        if "active_branch" not in data or not data["active_branch"]:
+            data["active_branch"] = active_branch
 
         # Save back
         result = await self.brain.execute_command("memory.save_chat", chat_id=chat_id, data=data)
@@ -165,6 +205,10 @@ class Plugin(PluginBase):
                     split_index = i
                     break
             
+            self.logger.info(f"Branch create: looking for message_id='{message_id}', found at index={split_index}, total_messages={len(messages)}")
+            if target_msg:
+                self.logger.info(f"Branch create: target_msg role='{target_msg.get('role')}', content='{target_msg.get('content', '')[:50]}', branches={target_msg.get('branches', [])}")
+            
             if not target_msg:
                  return {"status": "error", "error": f"Message '{message_id}' not found"}
 
@@ -172,15 +216,8 @@ class Plugin(PluginBase):
             msg_branches = target_msg.get("branches", [])
             
             if not msg_branches:
-                # If message has no branch, it belongs to the "Root" (or implicit main)
-                # Check if we have an explicit root defined
-                # Find the root branch (one with no parent)
-                root_id = None
-                for bid, bdata in data.get("branches", {}).items():
-                    if bdata.get("parent_branch") is None:
-                        root_id = bid
-                        break
-                source_branch = root_id or "main"
+                # If message has no branch, it belongs to the root
+                source_branch = self._find_root_branch(data)
             else:
                 # In strict tree, usually 1 branch per message.
                 # Use the first one.
@@ -190,11 +227,11 @@ class Plugin(PluginBase):
             if "branches" not in data:
                 data["branches"] = {}
 
-            # Lazy Root Generation again just in case
-            if source_branch == "main" or source_branch not in data["branches"]:
+            # Lazy Root Generation: if source_branch is not in metadata, create a root
+            if not source_branch or source_branch not in data["branches"]:
                 root_id = uuid.uuid4().hex[:8]
                 data["branches"][root_id] = {
-                    "display_name": None, # Explicitly null
+                    "display_name": None,
                     "created_at": time.time(),
                     "parent_branch": None,
                     "parent_message_id": None
@@ -204,21 +241,11 @@ class Plugin(PluginBase):
                 for msg in messages:
                     if "branches" not in msg or not msg["branches"]:
                         msg["branches"] = [root_id]
-                    elif "main" in msg["branches"]:
-                        msg["branches"] = [root_id if b == "main" else b for b in msg["branches"]]
                 
                 source_branch = root_id
-                # If we just created root, and the message was previously untagged, 
-                # make sure we use this new root as source
-                pass
             
             # Re-fetch message branches in case they were just lazy-updated
-            # (Loop updated the list objects, so target_msg (reference) should be updated? 
-            #  Yes, dicts are mutable references).
-            
-            # Check if we are still "main" (shouldn't be)
-            
-            
+            # (Dicts are mutable references, so target_msg should be updated).
             # Messages after the split point
             tail_messages = messages[split_index+1:]
             
@@ -236,9 +263,16 @@ class Plugin(PluginBase):
             # Check if Mid-Split (Tail exists)
             if actual_tail_messages:
                 # Create Continuation Branch
+                source_meta = data["branches"].get(source_branch, {})
+                source_name = source_meta.get("display_name")
+                # Give continuation a clear name:
+                # - Root branch (no name) → continuation gets "Main"
+                # - Named branch → continuation inherits same name
+                continuation_name = source_name or "Main"
+                
                 continuation_id = uuid.uuid4().hex[:8]
                 data["branches"][continuation_id] = {
-                    "display_name": None,
+                    "display_name": continuation_name,
                     "created_at": time.time(),
                     "parent_branch": source_branch,
                     "parent_message_id": message_id
@@ -269,7 +303,7 @@ class Plugin(PluginBase):
 
             # 4. Create New Branch
             data["branches"][branch_id] = {
-                "display_name": kwargs.get("name"), # None if not provided
+                "display_name": kwargs.get("name") or "New Branch",
                 "created_at": time.time(),
                 "parent_branch": source_branch,
                 "parent_message_id": message_id
@@ -287,6 +321,12 @@ class Plugin(PluginBase):
             history = await self._get_filtered_history(chat_id, branch_id)
             
             self.logger.info(f"Created branch '{branch_id}' from message '{message_id}' for chat '{chat_id}'")
+            
+            # Debug: dump complete branch state
+            import json
+            self.logger.info(f"BRANCH STATE AFTER CREATE:\n{json.dumps(data.get('branches', {}), indent=2, default=str)}")
+            for msg in data.get("messages", []):
+                self.logger.info(f"  MSG {msg.get('id','?')}: role={msg.get('role')}, branches={msg.get('branches', [])}, content={msg.get('content','')[:30]}")
             
             return {
                 "status": "success",
@@ -308,23 +348,22 @@ class Plugin(PluginBase):
             branch = p.get("branch", branch)
         
         try:
-            # Check if effective change or first load
             # Persist to backend
             result = await self.brain.execute_command("memory.load_chat", chat_id=chat_id)
             if result.get("status") == "success":
                 data = result.get("data", {})
-                data["active_branch"] = target_branch
+                data["active_branch"] = branch
                 await self.brain.execute_command("memory.save_chat", chat_id=chat_id, data=data)
 
             # Set as active in memory
-            self.active_branches[chat_id] = target_branch
+            self.active_branches[chat_id] = branch
             
             # Get history
-            history = await self._get_filtered_history(chat_id, target_branch)
+            history = await self._get_filtered_history(chat_id, branch)
             
             return {
                 "status": "success",
-                "branch": branch or "main",
+                "branch": branch,
                 "history": history
             }
         except Exception as e:
@@ -353,25 +392,11 @@ class Plugin(PluginBase):
             # Get branches from metadata
             branches_meta = data.get("branches", {})
             
-            # If empty (linear chat), ensure we at least return a virtual main if requested?
-            # actually, frontend expects what we have.
-            if not branches_meta and not branch_ids:
-                 branches_meta = {
-                    "main": {
-                        "id": "main",
-                        "display_name": None,
-                        "created_at": 0
-                    }
-                }
+            # If empty (linear chat), return empty — no branches exist yet
             
-            # Ensure all used branches are in meta (handle legacy/implicit main)
+            # Ensure all used branch IDs have metadata entries
             for bid in branch_ids:
-                if bid == "main" and "main" not in branches_meta:
-                     branches_meta["main"] = {
-                        "id": "main", 
-                        "display_name": None
-                    }
-                elif bid not in branches_meta:
+                if bid not in branches_meta:
                     # Should unlikely happen if we manage meta correctly
                     branches_meta[bid] = {
                         "id": bid,
@@ -381,7 +406,7 @@ class Plugin(PluginBase):
             return {
                 "status": "success",
                 "chat_id": chat_id,
-                "active_branch": self.active_branches.get(chat_id, "main"),
+                "active_branch": self.active_branches.get(chat_id) or self._find_root_branch(data),
                 "branches": branches_meta
             }
         except Exception as e:
@@ -440,13 +465,13 @@ class Plugin(PluginBase):
             del branches_meta[branch_id]
 
             # If deleted branch was active, switch to parent
-            parent_branch = branch_info.get("parent_branch", "main")
+            parent_branch = branch_info.get("parent_branch") or self._find_root_branch(data)
             active = self.active_branches.get(chat_id)
             
             if active == branch_id:
                 self.active_branches[chat_id] = active = parent_branch
-            else:
-                active = active or "main"
+            elif not active:
+                active = self._find_root_branch(data)
 
             data["active_branch"] = active
 
@@ -482,24 +507,31 @@ class Plugin(PluginBase):
             # Load data first to check for persistent active branch if needed
             # We need data anyway for history
             
-            # Use active branch if not specified
-            if branch is None:
-                branch = self.active_branches.get(chat_id)
-            
-            # We'll need to load chat to get history anyway, so let's do it and check active_branch there
+            # Load chat data — persisted data is source of truth
             result = await self.brain.execute_command("memory.load_chat", chat_id=chat_id)
             if result.get("status") != "success":
                  return result
                  
             data = result.get("data", {})
             
+            # Determine active branch:
+            # 1. Explicit parameter (from switch_branch)
+            # 2. Persisted in data (source of truth)
+            # 3. In-memory cache (may be stale)
+            # 4. Find root branch
             if branch is None:
                 branch = data.get("active_branch")
-                # Fallback to main
-                if not branch:
-                    branch = "main"
-                # Update memory cache
+            if branch is None:
+                branch = self.active_branches.get(chat_id)
+            if branch is None:
+                branch = self._find_root_branch(data)
+            
+            # Always descend to a leaf branch
+            if branch:
+                branch = self._find_leaf_branch(branch, data)
                 self.active_branches[chat_id] = branch
+                # Persist the resolved leaf as active
+                data["active_branch"] = branch
 
             # Now filter history
             # (We already have data, so maybe optimize _get_filtered_history to take data? 
@@ -512,19 +544,13 @@ class Plugin(PluginBase):
             history = await self._get_filtered_history(chat_id, branch)
             
             branches_meta = data.get("branches", {})
-            if "main" not in branches_meta:
-                branches_meta["main"] = {
-                    "display_name": "Main",
-                    "parent_branch": None,
-                    "created_at": 0
-                }
             
             return {
                 "status": "success",
                 "chat_id": chat_id,
                 "history": history,
                 "branches": branches_meta,
-                "active_branch": branch or "main"
+                "active_branch": branch or self._find_root_branch(data)
             }
         except Exception as e:
             return {"status": "error", "error": str(e)}
@@ -581,8 +607,13 @@ class Plugin(PluginBase):
                 if matching_branch:
                     msg_copy["source_branch"] = matching_branch
                 elif is_common:
-                     # If common, it technically belongs to the "root-most" or implicit main.
-                     msg_copy["source_branch"] = "main"
+                     # If common, assign to root branch for UI rendering
+                     root = None
+                     for bid, bd in branches_meta.items():
+                         if bd.get("parent_branch") is None:
+                             root = bid
+                             break
+                     msg_copy["source_branch"] = root or branch_id
                      
                 filtered.append(msg_copy)
         

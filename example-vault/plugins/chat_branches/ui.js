@@ -60,6 +60,16 @@
         const messagesEl = document.getElementById('chat-messages');
         if (!messagesEl) return;
 
+        // Cleanup existing dividers to prevent duplication
+        messagesEl.querySelectorAll('.branch-divider').forEach(el => el.remove());
+
+        console.log('[ChatBranches] injectBranchUI called:', {
+            historyLength: history?.length,
+            branches: Object.keys(branchesMetadata || {}),
+            currentActiveBranch,
+            branchDetails: JSON.stringify(branchesMetadata, null, 2)
+        });
+
         // Handle empty history (new/empty branch) - still show branch tabs
         if (!history || history.length === 0) {
             if (currentActiveBranch && branchesMetadata[currentActiveBranch]) {
@@ -96,6 +106,13 @@
 
                     siblings.sort((a, b) => (a.id || '').localeCompare(b.id || ''));
 
+                    console.log('[ChatBranches] TRANSITION divider at idx', idx, {
+                        from: lastBranchId, to: currentBranchId,
+                        parentId,
+                        siblingIds: siblings.map(s => s.id),
+                        siblingNames: siblings.map(s => s.display_name)
+                    });
+
                     if (siblings.length > 1 || currentBranchId) {
                         const msgEl = messagesEl.querySelector(`[data-message-index="${idx}"]`);
                         if (msgEl) {
@@ -114,15 +131,17 @@
                 b.parent_branch === lastBranchId
             );
 
+            console.log('[ChatBranches] FORWARD nav:', {
+                lastBranchId,
+                childIds: children.map(c => c.id),
+                childNames: children.map(c => c.display_name)
+            });
+
             if (children.length > 0) {
-                // Add the parent itself to the options so user can stay on parent or switch to child
-                const parentBranch = branchesMetadata[lastBranchId];
-                const tabsList = [parentBranch, ...children];
+                // Only show children — the parent is implicit (it's what the user is viewing)
+                children.sort((a, b) => (a.id || '').localeCompare(b.id || ''));
 
-                tabsList.sort((a, b) => (a.id || '').localeCompare(b.id || ''));
-
-                // Use currentActiveBranch to highlight the correct tab (could be parent or one of the children)
-                const forwardTabs = createBranchTabsElement(tabsList, currentActiveBranch, true);
+                const forwardTabs = createBranchTabsElement(children, currentActiveBranch, true);
                 messagesEl.appendChild(forwardTabs);
                 messagesEl.scrollTop = messagesEl.scrollHeight;
             }
@@ -144,7 +163,10 @@
         div.style.borderTop = isForward ? 'none' : '1px solid var(--border-subtle)';
 
         const tabsHtml = siblings.map(b => {
-            const isActive = b.id === activeBranchId;
+            // Ensure strict string comparison for IDs, handling potential nulls
+            const bId = String(b.id || '');
+            const activeId = String(activeBranchId || '');
+            const isActive = bId === activeId;
             const name = b.display_name || (b.id ? b.id.substring(0, 8) : 'branch');
             const isRoot = b.parent_branch === null || b.parent_branch === undefined;
             const canDelete = !isRoot;
@@ -209,6 +231,7 @@
                     // Don't switch if they clicked the delete button
                     if (e.target.closest('.branch-delete-btn')) return;
                     e.preventDefault();
+                    console.log('[ChatBranches] Tab clicked, dispatching switchBranch for:', btn.dataset.branchId);
                     window.dispatchEvent(new CustomEvent('chat:switchBranch', {
                         detail: { branchId: btn.dataset.branchId }
                     }));
@@ -270,8 +293,15 @@
      * Event Listeners for API calls
      */
     window.addEventListener('chat:createBranch', async (e) => {
-        const { messageId } = e.detail;
+        const { messageId, message, context } = e.detail;
         const activeChatId = window.chatModule?.activeChatId;
+
+        console.log('[ChatBranches] createBranch event:', {
+            messageId,
+            messageContent: message?.content?.substring(0, 50),
+            contextIndex: context?.index,
+            activeChatId
+        });
 
         if (!activeChatId) return;
 
@@ -280,6 +310,7 @@
                 chat_id: activeChatId,
                 message_id: messageId
             });
+            console.log('[ChatBranches] branch.create response:', JSON.stringify(res));
             const result = res.result || res;
             if (result.status === 'success') {
                 window.chatModule.loadHistory(activeChatId);
@@ -293,18 +324,30 @@
         const { branchId } = e.detail;
         const activeChatId = window.chatModule?.activeChatId;
 
-        if (!activeChatId) return;
+        console.log('[ChatBranches] switchBranch event fired:', { branchId, activeChatId });
+
+        if (!activeChatId) {
+            console.error('[ChatBranches] No activeChatId, aborting switch');
+            return;
+        }
 
         try {
+            console.log('[ChatBranches] Sending branch.switch request...');
             const res = await window.request('branch.switch', {
                 chat_id: activeChatId,
                 branch: branchId
             });
+            console.log('[ChatBranches] branch.switch response:', JSON.stringify(res));
             const result = res.result || res;
             if (result.status === 'success') {
+                console.log('[ChatBranches] Switch successful, reloading history...');
                 window.chatModule.loadHistory(activeChatId);
+            } else {
+                console.error('[ChatBranches] Switch failed:', result.error || result);
             }
-        } catch (err) { console.error(err); }
+        } catch (err) {
+            console.error('[ChatBranches] Switch error:', err);
+        }
     });
 
     window.addEventListener('chat:deleteBranch', async (e) => {
