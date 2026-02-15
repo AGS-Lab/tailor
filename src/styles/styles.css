@@ -732,6 +732,181 @@ input:focus {
 }
 
 /* ========================================
+   UTILITY CLASSES
+   ======================================== */
+.w-full {
+    width: 100%;
+}
+
+.flex-between {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.text-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-disabled);
+}
+
+.text-error {
+    color: var(--accent-error) !important;
+}
+
+.text-empty {
+    color: var(--text-disabled);
+    text-align: center;
+    padding: 32px 16px;
+    font-size: 13px;
+    font-style: italic;
+}
+
+/* ========================================
+   BUTTON CLASSES
+   ======================================== */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    font-family: var(--font-main);
+    font-size: 13px;
+    font-weight: 500;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    background: var(--bg-card);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    text-decoration: none;
+    line-height: 1.4;
+}
+
+.btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--border-active);
+}
+
+.btn-primary {
+    background: var(--accent-primary);
+    color: #ffffff;
+    border-color: var(--accent-primary);
+}
+
+.btn-primary:hover {
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
+}
+
+.btn-sm {
+    padding: 4px 10px;
+    font-size: 12px;
+    border-radius: 6px;
+}
+
+.btn-icon {
+    padding: 6px;
+    border-radius: 6px;
+    line-height: 1;
+}
+
+.btn-icon i {
+    width: 16px;
+    height: 16px;
+}
+
+.btn-danger {
+    color: var(--accent-error);
+    border-color: transparent;
+}
+
+.btn-danger:hover {
+    background: rgba(224, 49, 49, 0.1);
+    border-color: var(--accent-error);
+}
+
+.icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.icon-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.icon-btn i {
+    width: 18px;
+    height: 18px;
+}
+
+/* ========================================
+   PANEL & LOG COMPONENTS
+   ======================================== */
+.panel-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg-panel);
+}
+
+.scrollable {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.log-entry {
+    padding: 4px 12px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--bg-overlay);
+    line-height: 1.6;
+    word-break: break-word;
+}
+
+.log-entry .ts {
+    color: var(--text-disabled);
+    margin-right: 8px;
+    font-size: 11px;
+}
+
+.log-entry.error {
+    color: var(--accent-error);
+}
+
+.log-entry.in {
+    color: var(--accent-success);
+}
+
+.log-entry.out {
+    color: var(--accent-primary);
+}
+
+.toolbar {
+    padding: 8px 12px;
+    border-top: 1px solid var(--border-subtle);
+    background: var(--bg-panel);
+    flex-shrink: 0;
+}
+
+/* ========================================
    8. GOLDEN LAYOUT OVERRIDES
    ======================================== */
 /* Override ALL GoldenLayout theme backgrounds with CSS variables */

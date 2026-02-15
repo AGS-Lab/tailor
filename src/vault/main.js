@@ -37,7 +37,6 @@ export function initVault() {
         registerSidebarView: (id, icon, title) => sidebar.registerView(id, icon, title),
         setSidebarContent: (id, html) => sidebar.setContent(id, html),
         toggleSidebar: (id) => sidebar.toggle(id),
-        showToast,
 
         // Panels (GoldenLayout tabs)
         registerPanel: (id, title, icon, position) => panels.registerPanel(id, title, icon, position),
