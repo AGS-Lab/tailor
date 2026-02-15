@@ -1,0 +1,30 @@
+autoUpdate = false
+theme = "dark"
+
+[editor]
+fontFamily = "Fira Code, monospace"
+fontSize = 15
+wordWrap = "on"
+
+[plugins.chat_branches]
+enabled = true
+auto_name_branches = true
+auto_name_main_branch = false
+default_branch_name = "New Branch"
+confirm_delete = true
+
+[plugins.memory]
+enabled = true
+auto_title = true
+title_category = "fast"
+title_max_length = 50
+max_messages = 0
+
+[plugins.summarizer]
+enabled = true
+summary_category = "fast"
+
+[plugins.prompt_refiner]
+enabled = true
+auto_refine = false
+refine_category = "fast"

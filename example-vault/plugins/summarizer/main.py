@@ -206,10 +206,28 @@ class Plugin(PluginBase):
         
         try:
             # Call LLM
+            from sidecar.services.llm_service import get_llm_service
+            llm = get_llm_service()
+            if not llm:
+                 self.notify("LLM service execution failed", severity=Severity.ERROR)
+                 return {"status": "error", "error": "llm_unavailable"}
+
+            category = self.config.get("summary_category", "fast")
             prompt = f"{SUMMARIZER_SYSTEM_PROMPT}\n\nText to summarize:\n{content}"
-            ctx = await self.brain.pipeline.run(
-                message=prompt, history=[], metadata={"save_to_memory": False}
+            
+            # Using complete instead of pipeline.run to support category/model selection
+            response = await llm.complete(
+                messages=[{"role": "user", "content": prompt}],
+                category=category,
+                temperature=0.3
             )
+            
+            if response and response.content:
+                # Mock ctx object for compatibility with existing parsing logic
+                class MockCtx:
+                     pass
+                ctx = MockCtx()
+                ctx.response = response.content
             
             if ctx.response:
                 # Parse response

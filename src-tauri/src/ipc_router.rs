@@ -482,16 +482,43 @@ pub async fn get_effective_settings(
     app: AppHandle,
 ) -> Result<serde_json::Value, String> {
     // 1. Get Global Settings
-    let app_data_dir = app.path().app_data_dir()
-        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
-    let global_settings_path = app_data_dir.join("settings.toml");
+    let app_data_dir = app.path().app_data_dir().ok();
     
-    let mut settings = if global_settings_path.exists() {
-        let content = fs::read_to_string(&global_settings_path)
-            .map_err(|e| format!("Global settings read error: {}", e))?;
-        toml::from_str(&content)
-             .map_err(|e| format!("Global settings parse error: {}", e))?
+    // Try AppData settings.toml
+    let mut settings = if let Some(path) = app_data_dir.map(|p| p.join("settings.toml")) {
+        if path.exists() {
+             match fs::read_to_string(&path).and_then(|c| toml::from_str(&c).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))) {
+                 Ok(s) => Some(s),
+                 Err(e) => {
+                     println!("Global settings error (AppData): {}", e);
+                     None
+                 }
+             }
+        } else {
+            None
+        }
     } else {
+        None
+    };
+
+    // Try Local CWD settings.toml if not found/loaded
+    if settings.is_none() {
+        let local_settings = std::env::current_dir()
+            .map(|p| p.join("settings.toml"))
+            .unwrap_or_else(|_| PathBuf::from("settings.toml"));
+            
+        if local_settings.exists() {
+            match fs::read_to_string(&local_settings).and_then(|c| toml::from_str(&c).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))) {
+                 Ok(s) => { settings = Some(s); },
+                 Err(e) => {
+                     println!("Local settings error (CWD): {}", e);
+                 }
+            }
+        }
+    }
+
+    // Fallback to defaults
+    let mut settings = settings.unwrap_or_else(|| {
         serde_json::json!({
             "theme": "system",
             "autoUpdate": false,
@@ -499,9 +526,15 @@ pub async fn get_effective_settings(
                 "fontSize": 14,
                 "fontFamily": "Fira Code, monospace",
                 "wordWrap": "on"
+            },
+            "plugins": {
+                "chat_branches": { "enabled": true },
+                "memory": { "enabled": true },
+                "summarizer": { "enabled": true },
+                "prompt_refiner": { "enabled": true }
             }
         })
-    };
+    });
 
     // 2. Get Vault Settings
     let vault_path_buf = PathBuf::from(&vault_path);
@@ -596,6 +629,45 @@ pub async fn get_settings_schema() -> Result<serde_json::Value, String> {
                     "default": true
                 }
             ]
+        },
+        {
+            "id": "general",
+            "title": "General",
+            "settings": [
+                {
+                    "key": "streaming",
+                    "type": "boolean",
+                    "label": "Stream Responses",
+                    "description": "Show AI responses as they are generated",
+                    "default": true
+                },
+                {
+                    "key": "default_category",
+                    "type": "text",
+                    "label": "Default Model Category",
+                    "description": "Category to use for new chats (e.g. fast, smart)",
+                    "default": "fast"
+                },
+                {
+                    "key": "llm.defaults.max_tokens",
+                    "type": "number",
+                    "label": "Max Tokens",
+                    "description": "Default maximum tokens for generation",
+                    "default": 4096,
+                    "min": 128,
+                    "max": 128000
+                },
+                {
+                    "key": "llm.defaults.temperature",
+                    "type": "number",
+                    "label": "Temperature",
+                    "description": "Default randomness (0.0 - 2.0)",
+                    "default": 0.7,
+                    "min": 0.0,
+                    "max": 2.0,
+                    "step": 0.1
+                }
+            ]
         }
     ]))
 }
@@ -614,11 +686,22 @@ pub async fn get_global_settings(app: AppHandle) -> Result<serde_json::Value, St
         toml::from_str(&content)
             .map_err(|e| format!("Failed to parse settings: {}", e))
     } else {
-        // Default settings
-        Ok(serde_json::json!({
-            "theme": "system",
-            "autoUpdate": false,
-        }))
+        // Default settings - try local fallback first
+        let local_settings = std::env::current_dir()
+            .map(|p| p.join("settings.toml"))
+            .unwrap_or_else(|_| PathBuf::from("settings.toml"));
+            
+        if local_settings.exists() {
+            let content = fs::read_to_string(&local_settings)
+                .map_err(|e| format!("Failed to read local settings: {}", e))?;
+            toml::from_str(&content)
+                .map_err(|e| format!("Failed to parse local settings: {}", e))
+        } else {
+            Ok(serde_json::json!({
+                "theme": "system",
+                "autoUpdate": false,
+            }))
+        }
     }
 }
 

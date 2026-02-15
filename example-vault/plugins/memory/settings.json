@@ -1,4 +1,7 @@
 {
     "enabled": true,
-    "auto_title": true
+    "auto_title": true,
+    "title_category": "fast",
+    "title_max_length": 50,
+    "max_messages": 0
 }

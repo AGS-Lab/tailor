@@ -8,6 +8,7 @@
 import { request } from '../connection.js';
 import { createToolbar, registerAction, refreshComposerToolbar } from './MessageActionToolbar.js';
 import { getModelSelector } from './ModelSelector.js';
+import { settingsApi } from '../../services/api.js';
 
 // Chat state
 let conversationHistory = [];
@@ -69,13 +70,40 @@ export function initChat(containerEl) {
         }
     }, 50);
 
-    // Try to load history if chat ID is available
     if (window.activeChatId || activeChatId) {
         if (!activeChatId) activeChatId = window.activeChatId;
         loadHistory(activeChatId);
     }
 
+    // Load settings from vault config
+    loadSettings();
+
     console.log('[Chat] Core chat module initialized');
+}
+
+/**
+ * Load settings from vault configuration
+ */
+async function loadSettings() {
+    try {
+        const vaultPath = getCurrentVault();
+        if (!vaultPath || vaultPath === 'default') return;
+
+        const settings = await settingsApi.getEffectiveSettings(vaultPath);
+        if (settings) {
+            // Apply streaming setting
+            if (typeof settings.streaming === 'boolean') {
+                enableStreaming = settings.streaming;
+            }
+
+            // Apply default category for new chats
+            if (settings.default_category && !activeChatId && !window.activeChatId) {
+                setCategory(settings.default_category);
+            }
+        }
+    } catch (e) {
+        console.warn('[Chat] Failed to load settings:', e);
+    }
 }
 
 /**

@@ -2,10 +2,12 @@ from pathlib import Path
 from typing import List, Dict, Any, Set
 import uuid
 import time
+import asyncio
 
 from sidecar.api.plugin_base import PluginBase
 from sidecar.pipeline.events import PipelineEvents
 from sidecar.pipeline.types import PipelineContext
+from sidecar.services.llm_service import get_llm_service
 
 class Plugin(PluginBase):
     """
@@ -60,6 +62,8 @@ class Plugin(PluginBase):
         self.brain.register_command("branch.switch", self.switch_branch, self.name)
         self.brain.register_command("branch.list", self.list_branches, self.name)
         self.brain.register_command("branch.delete", self.delete_branch, self.name)
+        self.brain.register_command("branch.rename", self.rename_branch, self.name)
+        self.brain.register_command("branch.auto_name", self.auto_name_branch, self.name)
         
     async def on_load(self) -> None:
         """Load plugin."""
@@ -327,6 +331,12 @@ class Plugin(PluginBase):
             self.logger.info(f"BRANCH STATE AFTER CREATE:\n{json.dumps(data.get('branches', {}), indent=2, default=str)}")
             for msg in data.get("messages", []):
                 self.logger.info(f"  MSG {msg.get('id','?')}: role={msg.get('role')}, branches={msg.get('branches', [])}, content={msg.get('content','')[:30]}")
+            
+
+            
+            # Trigger auto-name for new branch if enabled
+            if self.config.get("auto_name_branches", True):
+                asyncio.create_task(self._generate_branch_name(chat_id, branch_id))
             
             return {
                 "status": "success",
@@ -618,3 +628,123 @@ class Plugin(PluginBase):
                 filtered.append(msg_copy)
         
         return filtered
+
+    async def rename_branch(self, chat_id: str = "", branch_id: str = "", name: str = "", **kwargs) -> Dict[str, Any]:
+        """Rename a branch."""
+        if not chat_id:
+            p = kwargs.get("p") or kwargs.get("params", {})
+            chat_id = p.get("chat_id")
+            branch_id = p.get("branch_id", branch_id)
+            name = p.get("name", name)
+
+        if not chat_id or not branch_id or not name:
+             return {"status": "error", "error": "chat_id, branch_id, and name are required"}
+        
+        try:
+            result = await self.brain.execute_command("memory.load_chat", chat_id=chat_id)
+            if result.get("status") != "success":
+                return result
+            
+            data = result.get("data", {})
+            branches_meta = data.get("branches", {})
+            
+            if branch_id not in branches_meta:
+                 return {"status": "error", "error": f"Branch '{branch_id}' not found"}
+            
+            branches_meta[branch_id]["display_name"] = name
+            
+            await self.brain.execute_command("memory.save_chat", chat_id=chat_id, data=data)
+            
+            return {
+                "status": "success", 
+                "branch_id": branch_id,
+                "name": name
+            }
+        except Exception as e:
+            return {"status": "error", "error": str(e)}
+
+    async def auto_name_branch(self, chat_id: str = "", branch_id: str = "", **kwargs) -> Dict[str, Any]:
+        """Manually trigger auto-naming for a branch."""
+        if not chat_id:
+            p = kwargs.get("p") or kwargs.get("params", {})
+            chat_id = p.get("chat_id")
+            branch_id = p.get("branch_id", branch_id)
+
+        if not chat_id or not branch_id:
+             return {"status": "error", "error": "chat_id and branch_id are required"}
+        
+        asyncio.create_task(self._generate_branch_name(chat_id, branch_id))
+        return {"status": "success", "message": "Auto-naming started"}
+
+    async def _generate_branch_name(self, chat_id: str, branch_id: str) -> None:
+        """Generate a branch name using LLM."""
+        try:
+            # 1. Get History for Branch
+            history = await self._get_filtered_history(chat_id, branch_id)
+            if not history:
+                return
+            
+            # Use last few messages to determine context
+            # We want to capture what this branch *diverged* into
+            # So look at the last 3-5 messages
+            relevant_msgs = history[-5:]
+            if not relevant_msgs:
+                return
+
+            conversation_text = ""
+            for msg in relevant_msgs:
+                role = msg.get("role", "unknown")
+                content = msg.get("content", "")[:200] # Truncate
+                conversation_text += f"{role}: {content}\n"
+            
+            llm_messages = [
+                {
+                    "role": "system",
+                    "content": (
+                        "You generate short, descriptive branch names for a chat conversation.\n"
+                        "Task: Summarize the distinct topic of the following message snippet into a 2-4 word unique name.\n\n"
+                        "Rules:\n"
+                        "- Max 4 words.\n"
+                        "- No punctuation.\n"
+                        "- No 'Branch' or 'Chat' in the name.\n"
+                        "- Focus on the specific sub-topic or direction.\n"
+                        "- Output ONLY the name."
+                    )
+                },
+                {
+                    "role": "user",
+                    "content": conversation_text
+                }
+            ]
+            
+            llm = get_llm_service()
+            if not llm:
+                return
+
+            # Use default category from global settings? 
+            # Or hardcode 'fast' as requested in settings_suggestions?
+            # User accepted all, so I should probably check if I can get global settings.
+            # But 'fast' is safe default.
+            
+            response = await llm.complete(
+                messages=llm_messages,
+                category="fast",
+                max_tokens=10,
+                temperature=0.3
+            )
+            
+            name = response.content.strip().strip('"\'.-').strip()
+            if not name or len(name) < 2:
+                return
+            
+            # Save Name
+            result = await self.brain.execute_command("memory.load_chat", chat_id=chat_id)
+            if result.get("status") == "success":
+                data = result.get("data", {})
+                if branch_id in data.get("branches", {}):
+                    data["branches"][branch_id]["display_name"] = name
+                    await self.brain.execute_command("memory.save_chat", chat_id=chat_id, data=data)
+                    self.logger.info(f"Auto-named branch {branch_id}: '{name}'")
+                    
+        except Exception as e:
+            self.logger.warning(f"Failed to auto-name branch {branch_id}: {e}")

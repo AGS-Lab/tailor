@@ -29,7 +29,9 @@ class Plugin(PluginBase):
         self.brain.register_command("memory.search", self.search_chats, self.name)
         self.brain.register_command("memory.delete_chat", self.delete_chat, self.name)
         self.brain.register_command("memory.rename_chat", self.rename_chat, self.name)
+        self.brain.register_command("memory.rename_chat", self.rename_chat, self.name)
         self.brain.register_command("chat.get_history", self.get_chat_history, self.name)
+        self.brain.register_command("chat.auto_title", self.manual_auto_title, self.name)
         
     async def on_load(self) -> None:
         """Load memory and subscribe to pipeline events."""
@@ -271,6 +273,13 @@ class Plugin(PluginBase):
         data["messages"].append(user_msg)
         data["messages"].append(assistant_msg)
         
+        # Truncate if max_messages is set
+        max_msgs = self.config.get("max_messages", 0)
+        if max_msgs > 0 and len(data["messages"]) > max_msgs:
+            # Keep the last N messages
+            data["messages"] = data["messages"][-max_msgs:]
+            self.logger.debug(f"Truncated chat {chat_id} to last {max_msgs} messages")
+        
         # Save back
         await self.brain.execute_command("memory.save_chat", chat_id=chat_id, data=data)
         self.logger.info(f"Saved interaction to {chat_id}.json")
@@ -329,9 +338,11 @@ class Plugin(PluginBase):
             if not llm:
                 return
 
+            category = self.config.get("title_category", "fast")
+            
             response = await llm.complete(
                 messages=llm_messages,
-                category="fast",
+                category=category,
                 max_tokens=20,
                 temperature=0.3
             )
@@ -339,8 +350,10 @@ class Plugin(PluginBase):
             title = response.content.strip().strip('"\'.-').strip()
             if not title or len(title) < 2:
                 return
-            if len(title) > 50:
-                title = title[:47] + "..."
+                
+            max_len = self.config.get("title_max_length", 50)
+            if len(title) > max_len:
+                title = title[:max_len-3] + "..."
 
             chat_file = self._get_chat_path(chat_id)
             if chat_file.exists():
@@ -353,3 +366,24 @@ class Plugin(PluginBase):
 
         except Exception as e:
             self.logger.warning(f"Auto-title failed for {chat_id}: {e}")
+
+    async def manual_auto_title(self, chat_id: str = "", **kwargs) -> Dict[str, Any]:
+        """Manually trigger auto-titling for a chat."""
+        if not chat_id:
+            p = kwargs.get("p") or kwargs.get("params", {})
+            chat_id = p.get("chat_id")
+            
+        if not chat_id:
+             return {"status": "error", "error": "chat_id required"}
+
+        # Load data
+        result = await self.brain.execute_command("memory.load_chat", chat_id=chat_id)
+        if result.get("status") != "success":
+            return result
+            
+        data = result.get("data", {})
+        
+        # Trigger background generation
+        asyncio.create_task(self._auto_generate_title(chat_id, data))
+        
+        return {"status": "success", "message": "Auto-titling started"}

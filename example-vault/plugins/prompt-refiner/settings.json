@@ -1,3 +1,5 @@
 {
-    "enabled": true
+    "enabled": true,
+    "auto_refine": false,
+    "refine_category": "fast"
 }

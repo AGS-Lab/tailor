@@ -1,3 +1,7 @@
 {
-    "enabled": true
+    "enabled": true,
+    "auto_name_branches": true,
+    "auto_name_main_branch": false,
+    "default_branch_name": "New Branch",
+    "confirm_delete": true
 }

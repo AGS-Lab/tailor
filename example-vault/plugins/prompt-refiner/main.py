@@ -156,11 +156,29 @@ class Plugin(PluginBase):
             # Prepend system context to the message for refinement
             refine_prompt = f"{REFINER_SYSTEM_PROMPT}\n\nUser prompt to refine:\n{original_text}"
             
-            ctx = await self.brain.pipeline.run(
-                message=refine_prompt,
-                history=[],
-                metadata={"save_to_memory": False}
+            from sidecar.services.llm_service import get_llm_service
+            llm = get_llm_service()
+            if not llm:
+                return {
+                    "status": "error",
+                    "error": "llm_unavailable",
+                    "message": "LLM service unavailable"
+                }
+
+            category = self.config.get("refine_category", "fast")
+            
+            response = await llm.complete(
+                messages=[{"role": "user", "content": refine_prompt}],
+                category=category,
+                temperature=0.7
             )
+            
+            if response and response.content:
+                # Mock ctx
+                class MockCtx:
+                     pass
+                ctx = MockCtx()
+                ctx.response = response.content
             
             if ctx.response:
                 refined_text = ctx.response.strip()
@@ -204,7 +222,38 @@ class Plugin(PluginBase):
     async def on_load(self) -> None:
         """Called after plugin is loaded."""
         await super().on_load()
+        
+        # Subscribe to INPUT for auto-refine if enabled
+        # We use a helper here or directly the method
+        from sidecar.constants import EventType
+        self.subscribe(EventType.INPUT, self._handle_auto_refine, priority=5)
+
         self.logger.info("Prompt Refiner plugin loaded")
+        
+    async def _handle_auto_refine(self, ctx: Any) -> None:
+        """Auto-refine input prompt if enabled."""
+        if not self.config.get("auto_refine", False):
+            return
+            
+        if not ctx.message or ctx.message.startswith("/"):
+            return
+            
+        # Only refine if reasonable length
+        if len(ctx.message) < 10:
+            return
+
+        self.notify("Auto-refining prompt...", severity="info")
+        
+        try:
+            res = await self._handle_refine(text=ctx.message)
+            if res.get("status") == "success":
+                refined = res.get("refined")
+                if refined and refined != ctx.message:
+                    self.logger.info(f"Auto-refined: '{ctx.message}' -> '{refined}'")
+                    ctx.message = refined
+                    self.notify("Prompt auto-refined", severity="success")
+        except Exception as e:
+            self.logger.warning(f"Auto-refine failed: {e}")
     
     async def on_unload(self) -> None:
         """Called when plugin is unloaded."""
