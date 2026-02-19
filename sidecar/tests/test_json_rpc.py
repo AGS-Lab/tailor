@@ -12,28 +12,30 @@ from sidecar import exceptions
 @pytest.mark.unit
 class TestBuildFunctions:
     """Test message building functions."""
-    
+
     def test_build_request(self):
         """Test building a request message."""
         msg = utils.build_request("test.method", {"arg": "value"}, request_id=1)
-        
+
         assert msg["jsonrpc"] == "2.0"
         assert msg["method"] == "test.method"
         assert msg["params"] == {"arg": "value"}
         assert msg["id"] == 1
-    
+
     def test_build_response(self):
         """Test building a response message."""
         msg = utils.build_response({"result": "data"}, request_id=2)
-        
+
         assert msg["jsonrpc"] == "2.0"
         assert msg["result"] == {"result": "data"}
         assert msg["id"] == 2
-    
+
     def test_build_error(self):
         """Test building an error message."""
-        msg = utils.build_error(-32600, "Invalid request", {"info": "test"}, request_id=3)
-        
+        msg = utils.build_error(
+            -32600, "Invalid request", {"info": "test"}, request_id=3
+        )
+
         assert msg["jsonrpc"] == "2.0"
         assert msg["error"]["code"] == -32600
         assert msg["error"]["message"] == "Invalid request"
@@ -44,23 +46,23 @@ class TestBuildFunctions:
 @pytest.mark.unit
 class TestValidation:
     """Test message validation."""
-    
+
     def test_valid_request(self):
         """Test validating a valid request."""
         msg = {"jsonrpc": "2.0", "method": "test", "id": 1}
         utils.validate_jsonrpc_message(msg)  # Should not raise
-    
+
     def test_valid_notification(self):
         """Test validating a valid notification (no id)."""
         msg = {"jsonrpc": "2.0", "method": "notify"}
         utils.validate_jsonrpc_message(msg)  # Should not raise
-    
+
     def test_invalid_version(self):
         """Test invalid JSON-RPC version."""
         msg = {"jsonrpc": "1.0", "method": "test", "id": 1}
         with pytest.raises(exceptions.JSONRPCError, match="version"):
             utils.validate_jsonrpc_message(msg)
-    
+
     def test_missing_method(self):
         """Test missing method field."""
         msg = {"jsonrpc": "2.0", "id": 1}
@@ -71,28 +73,24 @@ class TestValidation:
 @pytest.mark.unit
 class TestHelpers:
     """Test helper functions."""
-    
 
-    
-
-    
     def test_get_method(self):
         """Test get_method helper."""
         msg = {"jsonrpc": "2.0", "method": "my.method", "id": 1}
         assert utils.get_method(msg) == "my.method"
-    
+
     def test_get_params(self):
         """Test get_params helper."""
         msg_with_params = {"jsonrpc": "2.0", "method": "test", "params": {"key": "val"}}
         msg_without_params = {"jsonrpc": "2.0", "method": "test"}
-        
+
         assert utils.get_params(msg_with_params) == {"key": "val"}
         assert utils.get_params(msg_without_params) == {}
-    
+
     def test_get_request_id(self):
         """Test get_request_id helper."""
         request = {"jsonrpc": "2.0", "method": "test", "id": 42}
         notification = {"jsonrpc": "2.0", "method": "notify"}
-        
+
         assert utils.get_request_id(request) == 42
         assert utils.get_request_id(notification) is None

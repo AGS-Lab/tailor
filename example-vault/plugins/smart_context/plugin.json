@@ -1,0 +1,19 @@
+{
+    "name": "smart-context",
+    "displayName": "Smart Context",
+    "version": "0.1.0",
+    "description": "A plugin to provide smart context panel.",
+    "author": {
+        "name": "User",
+        "url": ""
+    },
+    "main": "main.py",
+    "keywords": [
+        "context",
+        "panel"
+    ],
+    "license": "MIT",
+    "tailor": {
+        "minVersion": "1.0.0"
+    }
+}

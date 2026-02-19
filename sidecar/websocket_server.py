@@ -10,7 +10,6 @@ import json
 from typing import Optional, Dict, Any, Callable, Awaitable
 import websockets
 from websockets.exceptions import ConnectionClosed
-import inspect
 from loguru import logger
 from . import utils
 from . import constants
@@ -22,24 +21,25 @@ CommandHandler = Callable[[Dict[str, Any]], Awaitable[Dict[str, Any]]]
 
 logger = logger.bind(name=__name__)
 
+
 class WebSocketServer:
     """
     WebSocket server for bi-directional communication with Rust.
-    
+
     Implements JSON-RPC 2.0 protocol for command/response exchange.
     Handlers can be registered for specific methods, and messages
     are routed to the appropriate handler.
-    
+
     Example:
         >>> server = WebSocketServer(port=9001)
         >>> server.register_handler("chat.send", handle_chat)
         >>> await server.start()
     """
-    
+
     def __init__(self, port: int, host: str = constants.DEFAULT_WEBSOCKET_HOST):
         """
         Initialize WebSocket server.
-        
+
         Args:
             port: Port to listen on
             host: Host address to bind to (default: localhost)
@@ -50,106 +50,108 @@ class WebSocketServer:
         self.message_queue: asyncio.Queue = asyncio.Queue()
         self.pending_messages: list[Dict[str, Any]] = []
         self.brain = None  # Will be set by VaultBrain after initialization
-        
+
         logger.info(f"WebSocket server initialized on {host}:{port}")
-    
+
     async def start(self) -> None:
         """
         Start the WebSocket server.
-        
+
         Starts listening for connections and handling messages.
         This method runs until the server is stopped.
         """
         logger.info(f"Starting WebSocket server on ws://{self.host}:{self.port}")
-        
+
         async with websockets.serve(
             self.handle_connection,
             self.host,
             self.port,
         ):
             logger.info(f"WebSocket server listening on ws://{self.host}:{self.port}")
-            
+
             # Send any pending messages that were queued before server started
             if self.pending_messages and self.connection:
                 logger.debug(f"Sending {len(self.pending_messages)} pending messages")
                 for msg in self.pending_messages:
                     await self.send(msg)
                 self.pending_messages.clear()
-            
+
             # Run forever
             await asyncio.Future()
-    
+
     async def handle_connection(self, websocket: Any) -> None:
         """
         Handle incoming WebSocket connection.
-        
+
         Args:
             websocket: WebSocket connection instance
         """
         client_addr = websocket.remote_address
         logger.info(f"Client connected from {client_addr}")
         self.connection = websocket
-        
+
         try:
             async for message in websocket:
                 await self.handle_message(message)
-        
+
         except ConnectionClosed as e:
             logger.info(f"Client disconnected: {e.code} - {e.reason}")
-        
+
         except Exception as e:
             logger.exception(f"WebSocket error: {e}")
-        
+
         finally:
             self.connection = None
             logger.debug("Connection closed")
-    
+
     async def handle_message(self, message: str) -> None:
         """
         Handle incoming message from Rust.
-        
+
         Parses JSON-RPC message, validates it, routes to appropriate handler,
         and sends back response.
-        
+
         Args:
             message: JSON-RPC message string
         """
         request_id: Optional[str] = None
-        
+
         try:
             # Parse JSON
             try:
                 data = json.loads(message)
             except json.JSONDecodeError as e:
                 logger.error(f"Invalid JSON: {message[:100]}")
-                raise exceptions.WebSocketMessageError(message, f"JSON parse error: {e}")
-            
+                raise exceptions.WebSocketMessageError(
+                    message, f"JSON parse error: {e}"
+                )
+
             # Validate JSON-RPC structure
             try:
                 utils.validate_jsonrpc_message(data)
             except exceptions.JSONRPCError as e:
                 logger.error(f"Invalid JSON-RPC message: {e.message}")
                 raise
-            
+
             # Extract message components
             request_id = utils.get_request_id(data)
             method = utils.get_method(data)
             params = utils.get_params(data)
-            
+
             if not method:
                 logger.error(f"Message missing method: {data}")
                 return
-            
+
             logger.debug(f"Received command: {method}")
-            
+
             try:
                 result = await self._execute_request(method, params, request_id)
-                
+
                 # Send success response
                 response = utils.build_response(result, request_id=request_id)
                 await self.send(response)
                 logger.debug(f"Command '{method}' executed successfully")
-                
+
             except exceptions.MethodNotFoundError:
                 logger.warning(f"No handler registered for method: {method}")
                 error_response = utils.build_method_not_found(
@@ -157,7 +159,7 @@ class WebSocketServer:
                     request_id=request_id,
                 )
                 await self.send(error_response)
-                
+
             except Exception as e:
                 logger.exception(f"Execution error for '{method}': {e}")
                 error_response = utils.build_internal_error(
@@ -169,23 +171,26 @@ class WebSocketServer:
                     request_id=request_id,
                 )
                 await self.send(error_response)
-        
+
         except exceptions.WebSocketMessageError as e:
             logger.error(f"Message handling error: {e.message}")
-        
+
         except exceptions.JSONRPCError as e:
             logger.error(f"JSON-RPC error: {e.message}")
-       
+
         except Exception as e:
             logger.exception(f"Unexpected error handling message: {e}")
             self.close()
 
-    async def _execute_request(self, method: str, params: Dict[str, Any], request_id: Optional[str]) -> Any:
+    async def _execute_request(
+        self, method: str, params: Dict[str, Any], request_id: Optional[str]
+    ) -> Any:
         """
         Execute the requested method via VaultBrain.
         """
         try:
             from .vault_brain import VaultBrain
+
             brain = VaultBrain.get()
             return await brain.execute_command(method, **params)
         except (ImportError, RuntimeError) as e:
@@ -193,11 +198,11 @@ class WebSocketServer:
             raise exceptions.MethodNotFoundError(method)
         except exceptions.CommandNotFoundError:
             raise exceptions.MethodNotFoundError(method)
-            
+
     async def send(self, data: Dict[str, Any]) -> None:
         """
         Send message to Rust.
-        
+
         Args:
             data: Message data (will be JSON encoded)
         """
@@ -210,7 +215,7 @@ class WebSocketServer:
                 self.close()
         else:
             logger.warning("No active connection, cannot send message")
-    
+
     def close(self) -> None:
         """
         Close the WebSocket connection.
@@ -231,10 +236,10 @@ class WebSocketServer:
     def send_to_rust(self, data: Dict[str, Any]) -> None:
         """
         Send data to Rust (safe to call from sync or async context).
-        
+
         This method can be called from synchronous code (e.g., plugins).
         It will queue the message to be sent when the event loop is available.
-        
+
         Args:
             data: Dictionary to send as JSON-RPC message
         """
@@ -244,13 +249,15 @@ class WebSocketServer:
             asyncio.create_task(self.send(data))
         except RuntimeError:
             # No running loop yet - queue message to send when connected
-            logger.debug(f"Queuing message (no event loop): {data.get('method', 'unknown')}")
+            logger.debug(
+                f"Queuing message (no event loop): {data.get('method', 'unknown')}"
+            )
             self.pending_messages.append(data)
-    
+
     def is_connected(self) -> bool:
         """
         Check if a client is currently connected.
-        
+
         Returns:
             True if connected, False otherwise
         """

@@ -216,6 +216,35 @@ The compiled app will be in `src-tauri/target/release/bundle/`.
 
 MIT
 
-## Documentation
+## Testing & Quality
 
-[WIP]
+### Running Tests
+
+Run the full test suite (backend + frontend):
+
+```bash
+# Run backend tests
+pixi run test
+
+# Run frontend tests
+npm run test
+```
+
+### Linting
+
+We use `ruff` for Python linting and formatting.
+
+```bash
+# Check for lint errors
+pixi run lint
+
+# Auto-format code
+pixi run format
+```
+
+## Continuous Integration
+
+A GitHub Actions workflow is set up in `.github/workflows/test.yml` to run tests on every push and PR to `main`.
+
+[![Test Status](https://github.com/ARC345/tailor/actions/workflows/test.yml/badge.svg)](https://github.com/ARC345/tailor/actions/workflows/test.yml)
+

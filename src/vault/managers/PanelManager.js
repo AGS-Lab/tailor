@@ -53,9 +53,15 @@ export class PanelManager {
                     const rightColumn = root.contentItems[0]?.contentItems?.[1];
                     if (rightColumn && rightColumn.contentItems) {
                         const stack = rightColumn.contentItems[0]; // First stack in right column
-                        if (stack && stack.addChild) {
-                            stack.addChild(newItem);
-                            console.log(`[PanelManager] Added panel ${id} to layout`);
+                        if (stack) {
+                            // Use addComponent if available (GL 2.x) or fallback to addChild
+                            if (stack.addComponent) {
+                                stack.addComponent(`plugin_${id}`, {}, title);
+                                console.log(`[PanelManager] Added panel ${id} to layout via addComponent`);
+                            } else if (stack.addChild) {
+                                stack.addChild(newItem);
+                                console.log(`[PanelManager] Added panel ${id} to layout via addChild`);
+                            }
                         }
                     }
                 } catch (e) {

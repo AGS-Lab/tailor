@@ -27,14 +27,14 @@ logger = logger.bind(name=__name__)
 async def run_servers(ws_server: WebSocketServer, brain: VaultBrain) -> None:
     """
     Run WebSocket server and tick loop concurrently.
-    
+
     Args:
         ws_server: WebSocket server instance
         brain: VaultBrain instance
     """
     # Initialize plugins
     await brain.initialize()
-    
+
     await asyncio.gather(
         ws_server.start(),
         brain.tick_loop(),
@@ -44,7 +44,7 @@ async def run_servers(ws_server: WebSocketServer, brain: VaultBrain) -> None:
 def parse_arguments() -> argparse.Namespace:
     """
     Parse command-line arguments.
-    
+
     Returns:
         Parsed arguments namespace
     """
@@ -52,69 +52,60 @@ def parse_arguments() -> argparse.Namespace:
         description="Tailor Python Sidecar - Vault orchestrator with plugin support",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    
+
     # Required arguments
-    parser.add_argument(
-        "--vault",
-        required=True,
-        help="Path to vault directory"
-    )
+    parser.add_argument("--vault", required=True, help="Path to vault directory")
     parser.add_argument(
         "--ws-port",
         type=int,
         required=True,
-        help="WebSocket port for communication with Tauri"
+        help="WebSocket port for communication with Tauri",
     )
-    
+
     # Optional arguments
     parser.add_argument(
         "--log-level",
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
-        help="Logging level (default: from environment or INFO)"
+        help="Logging level (default: from environment or INFO)",
     )
     parser.add_argument(
         "--log-file",
         type=Path,
-        help="Log file path (if not specified, logs only to console)"
+        help="Log file path (if not specified, logs only to console)",
     )
     parser.add_argument(
-        "-v", "--verbose",
+        "-v",
+        "--verbose",
         action="store_true",
-        help="Enable verbose logging (DEBUG level with detailed format)"
+        help="Enable verbose logging (DEBUG level with detailed format)",
     )
-    parser.add_argument(
-        "--version",
-        action="version",
-        version="Tailor Sidecar v0.1.0"
-    )
-    
+    parser.add_argument("--version", action="version", version="Tailor Sidecar v0.1.0")
+
     return parser.parse_args()
 
 
 def main() -> None:
     """Main entry point for the sidecar process."""
-    
+
     # Parse arguments
     args = parse_arguments()
     vault_path = Path(args.vault)
-    
+
     # Load environment variables from .env file if it exists
     # Check vault path first, then tailor root
-    env_paths = [
-        vault_path / ".env",
-        Path(__file__).parent.parent / ".env"
-    ]
-    
+    env_paths = [vault_path / ".env", Path(__file__).parent.parent / ".env"]
+
     for env_path in env_paths:
         if env_path.exists():
             try:
                 from dotenv import load_dotenv
+
                 load_dotenv(env_path)
                 # Log after logger is configured
             except ImportError:
                 pass  # dotenv not installed, use system env vars
             break
-    
+
     # Determine log file path
     log_file = args.log_file
     if not log_file:
@@ -129,18 +120,18 @@ def main() -> None:
         log_file=log_file,
         verbose=args.verbose,
     )
-    
+
     logger.info("=" * 60)
     logger.info("Tailor Python Sidecar starting...")
     logger.info("=" * 60)
     logger.info(f"Vault path: {vault_path}")
     logger.info(f"WebSocket port: {args.ws_port}")
-    
+
     # Validate vault exists
     if not vault_path.exists():
         logger.error(f"Vault path does not exist: {vault_path}")
         sys.exit(1)
-    
+
     # Add sidecar to Python path (so plugins can import sidecar.* modules)
     sidecar_dir = Path(__file__).parent.parent
     if str(sidecar_dir) not in sys.path:
@@ -152,45 +143,45 @@ def main() -> None:
     if lib_path.exists():
         sys.path.insert(0, str(lib_path))
         logger.info(f"Added to PYTHONPATH: {lib_path}")
-    
+
     brain: Optional[VaultBrain] = None
     ws_server: Optional[WebSocketServer] = None
-    
+
     try:
         # Initialize WebSocket server
         logger.info("Initializing WebSocket server...")
         ws_server = WebSocketServer(port=args.ws_port)
-        
+
         # Initialize vault brain (creates emitter internally)
         logger.info("Initializing VaultBrain...")
         brain = VaultBrain(vault_path=vault_path, ws_server=ws_server)
-        
+
         logger.info("=" * 60)
         logger.info("Sidecar initialized successfully!")
         logger.info(f"Plugins loaded: {len(brain.plugins)}")
         logger.info(f"Commands registered: {len(brain.commands)}")
         logger.info("=" * 60)
         logger.info("Starting WebSocket server and tick loop...")
-        
+
         # Run both servers
         asyncio.run(run_servers(ws_server, brain))
-        
+
     except exceptions.VaultNotFoundError as e:
         logger.error(f"Vault error: {e.message}")
         logger.error("Please check that the vault path is correct")
         sys.exit(1)
-    
+
     except exceptions.TailorError as e:
         logger.error(f"Tailor error: {e.message}")
         if e.details:
             logger.error(f"Details: {e.details}")
         sys.exit(1)
-    
+
     except KeyboardInterrupt:
         logger.info("")
         logger.info("Received shutdown signal (Ctrl+C)")
         logger.info("Sidecar shutting down gracefully...")
-        
+
         # Graceful shutdown (only if brain was initialized)
         if brain is not None:
             try:
@@ -199,9 +190,9 @@ def main() -> None:
                 logger.error(f"Error during shutdown: {e}")
         else:
             logger.debug("VaultBrain not initialized, skipping shutdown")
-            
+
         sys.exit(0)
-    
+
     except Exception as e:
         logger.exception(f"Fatal error: {e}")
         logger.critical("Sidecar crashed unexpectedly")

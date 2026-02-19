@@ -1,0 +1,304 @@
+============================= test session starts ==============================
+platform linux -- Python 3.14.2, pytest-9.0.2, pluggy-1.6.0
+rootdir: /home/arc/Dev/tailor
+plugins: anyio-4.12.1, asyncio-1.3.0, mock-3.15.1, langsmith-0.6.4, cov-7.0.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 1 item
+
+sidecar/tests/test_plugin_chat_branches.py F                             [100%]
+
+=================================== FAILURES ===================================
+__________________________ test_plugin_chat_branches ___________________________
+
+    @pytest.mark.asyncio
+    async def test_plugin_chat_branches():
+        """Test Chat Branches plugin with inline branch annotations."""
+    
+        # Setup test brain
+        example_vault = Path(__file__).parent.parent.parent / "example-vault"
+        brain = VaultBrain(example_vault, MagicMock())
+    
+        # Mock LLM
+        with patch("sidecar.services.llm_service.LLMService") as MockLLM:
+            mock_instance = MockLLM.return_value
+            mock_instance.complete.return_value = MagicMock(content="Response", model="test", usage={})
+    
+            brain.llm = mock_instance
+    
+            # Initialize
+            await brain.initialize()
+    
+            # Test chat ID
+            chat_id = "chat_branch_plugin_test"
+            memory_dir = example_vault / ".memory"
+            memory_file = memory_dir / f"{chat_id}.json"
+    
+            # Clean up if exists
+            if memory_file.exists():
+                memory_file.unlink()
+    
+            # 1. Send initial message
+            await brain.chat_send(message="Hello", chat_id=chat_id)
+    
+            # Verify messages stored
+            assert memory_file.exists()
+            with open(memory_file, "r") as f:
+                data = json.load(f)
+    
+            print(f"DEBUG: Memory File Content: {json.dumps(data, indent=2)}")
+            assert "messages" in data
+            assert len(data["messages"]) == 2
+            msg_id = data["messages"][0]["id"]
+    
+            # 2. Create branch
+            result = await brain.execute_command("branch.create",
+                chat_id=chat_id,
+                message_id=msg_id,
+                branch_id="test_branch"
+            )
+            print(f"Branch Create Result 1: {result}")
+            assert result["status"] == "success", f"Branch creation failed: {result}"
+            assert result["branch"] == "test_branch"
+    
+            # 3. Send message on branch
+            mock_instance.complete.return_value = MagicMock(content="Branch Response", model="test", usage={})
+            await brain.chat_send(message="Branch Message", chat_id=chat_id)
+    
+            # Verify branch annotation
+            with open(memory_file, "r") as f:
+                data = json.load(f)
+    
+            # Last 2 messages should have branches field
+            assert "branches" in data["messages"][-1]
+            assert "test_branch" in data["messages"][-1]["branches"]
+    
+            # 4. List branches to find Root
+            result = await brain.execute_command("branch.list", chat_id=chat_id)
+            assert result["status"] == "success"
+    
+            # Find the branch that is effectively main/root (display_name="Main")
+            root_branch_id = None
+            for bid, bdata in result["branches"].items():
+                if bdata.get("display_name") == "Main":
+                    root_branch_id = bid
+                    break
+    
+            assert root_branch_id is not None
+    
+            # 5. Switch to Root
+            result = await brain.execute_command("branch.switch",
+                chat_id=chat_id,
+                branch=root_branch_id
+            )
+            assert result["status"] == "success"
+    
+            # Should only see original 1 message (truncated)
+            history = result["history"]
+>           assert len(history) == 1
+E           AssertionError: assert 2 == 1
+E            +  where 2 = len([{'branches': ['36cb2105'], 'content': 'Hello', 'id': 'fe04e9a0', 'role': 'user', ...}, {'branches': ['5e0c7bb9'], 'co...u can find your API key at https://platform.openai.com/account/api-keys.', 'id': '53ccff6b', 'role': 'assistant', ...}])
+
+sidecar/tests/test_plugin_chat_branches.py:103: AssertionError
+----------------------------- Captured stdout call -----------------------------
+DEBUG: Memory File Content: {
+  "messages": [
+    {
+      "id": "fe04e9a0",
+      "role": "user",
+      "content": "Hello",
+      "time_marker": "1771525112.787385"
+    },
+    {
+      "id": "53ccff6b",
+      "role": "assistant",
+      "content": "[Error] litellm.AuthenticationError: AuthenticationError: OpenAIException - Incorrect API key provided: sk-invalid. You can find your API key at https://platform.openai.com/account/api-keys.",
+      "time_marker": "1771525112.787385"
+    }
+  ]
+}
+Branch Create Result 1: {'status': 'success', 'branch': 'test_branch', 'history': [{'id': 'fe04e9a0', 'role': 'user', 'content': 'Hello', 'time_marker': '1771525112.787385', 'branches': ['36cb2105'], 'source_branch': '36cb2105'}]}
+----------------------------- Captured stderr call -----------------------------
+2026-02-19 23:48:31.992 | INFO     | sidecar.vault_brain:__init__:98 - VaultBrain Singleton created for: /home/arc/Dev/tailor/example-vault
+2026-02-19 23:48:31.992 | INFO     | sidecar.vault_brain:initialize:133 - Starting VaultBrain initialization...
+2026-02-19 23:48:32.084 | DEBUG    | sidecar.services.keyring_service:set_env_vars:271 - Set env var OPENAI_API_KEY
+2026-02-19 23:48:32.100 | DEBUG    | sidecar.services.keyring_service:set_env_vars:271 - Set env var ANTHROPIC_API_KEY
+2026-02-19 23:48:32.125 | DEBUG    | sidecar.services.keyring_service:set_env_vars:271 - Set env var OPENAI_API_KEY
+2026-02-19 23:48:32.139 | DEBUG    | sidecar.services.keyring_service:set_env_vars:271 - Set env var ANTHROPIC_API_KEY
+2026-02-19 23:48:32.153 | DEBUG    | sidecar.vault_brain:_load_plugins:232 - Scanning plugins directory: /home/arc/Dev/tailor/example-vault/plugins
+2026-02-19 23:48:32.154 | DEBUG    | sidecar.api.plugin_base:__init__:65 - Plugin 'chat_branches' initialized (Passive)
+2026-02-19 23:48:32.154 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: branch.create
+2026-02-19 23:48:32.154 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: branch.switch
+2026-02-19 23:48:32.154 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: branch.list
+2026-02-19 23:48:32.154 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: branch.delete
+2026-02-19 23:48:32.154 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: branch.rename
+2026-02-19 23:48:32.154 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: branch.auto_name
+2026-02-19 23:48:32.154 | INFO     | sidecar.vault_brain:_load_plugins:318 - Plugin 'chat_branches' loaded. Config: {'enabled': True, 'auto_name_branches': True, 'auto_name_main_branch': False, 'default_branch_name': 'New Branch', 'confirm_delete': True}
+2026-02-19 23:48:32.154 | DEBUG    | sidecar.vault_brain:_load_plugins:282 - Plugin 'demo_plugin' is disabled, skipping
+2026-02-19 23:48:32.154 | DEBUG    | sidecar.api.plugin_base:__init__:65 - Plugin 'demo_ui' initialized (Passive)
+2026-02-19 23:48:32.154 | INFO     | demo_ui:__init__:34 - Demo UI plugin initialized
+2026-02-19 23:48:32.154 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: demo_ui.show_modal
+2026-02-19 23:48:32.154 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: demo_ui.update_stage
+2026-02-19 23:48:32.154 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: demo_ui.toolbar_action
+2026-02-19 23:48:32.154 | DEBUG    | demo_ui:register_commands:53 - Registered demo UI commands
+2026-02-19 23:48:32.154 | INFO     | sidecar.vault_brain:_load_plugins:318 - Plugin 'demo_ui' loaded. Config: {'enabled': True}
+2026-02-19 23:48:32.155 | DEBUG    | sidecar.vault_brain:_load_plugins:282 - Plugin 'event_test' is disabled, skipping
+2026-02-19 23:48:32.155 | DEBUG    | sidecar.api.plugin_base:__init__:65 - Plugin 'explorer' initialized (Passive)
+2026-02-19 23:48:32.155 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: explorer.list_chats
+2026-02-19 23:48:32.155 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: explorer.delete_chat
+2026-02-19 23:48:32.155 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: explorer.rename_chat
+2026-02-19 23:48:32.155 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: explorer.get_ui
+2026-02-19 23:48:32.155 | INFO     | sidecar.vault_brain:_load_plugins:318 - Plugin 'explorer' loaded. Config: {'enabled': True}
+2026-02-19 23:48:32.155 | DEBUG    | sidecar.api.plugin_base:__init__:65 - Plugin 'memory' initialized (Passive)
+2026-02-19 23:48:32.155 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: memory.load_chat
+2026-02-19 23:48:32.155 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: memory.save_chat
+2026-02-19 23:48:32.155 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: memory.search
+2026-02-19 23:48:32.155 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: memory.delete_chat
+2026-02-19 23:48:32.155 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: memory.rename_chat
+2026-02-19 23:48:32.155 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: chat.get_history
+2026-02-19 23:48:32.155 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: chat.auto_title
+2026-02-19 23:48:32.155 | INFO     | sidecar.vault_brain:_load_plugins:318 - Plugin 'memory' loaded. Config: {'enabled': True, 'auto_title': True, 'title_category': 'fast', 'title_max_length': 50, 'max_messages': 0}
+2026-02-19 23:48:32.155 | DEBUG    | sidecar.api.plugin_base:__init__:65 - Plugin 'prompt_refiner' initialized (Passive)
+2026-02-19 23:48:32.155 | INFO     | prompt_refiner:__init__:63 - Prompt Refiner plugin initialized
+2026-02-19 23:48:32.155 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: refiner.refine
+2026-02-19 23:48:32.155 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: refiner.refine_from_ui
+2026-02-19 23:48:32.155 | DEBUG    | prompt_refiner:register_commands:77 - Registered refiner.refine and refiner.refine_from_ui commands
+2026-02-19 23:48:32.155 | INFO     | sidecar.vault_brain:_load_plugins:318 - Plugin 'prompt_refiner' loaded. Config: {'enabled': True, 'auto_refine': False, 'refine_category': 'fast'}
+2026-02-19 23:48:32.155 | DEBUG    | sidecar.api.plugin_base:__init__:65 - Plugin 'smart_context' initialized (Passive)
+2026-02-19 23:48:32.155 | INFO     | smart_context:__init__:30 - Smart Context plugin initialized
+2026-02-19 23:48:32.155 | INFO     | sidecar.vault_brain:_load_plugins:318 - Plugin 'smart_context' loaded. Config: {'enabled': True}
+2026-02-19 23:48:32.156 | DEBUG    | sidecar.api.plugin_base:__init__:65 - Plugin 'summarizer' initialized (Passive)
+2026-02-19 23:48:32.156 | INFO     | summarizer:__init__:60 - Summarizer plugin initialized
+2026-02-19 23:48:32.156 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: summarizer.summarize
+2026-02-19 23:48:32.156 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: summarizer.delete_summary
+2026-02-19 23:48:32.156 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: summarizer.replace_message
+2026-02-19 23:48:32.156 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: summarizer.save_bookmark
+2026-02-19 23:48:32.156 | INFO     | sidecar.vault_brain:_load_plugins:318 - Plugin 'summarizer' loaded. Config: {'enabled': True, 'summary_category': 'fast'}
+2026-02-19 23:48:32.156 | INFO     | sidecar.vault_brain:initialize:170 - VaultBrain configured: 7 plugins, 26 commands
+2026-02-19 23:48:32.156 | INFO     | sidecar.vault_brain:_activate_plugins:328 - Activating plugins (calling on_load)...
+2026-02-19 23:48:32.156 | INFO     | chat_branches:on_load:70 - Chat Branches Plugin loaded.
+2026-02-19 23:48:32.156 | DEBUG    | sidecar.vault_brain:register_command:367 - Overriding command 'chat.get_history'
+2026-02-19 23:48:32.156 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: chat.get_history
+2026-02-19 23:48:32.156 | DEBUG    | sidecar.event_bus:subscribe:40 - Subscribed to: pipeline.output (priority=5)
+2026-02-19 23:48:32.156 | DEBUG    | sidecar.event_bus:subscribe:40 - Subscribed to: system:tick (priority=0)
+2026-02-19 23:48:32.156 | DEBUG    | sidecar.api.plugin_base:on_load:100 - Plugin 'demo_ui' loaded (Active)
+2026-02-19 23:48:32.156 | INFO     | demo_ui:on_load:175 - Demo UI plugin loaded
+2026-02-19 23:48:32.156 | DEBUG    | sidecar.event_bus:subscribe:40 - Subscribed to: system:tick (priority=0)
+2026-02-19 23:48:32.156 | DEBUG    | sidecar.api.plugin_base:on_load:100 - Plugin 'explorer' loaded (Active)
+2026-02-19 23:48:32.156 | INFO     | explorer:on_load:132 - Chat History sidebar plugin loaded
+2026-02-19 23:48:32.156 | DEBUG    | sidecar.event_bus:subscribe:40 - Subscribed to: system:tick (priority=0)
+2026-02-19 23:48:32.156 | DEBUG    | sidecar.api.plugin_base:on_load:100 - Plugin 'memory' loaded (Active)
+2026-02-19 23:48:32.156 | DEBUG    | sidecar.event_bus:subscribe:40 - Subscribed to: pipeline.output (priority=10)
+2026-02-19 23:48:32.156 | INFO     | memory:on_load:43 - Memory Plugin loaded.
+2026-02-19 23:48:32.156 | DEBUG    | sidecar.event_bus:subscribe:40 - Subscribed to: system:tick (priority=0)
+2026-02-19 23:48:32.156 | DEBUG    | sidecar.api.plugin_base:on_load:100 - Plugin 'prompt_refiner' loaded (Active)
+2026-02-19 23:48:32.156 | DEBUG    | sidecar.event_bus:subscribe:40 - Subscribed to: pipeline.input (priority=5)
+2026-02-19 23:48:32.156 | INFO     | prompt_refiner:on_load:231 - Prompt Refiner plugin loaded
+2026-02-19 23:48:32.156 | DEBUG    | sidecar.event_bus:subscribe:40 - Subscribed to: system:tick (priority=0)
+2026-02-19 23:48:32.156 | DEBUG    | sidecar.api.plugin_base:on_load:100 - Plugin 'smart_context' loaded (Active)
+2026-02-19 23:48:32.156 | INFO     | smart_context:on_load:61 - Smart Context plugin loaded
+2026-02-19 23:48:32.156 | DEBUG    | sidecar.event_bus:subscribe:40 - Subscribed to: system:tick (priority=0)
+2026-02-19 23:48:32.156 | DEBUG    | sidecar.api.plugin_base:on_load:100 - Plugin 'summarizer' loaded (Active)
+2026-02-19 23:48:32.156 | INFO     | summarizer:on_load:337 - Summarizer plugin loaded
+2026-02-19 23:48:32.156 | DEBUG    | sidecar.event_bus:subscribe:40 - Subscribed to: system:tick (priority=0)
+2026-02-19 23:48:32.156 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: system.client_ready
+2026-02-19 23:48:32.156 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: chat.send
+2026-02-19 23:48:32.156 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: chat.set_model
+2026-02-19 23:48:32.156 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: settings.delete_api_key
+2026-02-19 23:48:32.156 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: settings.detect_ollama
+2026-02-19 23:48:32.157 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: settings.get_available_models
+2026-02-19 23:48:32.157 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: system.info
+2026-02-19 23:48:32.157 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: settings.get_model_categories
+2026-02-19 23:48:32.157 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: settings.get_model_info
+2026-02-19 23:48:32.157 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: system.chat
+2026-02-19 23:48:32.157 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: plugins.install
+2026-02-19 23:48:32.157 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: system.list_commands
+2026-02-19 23:48:32.157 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: plugins.list
+2026-02-19 23:48:32.157 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: settings.list_providers
+2026-02-19 23:48:32.157 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: system.restart_vault
+2026-02-19 23:48:32.157 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: settings.set_model_category
+2026-02-19 23:48:32.157 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: settings.store_api_key
+2026-02-19 23:48:32.157 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: plugins.toggle
+2026-02-19 23:48:32.157 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: plugins.uninstall
+2026-02-19 23:48:32.157 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: plugins.update
+2026-02-19 23:48:32.157 | DEBUG    | sidecar.vault_brain:register_command:373 - Registered command: settings.verify_api_key
+2026-02-19 23:48:32.157 | INFO     | sidecar.vault_brain:initialize:182 - VaultBrain fully initialized and ready.
+2026-02-19 23:48:32.157 | DEBUG    | sidecar.pipeline.default:run:137 - Invoking LangGraph...
+2026-02-19 23:48:32.158 | DEBUG    | sidecar.pipeline.nodes:input_node:24 - Executing Input Node
+2026-02-19 23:48:32.158 | DEBUG    | sidecar.pipeline.nodes:context_node:33 - Executing Context Node
+2026-02-19 23:48:32.159 | DEBUG    | sidecar.pipeline.nodes:llm_node:55 - Executing LLM Node
+2026-02-19 23:48:32.159 | DEBUG    | sidecar.services.llm_service:complete:403 - Completing with model: openai/gpt-3.5-turbo, params: {'temperature': 0.7, 'max_tokens': 4096}
+2026-02-19 23:48:32.786 | ERROR    | sidecar.services.llm_service:_sync_completion:483 - Completion failed: litellm.AuthenticationError: AuthenticationError: OpenAIException - Incorrect API key provided: sk-invalid. You can find your API key at https://platform.openai.com/account/api-keys.
+2026-02-19 23:48:32.786 | ERROR    | sidecar.pipeline.nodes:llm_node:91 - LLM Error: litellm.AuthenticationError: AuthenticationError: OpenAIException - Incorrect API key provided: sk-invalid. You can find your API key at https://platform.openai.com/account/api-keys.
+2026-02-19 23:48:32.787 | DEBUG    | sidecar.pipeline.nodes:post_process_node:100 - Executing Post Process Node
+2026-02-19 23:48:32.787 | DEBUG    | sidecar.pipeline.nodes:output_node:106 - Executing Output Node
+2026-02-19 23:48:32.787 | DEBUG    | memory:save_chat:93 - Saved chat to chat_branch_plugin_test.json
+2026-02-19 23:48:32.787 | INFO     | memory:save_interaction:284 - Saved interaction to chat_branch_plugin_test.json
+2026-02-19 23:48:32.787 | DEBUG    | sidecar.services.llm_service:complete:403 - Completing with model: openai/gpt-3.5-turbo, params: {'temperature': 0.3, 'max_tokens': 20}
+2026-02-19 23:48:32.788 | INFO     | chat_branches:create_branch:182 - Chat Branches: Creating branch...
+2026-02-19 23:48:32.788 | INFO     | chat_branches:create_branch:212 - Branch create: looking for message_id='fe04e9a0', found at index=0, total_messages=2
+2026-02-19 23:48:32.788 | INFO     | chat_branches:create_branch:214 - Branch create: target_msg role='user', content='Hello', branches=[]
+2026-02-19 23:48:32.788 | INFO     | chat_branches:create_branch:306 - Split branch '36cb2105' at 'fe04e9a0'. Created continuation '5e0c7bb9' with 1 msgs.
+2026-02-19 23:48:32.788 | DEBUG    | memory:save_chat:93 - Saved chat to chat_branch_plugin_test.json
+2026-02-19 23:48:32.788 | INFO     | chat_branches:create_branch:327 - Created branch 'test_branch' from message 'fe04e9a0' for chat 'chat_branch_plugin_test'
+2026-02-19 23:48:32.788 | INFO     | chat_branches:create_branch:331 - BRANCH STATE AFTER CREATE:
+{
+  "36cb2105": {
+    "display_name": null,
+    "created_at": 1771525112.7886565,
+    "parent_branch": null,
+    "parent_message_id": null
+  },
+  "5e0c7bb9": {
+    "display_name": "Main",
+    "created_at": 1771525112.7886605,
+    "parent_branch": "36cb2105",
+    "parent_message_id": "fe04e9a0"
+  },
+  "test_branch": {
+    "display_name": "New Branch",
+    "created_at": 1771525112.7886786,
+    "parent_branch": "36cb2105",
+    "parent_message_id": "fe04e9a0"
+  }
+}
+2026-02-19 23:48:32.788 | INFO     | chat_branches:create_branch:333 -   MSG fe04e9a0: role=user, branches=['36cb2105'], content=Hello
+2026-02-19 23:48:32.788 | INFO     | chat_branches:create_branch:333 -   MSG 53ccff6b: role=assistant, branches=['5e0c7bb9'], content=[Error] litellm.Authentication
+2026-02-19 23:48:32.789 | DEBUG    | sidecar.pipeline.default:run:137 - Invoking LangGraph...
+2026-02-19 23:48:32.789 | DEBUG    | sidecar.services.llm_service:complete:403 - Completing with model: openai/gpt-3.5-turbo, params: {'temperature': 0.3, 'max_tokens': 10}
+2026-02-19 23:48:32.789 | DEBUG    | sidecar.pipeline.nodes:input_node:24 - Executing Input Node
+2026-02-19 23:48:32.791 | DEBUG    | sidecar.pipeline.nodes:context_node:33 - Executing Context Node
+2026-02-19 23:48:32.792 | DEBUG    | sidecar.pipeline.nodes:llm_node:55 - Executing LLM Node
+2026-02-19 23:48:32.792 | DEBUG    | sidecar.services.llm_service:complete:403 - Completing with model: openai/gpt-3.5-turbo, params: {'temperature': 0.7, 'max_tokens': 4096}
+2026-02-19 23:48:33.116 | ERROR    | sidecar.services.llm_service:_sync_completion:483 - Completion failed: litellm.AuthenticationError: AuthenticationError: OpenAIException - Incorrect API key provided: sk-invalid. You can find your API key at https://platform.openai.com/account/api-keys.
+2026-02-19 23:48:33.116 | WARNING  | memory:_auto_generate_title:367 - Auto-title failed for chat_branch_plugin_test: litellm.AuthenticationError: AuthenticationError: OpenAIException - Incorrect API key provided: sk-invalid. You can find your API key at https://platform.openai.com/account/api-keys.
+2026-02-19 23:48:33.496 | ERROR    | sidecar.services.llm_service:_sync_completion:483 - Completion failed: litellm.AuthenticationError: AuthenticationError: OpenAIException - Incorrect API key provided: sk-invalid. You can find your API key at https://platform.openai.com/account/api-keys.
+2026-02-19 23:48:33.497 | ERROR    | sidecar.pipeline.nodes:llm_node:91 - LLM Error: litellm.AuthenticationError: AuthenticationError: OpenAIException - Incorrect API key provided: sk-invalid. You can find your API key at https://platform.openai.com/account/api-keys.
+2026-02-19 23:48:33.501 | ERROR    | sidecar.services.llm_service:_sync_completion:483 - Completion failed: litellm.AuthenticationError: AuthenticationError: OpenAIException - Incorrect API key provided: sk-invalid. You can find your API key at https://platform.openai.com/account/api-keys.
+2026-02-19 23:48:33.501 | WARNING  | chat_branches:_generate_branch_name:750 - Failed to auto-name branch test_branch: litellm.AuthenticationError: AuthenticationError: OpenAIException - Incorrect API key provided: sk-invalid. You can find your API key at https://platform.openai.com/account/api-keys.
+2026-02-19 23:48:33.501 | DEBUG    | sidecar.pipeline.nodes:post_process_node:100 - Executing Post Process Node
+2026-02-19 23:48:33.501 | DEBUG    | sidecar.pipeline.nodes:output_node:106 - Executing Output Node
+2026-02-19 23:48:33.502 | DEBUG    | memory:save_chat:93 - Saved chat to chat_branch_plugin_test.json
+2026-02-19 23:48:33.502 | INFO     | memory:save_interaction:284 - Saved interaction to chat_branch_plugin_test.json
+2026-02-19 23:48:33.502 | DEBUG    | memory:save_chat:93 - Saved chat to chat_branch_plugin_test.json
+2026-02-19 23:48:33.502 | DEBUG    | chat_branches:_annotate_new_messages:174 - Annotated messages with branch 'test_branch'
+2026-02-19 23:48:33.502 | DEBUG    | sidecar.services.llm_service:complete:403 - Completing with model: openai/gpt-3.5-turbo, params: {'temperature': 0.3, 'max_tokens': 20}
+2026-02-19 23:48:33.503 | DEBUG    | memory:save_chat:93 - Saved chat to chat_branch_plugin_test.json
+=============================== warnings summary ===============================
+.pixi/envs/default/lib/python3.14/site-packages/langchain_core/_api/deprecation.py:26
+  /home/arc/Dev/tailor/.pixi/envs/default/lib/python3.14/site-packages/langchain_core/_api/deprecation.py:26: UserWarning: Core Pydantic V1 functionality isn't compatible with Python 3.14 or greater.
+    from pydantic.v1.fields import FieldInfo as FieldInfoV1
+
+sidecar/tests/test_plugin_chat_branches.py::test_plugin_chat_branches
+  /home/arc/Dev/tailor/.pixi/envs/default/lib/python3.14/site-packages/aiohttp/connector.py:993: DeprecationWarning: enable_cleanup_closed ignored because https://github.com/python/cpython/pull/118960 is fixed in Python version sys.version_info(major=3, minor=14, micro=2, releaselevel='final', serial=0)
+    super().__init__(
+
+sidecar/tests/test_plugin_chat_branches.py::test_plugin_chat_branches
+  /home/arc/Dev/tailor/.pixi/envs/default/lib/python3.14/asyncio/base_events.py:2047: RuntimeWarning: coroutine 'OpenAIChatCompletion.acompletion' was never awaited
+    handle = None  # Needed to break cycles when an exception occurs.
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED sidecar/tests/test_plugin_chat_branches.py::test_plugin_chat_branches
+======================== 1 failed, 3 warnings in 2.80s =========================

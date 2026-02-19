@@ -1,7 +1,7 @@
 import pytest
-import asyncio
 from unittest.mock import MagicMock
 from sidecar.vault_brain import VaultBrain
+
 
 @pytest.mark.asyncio
 async def test_event_priority():
@@ -9,10 +9,11 @@ async def test_event_priority():
     brain = VaultBrain.__new__(VaultBrain)
     # Manually initialize events since we skipped __init__
     from sidecar.event_bus import EventBus
+
     brain.events = EventBus()
-    
+
     brain.ws_server = MagicMock()
-    
+
     execution_order = []
 
     async def handler_high():
@@ -20,7 +21,7 @@ async def test_event_priority():
 
     async def handler_medium():
         execution_order.append("medium")
-        
+
     async def handler_low():
         execution_order.append("low")
 
@@ -33,6 +34,6 @@ async def test_event_priority():
     await brain.publish("test.event", sequential=True)
 
     assert execution_order == ["high", "medium", "low"]
-    
+
     # Clean up
     brain.clear_subscribers("test.event")

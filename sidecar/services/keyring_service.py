@@ -7,13 +7,13 @@ Uses OS-level secure storage:
 - Linux: Secret Service (GNOME Keyring, KWallet)
 """
 
-import asyncio
 from typing import Optional, List, Dict, Any
 from loguru import logger
 
 try:
     import keyring
     from keyring.errors import KeyringError
+
     KEYRING_AVAILABLE = True
 except ImportError:
     KEYRING_AVAILABLE = False
@@ -61,18 +61,21 @@ class KeyringService:
     """
     Secure API key storage service using OS keyring.
     """
-    
+
     def __init__(self):
         self._logger = logger.bind(component="KeyringService")
         self._fallback_file = None
-        
+
         if not KEYRING_AVAILABLE:
-            self._logger.warning("keyring package not available. Using local file fallback.")
+            self._logger.warning(
+                "keyring package not available. Using local file fallback."
+            )
             self._setup_fallback()
-            
+
     def _setup_fallback(self):
         """Setup fallback storage file."""
         import pathlib
+
         try:
             # unique path for fallback
             self._fallback_file = pathlib.Path.home() / ".tailor" / "secrets.json"
@@ -85,6 +88,7 @@ class KeyringService:
     def _load_fallback(self) -> Dict[str, str]:
         """Load secrets from fallback file."""
         import json
+
         if not self._fallback_file or not self._fallback_file.exists():
             return {}
         try:
@@ -96,6 +100,7 @@ class KeyringService:
     def _save_fallback(self, data: Dict[str, str]) -> bool:
         """Save secrets to fallback file."""
         import json
+
         if not self._fallback_file:
             return False
         try:
@@ -108,7 +113,7 @@ class KeyringService:
     def is_available(self) -> bool:
         """Check if storage service is available."""
         return KEYRING_AVAILABLE or (self._fallback_file is not None)
-    
+
     def store_api_key(self, provider: str, api_key: str) -> bool:
         """
         Store an API key securely.
@@ -116,7 +121,7 @@ class KeyringService:
         if provider not in PROVIDERS:
             self._logger.error(f"Unknown provider: {provider}")
             return False
-            
+
         if KEYRING_AVAILABLE:
             try:
                 keyring.set_password(SERVICE_NAME, provider, api_key)
@@ -133,7 +138,7 @@ class KeyringService:
                 self._logger.info(f"Stored API key for provider: {provider} (fallback)")
                 return True
             return False
-    
+
     def get_api_key(self, provider: str) -> Optional[str]:
         """
         Retrieve an API key.
@@ -148,7 +153,7 @@ class KeyringService:
             # Fallback
             secrets = self._load_fallback()
             return secrets.get(provider)
-    
+
     def delete_api_key(self, provider: str) -> bool:
         """
         Delete an API key.
@@ -167,10 +172,12 @@ class KeyringService:
             if provider in secrets:
                 del secrets[provider]
                 if self._save_fallback(secrets):
-                    self._logger.info(f"Deleted API key for provider: {provider} (fallback)")
+                    self._logger.info(
+                        f"Deleted API key for provider: {provider} (fallback)"
+                    )
                     return True
             return False
-    
+
     def list_configured_providers(self) -> List[str]:
         """
         List all providers with stored API keys.
@@ -187,24 +194,24 @@ class KeyringService:
             # Fallback
             secrets = self._load_fallback()
             configured = list(secrets.keys())
-            
+
         return configured
-    
+
     def get_provider_status(self) -> Dict[str, Dict[str, Any]]:
         """
         Get status of all supported providers.
         """
         status = {}
         configured = self.list_configured_providers()
-        
+
         for provider_id, info in PROVIDERS.items():
             status[provider_id] = {
                 "name": info["name"],
                 "configured": provider_id in configured,
             }
-        
+
         return status
-    
+
     async def verify_api_key(self, provider: str) -> Dict[str, Any]:
         """
         Verify that a stored API key is valid by making a test request.
@@ -212,42 +219,38 @@ class KeyringService:
         api_key = self.get_api_key(provider)
         if not api_key:
             return {"valid": False, "error": "No API key stored"}
-        
+
         if provider not in PROVIDERS:
             return {"valid": False, "error": "Unknown provider"}
-        
+
         try:
             import httpx
-            
+
             provider_info = PROVIDERS[provider]
             headers = self._get_auth_headers(provider, api_key)
-            
+
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(
-                    provider_info["validation_url"],
-                    headers=headers
+                    provider_info["validation_url"], headers=headers
                 )
-                
+
                 if response.status_code in (200, 201):
                     return {"valid": True}
                 elif response.status_code == 401:
                     return {"valid": False, "error": "Invalid API key"}
                 else:
                     return {"valid": False, "error": f"HTTP {response.status_code}"}
-                    
+
         except Exception as e:
             self._logger.error(f"Verification failed for {provider}: {e}")
             return {"valid": False, "error": str(e)}
-    
+
     def _get_auth_headers(self, provider: str, api_key: str) -> Dict[str, str]:
         """Get provider-specific authentication headers."""
         if provider == "openai":
             return {"Authorization": f"Bearer {api_key}"}
         elif provider == "anthropic":
-            return {
-                "x-api-key": api_key,
-                "anthropic-version": "2023-06-01"
-            }
+            return {"x-api-key": api_key, "anthropic-version": "2023-06-01"}
         elif provider == "google":
             return {"x-goog-api-key": api_key}
         elif provider == "mistral":
@@ -256,13 +259,13 @@ class KeyringService:
             return {"Authorization": f"Bearer {api_key}"}
         else:
             return {"Authorization": f"Bearer {api_key}"}
-    
+
     def set_env_vars(self) -> None:
         """
         Set environment variables for all stored API keys.
         """
         import os
-        
+
         # Load from storage (keyring or fallback)
         for provider_id, info in PROVIDERS.items():
             api_key = self.get_api_key(provider_id)
@@ -281,4 +284,3 @@ def get_keyring_service() -> KeyringService:
     if _keyring_service is None:
         _keyring_service = KeyringService()
     return _keyring_service
-

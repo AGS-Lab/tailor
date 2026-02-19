@@ -7,6 +7,7 @@ sys.path.insert(0, str(tailor_path))
 
 try:
     import sidecar
+
     print("Successfully imported sidecar")
     print(f"sidecar file: {sidecar.__file__}")
 except ImportError as e:
@@ -14,6 +15,7 @@ except ImportError as e:
 
 try:
     from sidecar.api.plugin_base import PluginBase
+
     print("Successfully imported PluginBase")
 except ImportError as e:
     print(f"Failed to import PluginBase: {e}")

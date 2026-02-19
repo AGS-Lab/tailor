@@ -1,0 +1,83 @@
+============================= test session starts ==============================
+platform linux -- Python 3.14.2, pytest-9.0.2, pluggy-1.6.0
+rootdir: /home/arc/Dev/tailor
+plugins: anyio-4.12.1, asyncio-1.3.0, mock-3.15.1, langsmith-0.6.4, cov-7.0.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 1 item
+
+sidecar/tests/test_id_propagation.py F                                   [100%]
+
+=================================== FAILURES ===================================
+_____________________________ test_id_propagation ______________________________
+
+    @pytest.mark.asyncio
+    async def test_id_propagation():
+        # Setup
+        if VaultBrain._instance is None:
+            brain = VaultBrain(MagicMock(), MagicMock())
+            # Prevent partial init issues
+            brain._initialized = True
+            brain.events.clear_subscribers(PipelineEvents.OUTPUT)
+        else:
+            brain = VaultBrain.get()
+    
+    
+        # We need to ensure brain has the memory plugin loaded
+        # Ideally we'd mock the whole plugin loading, but we can just mock the self.plugins dict
+    
+        mock_memory = MagicMock()
+        mock_memory.get_chat_history = AsyncMock(return_value={"status": "success", "history": []})
+    
+        brain.plugins["memory"] = mock_memory
+    
+        # Mock LLMService to return a predictable response
+        mock_llm = MagicMock(spec=LLMService)
+        mock_llm.complete = AsyncMock(return_value=MagicMock(content="Test Response", model="test", usage={}))
+    
+        brain._llm_service = mock_llm
+    
+        # Instantiate real pipeline to ensure events are emitted
+        brain.pipeline = DefaultPipeline(brain)
+        # Inject mock LLM into pipeline
+        brain.pipeline._llm_service = mock_llm
+    
+        # Also need to patch Pipeline execution to ensure OUTPUT event is published triggers our Logic?
+        # Actually, we need integration test behavior here.
+        # The DefaultPipeline emits OUTPUT. The Memory plugin listens to OUTPUT.
+        # We need real event bus behavior.
+    
+        # Let's mock the 'save_interaction' method of memory plugin to simulate what the real one does
+        # (setting metadata), since loading the real plugin involves filesystem I/O we might want to avoid or assume works.
+        # BUT, the real test is seeing if VaultBrain passes it back.
+    
+        async def mock_save_interaction(ctx):
+            ctx.metadata["generated_ids"] = {
+                "user_message_id": "uuid-user-123",
+                "assistant_message_id": "uuid-assist-123"
+            }
+    
+        brain.subscribe(PipelineEvents.OUTPUT, mock_save_interaction)
+    
+        # TEST 1: Non-Streaming
+        res = await brain.chat_send(message="Hello", chat_id="test_chat", stream=False)
+    
+>       assert res["status"] == "success"
+E       AssertionError: assert 'error' == 'success'
+E         
+E         - success
+E         + error
+
+sidecar/tests/test_id_propagation.py:69: AssertionError
+----------------------------- Captured stderr call -----------------------------
+2026-02-19 23:54:27.469 | INFO     | sidecar.vault_brain:__init__:98 - VaultBrain Singleton created for: <MagicMock name='mock.resolve()' id='140659525173328'>
+2026-02-19 23:54:27.473 | DEBUG    | sidecar.event_bus:subscribe:40 - Subscribed to: pipeline.output (priority=0)
+2026-02-19 23:54:27.473 | ERROR    | sidecar.vault_brain:chat_send:851 - Chat error: 'VaultBrain' object has no attribute 'category'
+=============================== warnings summary ===============================
+.pixi/envs/default/lib/python3.14/site-packages/langchain_core/_api/deprecation.py:26
+  /home/arc/Dev/tailor/.pixi/envs/default/lib/python3.14/site-packages/langchain_core/_api/deprecation.py:26: UserWarning: Core Pydantic V1 functionality isn't compatible with Python 3.14 or greater.
+    from pydantic.v1.fields import FieldInfo as FieldInfoV1
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED sidecar/tests/test_id_propagation.py::test_id_propagation - AssertionE...
+========================= 1 failed, 1 warning in 1.09s =========================

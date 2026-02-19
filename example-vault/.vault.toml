@@ -44,3 +44,6 @@ enabled = true
 
 [plugins.plugin_manager]
 enabled = true
+
+[plugins.smart_context]
+enabled = true

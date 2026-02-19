@@ -51,111 +51,112 @@ WEBSOCKET_PING_INTERVAL: Final[float] = 20.0
 # Event Types
 # ============================================================================
 
+
 class EventType(str, Enum):
     """Event types for UI notifications."""
-    
+
     NOTIFY = "NOTIFY"
     """General notification event."""
-    
+
     PROGRESS = "PROGRESS"
     """Progress update event."""
-    
+
     UPDATE_STATE = "UPDATE_STATE"
     """UI state update event."""
-    
+
     LLM_RESPONSE = "LLM_RESPONSE"
     """LLM response event."""
-    
+
     LLM_CLEARED = "LLM_CLEARED"
     """LLM conversation cleared event."""
 
     UI_COMMAND = "UI_COMMAND"
     """UI command event."""
-    
+
     CHAT_TOKEN = "CHAT_TOKEN"
     """Chat streaming token event - sent for each token during streaming response."""
-    
+
     CHAT_STREAM_START = "CHAT_STREAM_START"
     """Chat stream started event - sent when streaming begins."""
-    
+
     CHAT_STREAM_END = "CHAT_STREAM_END"
     """Chat stream completed event - sent when streaming finishes."""
 
 
 class EventScope(str, Enum):
     """Event routing scopes."""
-    
+
     WINDOW = "window"
     """Route event to only the originating window."""
-    
+
     VAULT = "vault"
     """Route event to all windows of the same vault."""
-    
+
     GLOBAL = "global"
     """Route event to all windows in the application."""
 
 
 class Severity(str, Enum):
     """Notification severity levels."""
-    
+
     INFO = "info"
     """Informational message."""
-    
+
     SUCCESS = "success"
     """Success message."""
-    
+
     WARNING = "warning"
     """Warning message."""
-    
+
     ERROR = "error"
     """Error message."""
 
 
 class UIAction(str, Enum):
     """UI command actions that plugins can emit."""
-    
+
     # Sidebar
     REGISTER_SIDEBAR = "register_sidebar"
     """Register a new sidebar view."""
-    
+
     SET_SIDEBAR = "set_sidebar"
     """Set content of a sidebar view."""
-    
+
     # Panels (GoldenLayout tabs)
     REGISTER_PANEL = "register_panel"
     """Register a new panel/tab."""
-    
+
     SET_PANEL = "set_panel"
     """Set content of a panel."""
-    
+
     REMOVE_PANEL = "remove_panel"
     """Remove a panel."""
-    
+
     # Toolbar
     REGISTER_TOOLBAR = "register_toolbar"
     """Register a toolbar button."""
-    
+
     # Stage/Toolbox (main content area)
     SET_STAGE = "set_stage"
     """Set stage content (Legacy)."""
 
     SET_TOOLBOX = "set_toolbox"
     """Set toolbox content."""
-    
+
     ADD_TOOLBOX_ITEM = "add_toolbox_item"
     """Add item to toolbox."""
-    
+
     # Modal
     SHOW_MODAL = "show_modal"
     """Show a modal dialog."""
-    
+
     CLOSE_MODAL = "close_modal"
     """Close the modal dialog."""
-    
+
     # Input Control
     REQUEST_INPUT = "request_input"
     """Request current input field text from frontend."""
-    
+
     SET_INPUT = "set_input"
     """Set the input field text."""
 
@@ -243,7 +244,7 @@ DEFAULT_VAULT_CONFIG: Final[dict] = {
     "version": DEFAULT_VAULT_VERSION,
     "plugins": {
         "enabled": [],
-    }
+    },
 }
 """Default vault configuration structure."""
 
@@ -269,28 +270,29 @@ ENV_TICK_INTERVAL: Final[str] = "TAILOR_TICK_INTERVAL"
 # Core Events
 # ============================================================================
 
+
 class CoreEvents(str, Enum):
     """
     Standard event names for core system activities.
     """
-    
+
     # System Lifecycle
     SYSTEM_STARTUP = "system:startup"
     SYSTEM_SHUTDOWN = "system:shutdown"
     PLUGIN_LOADED = "plugin:loaded"
     ALL_PLUGINS_LOADED = "system:ready"
-    
+
     # File Operations
     FILE_SAVED = "file:saved"
     FILE_OPENED = "file:opened"
     FILE_CREATED = "file:created"
     FILE_DELETED = "file:deleted"
     FILE_MODIFIED = "file:modified"
-    
+
     # Editor/UI Interactions
     EDITOR_CHANGED = "editor:changed"
     COMMAND_EXECUTED = "command:executed"
-    
+
     # AI/LLM
     LLM_REQUEST = "llm:request"
     LLM_RESPONSE = "llm:response"
@@ -298,6 +300,6 @@ class CoreEvents(str, Enum):
 
     # Periodic
     TICK = "system:tick"
-    
+
     def __str__(self) -> str:
         return self.value
