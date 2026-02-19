@@ -15,7 +15,11 @@ def load_plugin_module(path):
     return module
 
 
-plugin_path = Path("/home/arc/Dev/tailor/example-vault/plugins/prompt_refiner/main.py")
+# Resolve plugin path relative to this test file
+# sidecar/tests/test_plugin_prompt_refiner.py -> ... -> example-vault/plugins/prompt_refiner/main.py
+base_dir = Path(__file__).resolve().parent.parent.parent
+plugin_path = base_dir / "example-vault" / "plugins" / "prompt_refiner" / "main.py"
+
 refiner = load_plugin_module(plugin_path)
 
 

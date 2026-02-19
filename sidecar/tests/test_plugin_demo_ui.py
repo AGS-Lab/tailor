@@ -21,7 +21,11 @@ def load_plugin_module(path):
     return module
 
 
-plugin_path = Path("/home/arc/Dev/tailor/example-vault/plugins/demo_ui/main.py")
+# Resolve plugin path relative to this test file
+# sidecar/tests/test_plugin_demo_ui.py -> ... -> example-vault/plugins/demo_ui/main.py
+base_dir = Path(__file__).resolve().parent.parent.parent
+plugin_path = base_dir / "example-vault" / "plugins" / "demo_ui" / "main.py"
+
 demo_ui = load_plugin_module(plugin_path)
 
 
