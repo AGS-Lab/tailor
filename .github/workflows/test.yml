@@ -2,30 +2,30 @@ name: Test
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 jobs:
   test:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Set up Pixi
-      uses: prefix-dev/setup-pixi@v0.5.1
-      with:
-        pixi-version: v0.19.0
-        cache: true
+      - name: Set up Pixi
+        uses: prefix-dev/setup-pixi@v0.8.3
+        with:
+          pixi-version: v0.63.2
+          cache: true
 
-    - name: Run Backend Tests
-      run: pixi run test
+      - name: Run Backend Tests
+        run: pixi run test
 
-    - name: Run Frontend Tests
-      # Assuming npm is available via pixi or system, but pixi should handle npm install via 'install-frontend' task if defined, or just use npm directly if nodejs is in pixi env
-      # In pixi.toml: install-frontend = "npm install"
-      # We need to run that first.
-      run: |
-        pixi run install-frontend
-        pixi run npm run test
+      - name: Run Frontend Tests
+        # Assuming npm is available via pixi or system, but pixi should handle npm install via 'install-frontend' task if defined, or just use npm directly if nodejs is in pixi env
+        # In pixi.toml: install-frontend = "npm install"
+        # We need to run that first.
+        run: |
+          pixi run install-frontend
+          pixi run npm run test
