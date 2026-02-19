@@ -13,12 +13,12 @@ from sidecar.vault_brain import VaultBrain
 
 
 @pytest.mark.asyncio
-async def test_memory_fallback_linear_chat():
+async def test_memory_fallback_linear_chat(example_vault_path):
     """
     Verify that core chat functionality works even if the 'chat_branches' plugin is missing.
     """
     # Setup paths
-    vault_path = Path("/home/arc/Dev/tailor/example-vault")
+    vault_path = example_vault_path
     memory_dir = vault_path / ".memory"
     chat_id = "chat_fallback_test"
 
@@ -99,7 +99,3 @@ async def test_memory_fallback_linear_chat():
             pass
 
     print("Fallback Test Passed!")
-
-
-if __name__ == "__main__":
-    asyncio.run(test_memory_fallback_linear_chat())

@@ -21,12 +21,10 @@ def load_plugin_module(path):
     return module
 
 
-# Resolve plugin path relative to this test file
-# sidecar/tests/test_plugin_demo_ui.py -> ... -> example-vault/plugins/demo_ui/main.py
-base_dir = Path(__file__).resolve().parent.parent.parent
-plugin_path = base_dir / "example-vault" / "plugins" / "demo_ui" / "main.py"
-
-demo_ui = load_plugin_module(plugin_path)
+@pytest.fixture
+def demo_ui_module(example_vault_path):
+    plugin_path = example_vault_path / "plugins" / "demo_ui" / "main.py"
+    return load_plugin_module(plugin_path)
 
 
 @pytest.fixture
@@ -38,11 +36,11 @@ def mock_brain():
 
 
 @pytest.fixture
-def plugin(mock_brain, tmp_path):
+def plugin(mock_brain, tmp_path, demo_ui_module):
     with patch("sidecar.vault_brain.VaultBrain.get", return_value=mock_brain):
         # We need to ensure that when the plugin accesses self.brain, it gets our mock
         # The property calls VaultBrain.get()
-        p = demo_ui.Plugin(tmp_path, tmp_path)
+        p = demo_ui_module.Plugin(tmp_path, tmp_path)
         yield p
 
 

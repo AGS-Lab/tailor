@@ -15,12 +15,10 @@ def load_plugin_module(path):
     return module
 
 
-# Resolve plugin path relative to this test file
-# sidecar/tests/test_plugin_prompt_refiner.py -> ... -> example-vault/plugins/prompt_refiner/main.py
-base_dir = Path(__file__).resolve().parent.parent.parent
-plugin_path = base_dir / "example-vault" / "plugins" / "prompt_refiner" / "main.py"
-
-refiner = load_plugin_module(plugin_path)
+@pytest.fixture
+def refiner_module(example_vault_path):
+    plugin_path = example_vault_path / "plugins" / "prompt_refiner" / "main.py"
+    return load_plugin_module(plugin_path)
 
 
 @pytest.fixture
@@ -33,9 +31,9 @@ def mock_brain():
 
 
 @pytest.fixture
-def plugin(mock_brain, tmp_path):
+def plugin(mock_brain, tmp_path, refiner_module):
     with patch("sidecar.vault_brain.VaultBrain.get", return_value=mock_brain):
-        p = refiner.Plugin(tmp_path, tmp_path)
+        p = refiner_module.Plugin(tmp_path, tmp_path)
         yield p
 
 

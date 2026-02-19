@@ -19,3 +19,17 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "unit: mark test as a unit test")
     config.addinivalue_line("markers", "integration: mark test as an integration test")
     config.addinivalue_line("markers", "slow: mark test as slow running")
+
+
+import pytest
+
+@pytest.fixture(scope="session")
+def project_root() -> Path:
+    """Return the project root path."""
+    return Path(__file__).resolve().parent.parent.parent
+
+
+@pytest.fixture(scope="session")
+def example_vault_path(project_root) -> Path:
+    """Return the path to the example vault."""
+    return project_root / "example-vault"
