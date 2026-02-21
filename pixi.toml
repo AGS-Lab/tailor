@@ -8,12 +8,18 @@ version = "0.1.0"
 
 [tasks]
 install-frontend = "npm install"
-dev = { cmd = "npm run tauri:dev", env = { PKG_CONFIG_PATH = "/usr/lib/pkgconfig", LIBRARY_PATH = "/usr/lib" } }
-build = { cmd = "npm run tauri:build", env = { PKG_CONFIG_PATH = "/usr/lib/pkgconfig", LIBRARY_PATH = "/usr/lib" } }
+dev = "npm run tauri:dev"
+build = "npm run tauri:build"
+test-rust = { cmd = "cargo test", cwd = "src-tauri" }
 sidecar = "python -m sidecar"
 test = "pytest sidecar/tests"
 lint = "ruff check sidecar"
 format = "ruff format sidecar"
+
+[target.linux-64.tasks]
+dev = { cmd = "npm run tauri:dev", env = { PKG_CONFIG_PATH = "/usr/lib/pkgconfig", LIBRARY_PATH = "/usr/lib" } }
+build = { cmd = "npm run tauri:build", env = { PKG_CONFIG_PATH = "/usr/lib/pkgconfig", LIBRARY_PATH = "/usr/lib" } }
+test-rust = { cmd = "cargo test", cwd = "src-tauri", env = { PKG_CONFIG_PATH = "/usr/lib/pkgconfig", LIBRARY_PATH = "/usr/lib" } }
 
 
 [dependencies]

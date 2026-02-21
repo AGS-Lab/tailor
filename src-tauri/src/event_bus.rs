@@ -107,3 +107,28 @@ impl EventBus {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_event_bus_registration() {
+        let bus = EventBus::new();
+        
+        bus.register_window("main".to_string(), "vault_123".to_string()).await;
+        
+        {
+            let map = bus.window_vaults.lock().await;
+            assert_eq!(map.get("main"), Some(&"vault_123".to_string()));
+            assert_eq!(map.len(), 1);
+        } // Drop lock
+        
+        bus.unregister_window("main").await;
+        
+        {
+            let map = bus.window_vaults.lock().await;
+            assert!(map.is_empty());
+        } // Drop lock
+    }
+}
+

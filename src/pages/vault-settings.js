@@ -62,9 +62,9 @@ async function loadSettings(vaultPath, container) {
     try {
         await showSection('general', vaultPath, container);
     } catch (error) {
-        console.error('Error loading settings:', error);
+        console.error('DEBUG VAULT SETTINGS ERROR:', error);
         const contentArea = container.querySelector('#settings-content-area');
-        contentArea.innerHTML = `<div class="error-message">Failed to load settings</div>`;
+        if (contentArea) contentArea.innerHTML = `<div class="error-message">Failed to load settings</div>`;
     }
 }
 

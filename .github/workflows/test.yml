@@ -22,6 +22,9 @@ jobs:
       - name: Run Backend Tests
         run: pixi run test
 
+      - name: Run Core Tests (Rust)
+        run: pixi run test-rust
+
       - name: Run Frontend Tests
         # Assuming npm is available via pixi or system, but pixi should handle npm install via 'install-frontend' task if defined, or just use npm directly if nodejs is in pixi env
         # In pixi.toml: install-frontend = "npm install"

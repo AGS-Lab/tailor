@@ -74,3 +74,30 @@ impl WindowManager {
             .to_string()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_window_manager_registry() {
+        let mut manager = WindowManager::new();
+        
+        let vault_path = "/tmp/my_vault".to_string();
+        
+        // Test manual insertion for internal state checks
+        manager.windows.insert("test_window".to_string(), vault_path.clone());
+        
+        assert_eq!(manager.get_vault_path("test_window"), Some(&vault_path));
+        assert!(manager.get_active_windows().contains(&"test_window".to_string()));
+        
+        manager.remove_window("test_window");
+        assert_eq!(manager.get_vault_path("test_window"), None);
+    }
+
+    #[test]
+    fn test_extract_vault_name() {
+        assert_eq!(WindowManager::extract_vault_name("/path/to/my_vault"), "my_vault");
+        assert_eq!(WindowManager::extract_vault_name("my_vault"), "my_vault");
+    }
+}

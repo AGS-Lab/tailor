@@ -50,9 +50,9 @@ async function loadSettings(container) {
     try {
         await showSection('general', container);
     } catch (error) {
-        console.error('Error loading settings:', error);
+        console.error('DEBUG SETTINGS ERROR:', error);
         const contentArea = container.querySelector('#settings-content-area');
-        contentArea.innerHTML = `<div class="error-message">Failed to load settings</div>`;
+        if (contentArea) contentArea.innerHTML = `<div class="error-message">Failed to load settings</div>`;
     }
 }
 

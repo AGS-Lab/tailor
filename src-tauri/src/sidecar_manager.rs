@@ -283,3 +283,31 @@ impl Drop for SidecarManager {
         println!("SidecarManager dropping - cleaning up processes");
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_port_available() {
+        // Find an open port by binding 0
+        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        
+        // Port should be unavailable because we bound to it
+        assert!(!SidecarManager::is_port_available(port));
+        
+        // Drop the listener to free the port
+        drop(listener);
+        
+        // Now it should be available
+        assert!(SidecarManager::is_port_available(port));
+    }
+
+    #[tokio::test]
+    async fn test_manager_default_state() {
+        let manager = SidecarManager::new();
+        assert_eq!(*manager.next_port.lock().await, 9000);
+        assert!(manager.processes.lock().await.is_empty());
+    }
+}

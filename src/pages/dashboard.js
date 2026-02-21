@@ -203,7 +203,8 @@ async function loadVaults(container) {
 
         setupVaultCardListeners(container);
     } catch (error) {
-        vaultsGrid.innerHTML = '<div class="error-message">Failed to load vaults</div>';
+        console.error("DEBUG DASHBOARD ERROR:", error);
+        if (vaultsGrid) vaultsGrid.innerHTML = '<div class="error-message">Failed to load vaults</div>';
     }
 }
 

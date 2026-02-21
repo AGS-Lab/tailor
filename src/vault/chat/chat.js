@@ -397,8 +397,9 @@ async function sendMessage() {
                 }
 
                 // Then update content (which creates toolbar with correct ID)
-                updateMessage(assistantMsgEl, response);
-                conversationHistory.push({ role: 'assistant', content: response });
+                const responseText = result.response || '';
+                updateMessage(assistantMsgEl, responseText);
+                conversationHistory.push({ role: 'assistant', content: responseText });
             }
             // Note: For streaming mode, history is updated in handleStreamEnd
 

@@ -902,3 +902,35 @@ pub async fn validate_plugin(_vault_path: String, plugin_path: String) -> Result
     }))
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_merge_json() {
+        let mut a = json!({"foo": "bar", "nested": {"a": 1}});
+        let b = json!({"foo": "baz", "nested": {"b": 2}, "new": true});
+        
+        merge_json(&mut a, b);
+        
+        assert_eq!(a["foo"], json!("baz"));
+        assert_eq!(a["nested"]["a"], json!(1));
+        assert_eq!(a["nested"]["b"], json!(2));
+        assert_eq!(a["new"], json!(true));
+    }
+
+    #[tokio::test]
+    async fn test_get_plugin_template() {
+        let template = get_plugin_template().await.unwrap();
+        assert!(template.contains("class Plugin(PluginBase):"));
+    }
+
+    #[tokio::test]
+    async fn test_get_settings_schema() {
+        let schema = get_settings_schema().await.unwrap();
+        assert!(schema.is_array());
+        assert!(!schema.as_array().unwrap().is_empty());
+    }
+}
+
