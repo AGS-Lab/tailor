@@ -17,9 +17,9 @@ lint = "ruff check sidecar"
 format = "ruff format sidecar"
 
 [target.linux-64.tasks]
-dev = { cmd = "npm run tauri:dev", env = { PKG_CONFIG_PATH = "/usr/lib/pkgconfig", LIBRARY_PATH = "/usr/lib" } }
-build = { cmd = "npm run tauri:build", env = { PKG_CONFIG_PATH = "/usr/lib/pkgconfig", LIBRARY_PATH = "/usr/lib" } }
-test-rust = { cmd = "cargo test", cwd = "src-tauri", env = { PKG_CONFIG_PATH = "/usr/lib/pkgconfig", LIBRARY_PATH = "/usr/lib" } }
+dev = "PKG_CONFIG_PATH=$PKG_CONFIG_PATH:/usr/lib/pkgconfig:/usr/share/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig LIBRARY_PATH=$LIBRARY_PATH:/usr/lib:/usr/lib/x86_64-linux-gnu npm run tauri:dev"
+build = "PKG_CONFIG_PATH=$PKG_CONFIG_PATH:/usr/lib/pkgconfig:/usr/share/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig LIBRARY_PATH=$LIBRARY_PATH:/usr/lib:/usr/lib/x86_64-linux-gnu npm run tauri:build"
+test-rust = { cmd = "PKG_CONFIG_PATH=$PKG_CONFIG_PATH:/usr/lib/pkgconfig:/usr/share/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig LIBRARY_PATH=$LIBRARY_PATH:/usr/lib:/usr/lib/x86_64-linux-gnu cargo test", cwd = "src-tauri" }
 
 
 [dependencies]
