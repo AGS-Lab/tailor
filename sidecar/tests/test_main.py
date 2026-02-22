@@ -26,6 +26,6 @@ def test_main_exit_on_missing_vault(tmp_path):
     vault_dir = tmp_path / "non_existent_vault"
     
     with patch("sys.argv", ["main.py", "--vault", str(vault_dir), "--ws-port", "8080"]):
-        with patch("sys.exit") as mock_exit:
+        with pytest.raises(SystemExit) as exc_info:
             main.main()
-            mock_exit.assert_called_once_with(1)
+        assert exc_info.value.code == 1

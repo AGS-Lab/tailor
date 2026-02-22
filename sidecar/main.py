@@ -106,6 +106,11 @@ def main() -> None:
                 pass  # dotenv not installed, use system env vars
             break
 
+    # Validate vault exists
+    if not vault_path.exists():
+        print(f"Vault path does not exist: {vault_path}", file=sys.stderr)
+        sys.exit(1)
+
     # Determine log file path
     log_file = args.log_file
     if not log_file:
@@ -126,11 +131,6 @@ def main() -> None:
     logger.info("=" * 60)
     logger.info(f"Vault path: {vault_path}")
     logger.info(f"WebSocket port: {args.ws_port}")
-
-    # Validate vault exists
-    if not vault_path.exists():
-        logger.error(f"Vault path does not exist: {vault_path}")
-        sys.exit(1)
 
     # Add sidecar to Python path (so plugins can import sidecar.* modules)
     sidecar_dir = Path(__file__).parent.parent
