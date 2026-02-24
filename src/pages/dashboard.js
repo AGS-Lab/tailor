@@ -174,28 +174,59 @@ async function loadVaults(container) {
             });
         }
 
-        vaultsGrid.innerHTML = sortedVaults.map((vault, index) => `
-            <div class="vault-card" data-vault-path="${vault.path}" style="animation-delay: ${index * 0.05}s">
-                <div class="vault-card-header">
-                    <div class="vault-icon">
-                        <i data-lucide="folder"></i>
-                    </div>
-                    <div class="vault-info">
-                        <h3>${vault.name || 'Untitled Vault'}</h3>
-                        <p class="vault-path" title="${vault.path}">${truncatePath(vault.path)}</p>
-                    </div>
-                </div>
-                <div class="vault-card-actions">
-                    <button class="btn btn-primary vault-open-btn" data-action="open" title="Open this vault">
-                        <i data-lucide="play-circle"></i>
-                        Open Vault
-                    </button>
-                    <button class="btn-icon vault-settings-btn" data-action="settings" title="Vault settings">
-                        <i data-lucide="settings"></i>
-                    </button>
-                </div>
-            </div>
-        `).join('');
+        vaultsGrid.innerHTML = '';
+        sortedVaults.forEach((vault, index) => {
+            const card = document.createElement('div');
+            card.className = 'vault-card';
+            card.dataset.vaultPath = vault.path || '';
+            card.style.animationDelay = `${index * 0.05}s`;
+
+            const header = document.createElement('div');
+            header.className = 'vault-card-header';
+
+            const iconWrap = document.createElement('div');
+            iconWrap.className = 'vault-icon';
+            const icon = document.createElement('i');
+            icon.dataset.lucide = 'folder';
+            iconWrap.appendChild(icon);
+
+            const info = document.createElement('div');
+            info.className = 'vault-info';
+            const title = document.createElement('h3');
+            title.textContent = vault.name || 'Untitled Vault';
+            const pathTxt = document.createElement('p');
+            pathTxt.className = 'vault-path';
+            pathTxt.title = vault.path || '';
+            pathTxt.textContent = truncatePath(vault.path);
+
+            info.appendChild(title);
+            info.appendChild(pathTxt);
+
+            header.appendChild(iconWrap);
+            header.appendChild(info);
+
+            const actions = document.createElement('div');
+            actions.className = 'vault-card-actions';
+
+            const openBtn = document.createElement('button');
+            openBtn.className = 'btn btn-primary vault-open-btn';
+            openBtn.dataset.action = 'open';
+            openBtn.title = 'Open this vault';
+            openBtn.innerHTML = '<i data-lucide="play-circle"></i> Open Vault';
+
+            const settingsBtn = document.createElement('button');
+            settingsBtn.className = 'btn-icon vault-settings-btn';
+            settingsBtn.dataset.action = 'settings';
+            settingsBtn.title = 'Vault settings';
+            settingsBtn.innerHTML = '<i data-lucide="settings"></i>';
+
+            actions.appendChild(openBtn);
+            actions.appendChild(settingsBtn);
+
+            card.appendChild(header);
+            card.appendChild(actions);
+            vaultsGrid.appendChild(card);
+        });
 
         if (window.lucide) {
             window.lucide.createIcons();
@@ -366,25 +397,57 @@ async function openPluginsModal(container) {
                     <i data-lucide="info"></i>
                     <p>These plugins can be installed within individual vaults. Open a vault and go to Settings → Plugin Store to install.</p>
                 </div>
-                <div class="plugins-list">
-                    ${registry.plugins.map(plugin => `
-                        <div class="plugin-browse-item">
-                            <div class="plugin-browse-icon">
-                                <i data-lucide="${plugin.icon || 'puzzle'}"></i>
-                            </div>
-                            <div class="plugin-browse-info">
-                                <h4>${plugin.name}</h4>
-                                <p>${plugin.description}</p>
-                                <div class="plugin-meta">
-                                    <span><i data-lucide="user"></i> ${plugin.author}</span>
-                                    <span><i data-lucide="tag"></i> v${plugin.version}</span>
-                                    ${plugin.homepage ? `<a href="${plugin.homepage}" target="_blank" rel="noopener noreferrer"><i data-lucide="external-link"></i> View Source</a>` : ''}
-                                </div>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
             `;
+            const list = document.createElement('div');
+            list.className = 'plugins-list';
+            registry.plugins.forEach(plugin => {
+                const item = document.createElement('div');
+                item.className = 'plugin-browse-item';
+
+                const iconWrap = document.createElement('div');
+                iconWrap.className = 'plugin-browse-icon';
+                const icon = document.createElement('i');
+                icon.dataset.lucide = plugin.icon || 'puzzle';
+                iconWrap.appendChild(icon);
+
+                const info = document.createElement('div');
+                info.className = 'plugin-browse-info';
+
+                const title = document.createElement('h4');
+                title.textContent = plugin.name || '';
+                const desc = document.createElement('p');
+                desc.textContent = plugin.description || '';
+
+                const meta = document.createElement('div');
+                meta.className = 'plugin-meta';
+
+                const authorSpan = document.createElement('span');
+                authorSpan.innerHTML = `<i data-lucide="user"></i> ${plugin.author || 'Unknown'}`;
+
+                const versionSpan = document.createElement('span');
+                versionSpan.innerHTML = `<i data-lucide="tag"></i> v${plugin.version || '0.0.0'}`;
+
+                meta.appendChild(authorSpan);
+                meta.appendChild(versionSpan);
+
+                if (plugin.homepage) {
+                    const link = document.createElement('a');
+                    link.href = plugin.homepage;
+                    link.target = '_blank';
+                    link.rel = 'noopener noreferrer';
+                    link.innerHTML = '<i data-lucide="external-link"></i> View Source';
+                    meta.appendChild(link);
+                }
+
+                info.appendChild(title);
+                info.appendChild(desc);
+                info.appendChild(meta);
+
+                item.appendChild(iconWrap);
+                item.appendChild(info);
+                list.appendChild(item);
+            });
+            modalBody.appendChild(list);
         }
 
         if (window.lucide) window.lucide.createIcons();

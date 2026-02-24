@@ -109,33 +109,73 @@ async function loadInstalledPlugins() {
                 </div>
             `;
         } else {
-            content.innerHTML = `
-                <div class="installed-plugins-list">
-                    ${plugins.map(plugin => `
-                        <div class="plugin-item" data-plugin-id="${plugin.id}">
-                            <div class="plugin-item-info">
-                                <div class="plugin-item-header">
-                                    <h4>${plugin.name || plugin.id}</h4>
-                                    <span class="plugin-version">v${plugin.version || '0.0.0'}</span>
-                                </div>
-                                <p class="plugin-desc">${plugin.description || ''}</p>
-                            </div>
-                            <div class="plugin-item-actions">
-                                <label class="toggle-switch">
-                                    <input type="checkbox" class="plugin-toggle" 
-                                           data-plugin-id="${plugin.id}"
-                                           ${plugin.enabled ? 'checked' : ''}>
-                                    <span class="toggle-slider"></span>
-                                </label>
-                                <button class="btn btn-icon btn-danger plugin-uninstall" 
-                                        data-plugin-id="${plugin.id}" title="Uninstall">
-                                    <i data-lucide="trash-2"></i>
-                                </button>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
-            `;
+            content.innerHTML = '';
+            const listContainer = document.createElement('div');
+            listContainer.className = 'installed-plugins-list';
+
+            plugins.forEach(plugin => {
+                const item = document.createElement('div');
+                item.className = 'plugin-item';
+                item.dataset.pluginId = plugin.id || '';
+
+                const info = document.createElement('div');
+                info.className = 'plugin-item-info';
+
+                const header = document.createElement('div');
+                header.className = 'plugin-item-header';
+
+                const title = document.createElement('h4');
+                title.textContent = plugin.name || plugin.id || '';
+
+                const version = document.createElement('span');
+                version.className = 'plugin-version';
+                version.textContent = `v${plugin.version || '0.0.0'}`;
+
+                header.appendChild(title);
+                header.appendChild(version);
+
+                const desc = document.createElement('p');
+                desc.className = 'plugin-desc';
+                desc.textContent = plugin.description || '';
+
+                info.appendChild(header);
+                info.appendChild(desc);
+
+                const actions = document.createElement('div');
+                actions.className = 'plugin-item-actions';
+
+                const label = document.createElement('label');
+                label.className = 'toggle-switch';
+
+                const input = document.createElement('input');
+                input.type = 'checkbox';
+                input.className = 'plugin-toggle';
+                input.dataset.pluginId = plugin.id || '';
+                input.checked = !!plugin.enabled;
+
+                const slider = document.createElement('span');
+                slider.className = 'toggle-slider';
+
+                label.appendChild(input);
+                label.appendChild(slider);
+
+                const btn = document.createElement('button');
+                btn.className = 'btn btn-icon btn-danger plugin-uninstall';
+                btn.dataset.pluginId = plugin.id || '';
+                btn.title = 'Uninstall';
+
+                const icon = document.createElement('i');
+                icon.dataset.lucide = 'trash-2';
+                btn.appendChild(icon);
+
+                actions.appendChild(label);
+                actions.appendChild(btn);
+
+                item.appendChild(info);
+                item.appendChild(actions);
+                listContainer.appendChild(item);
+            });
+            content.appendChild(listContainer);
         }
 
         if (window.lucide) window.lucide.createIcons();
@@ -205,44 +245,73 @@ async function loadPluginStore() {
         const installedData = installedRes.result || installedRes;
         const installedIds = (installedData.plugins || []).map(p => p.id);
 
-        content.innerHTML = `
-            <div class="plugin-store-grid">
-                ${availablePlugins.map(plugin => {
+        content.innerHTML = '';
+        const gridContainer = document.createElement('div');
+        gridContainer.className = 'plugin-store-grid';
+
+        availablePlugins.forEach(plugin => {
             const isInstalled = installedIds.includes(plugin.id);
-            return `
-                        <div class="plugin-card" data-plugin-id="${plugin.id}">
-                            <div class="plugin-card-header">
-                                <div class="plugin-icon">
-                                    <i data-lucide="${plugin.icon || 'package'}"></i>
-                                </div>
-                                <div class="plugin-meta">
-                                    <h4>${plugin.name}</h4>
-                                    <span class="plugin-author">by ${plugin.author || 'Unknown'}</span>
-                                </div>
-                            </div>
-                            <p class="plugin-desc">${plugin.description || ''}</p>
-                            <div class="plugin-card-footer">
-                                <div class="plugin-stats">
-                                    <span><i data-lucide="star"></i> ${plugin.stars || 0}</span>
-                                    <span><i data-lucide="download"></i> ${plugin.installs || 0}</span>
-                                </div>
-                                ${isInstalled ? `
-                                    <button class="btn btn-success btn-sm" disabled>
-                                        <i data-lucide="check"></i> Installed
-                                    </button>
-                                ` : `
-                                    <button class="btn btn-primary btn-sm plugin-install-btn"
-                                            data-plugin-id="${plugin.id}"
-                                            data-download-url="${plugin.download_url || ''}">
-                                        <i data-lucide="download"></i> Install
-                                    </button>
-                                `}
-                            </div>
-                        </div>
-                    `;
-        }).join('')}
-            </div>
-        `;
+
+            const card = document.createElement('div');
+            card.className = 'plugin-card';
+            card.dataset.pluginId = plugin.id || '';
+
+            const header = document.createElement('div');
+            header.className = 'plugin-card-header';
+
+            const iconWrap = document.createElement('div');
+            iconWrap.className = 'plugin-icon';
+            const icon = document.createElement('i');
+            icon.dataset.lucide = plugin.icon || 'package';
+            iconWrap.appendChild(icon);
+
+            const meta = document.createElement('div');
+            meta.className = 'plugin-meta';
+            const title = document.createElement('h4');
+            title.textContent = plugin.name || '';
+            const author = document.createElement('span');
+            author.className = 'plugin-author';
+            author.textContent = `by ${plugin.author || 'Unknown'}`;
+            meta.appendChild(title);
+            meta.appendChild(author);
+
+            header.appendChild(iconWrap);
+            header.appendChild(meta);
+
+            const desc = document.createElement('p');
+            desc.className = 'plugin-desc';
+            desc.textContent = plugin.description || '';
+
+            const footer = document.createElement('div');
+            footer.className = 'plugin-card-footer';
+
+            const stats = document.createElement('div');
+            stats.className = 'plugin-stats';
+            stats.innerHTML = `<span><i data-lucide="star"></i> ${plugin.stars || 0}</span><span><i data-lucide="download"></i> ${plugin.installs || 0}</span>`;
+
+            footer.appendChild(stats);
+
+            if (isInstalled) {
+                const btn = document.createElement('button');
+                btn.className = 'btn btn-success btn-sm';
+                btn.disabled = true;
+                btn.innerHTML = '<i data-lucide="check"></i> Installed';
+                footer.appendChild(btn);
+            } else {
+                const btn = document.createElement('button');
+                btn.className = 'btn btn-primary btn-sm plugin-install-btn';
+                btn.dataset.pluginId = plugin.id || '';
+                btn.dataset.downloadUrl = plugin.download_url || '';
+                btn.innerHTML = '<i data-lucide="download"></i> Install';
+                footer.appendChild(btn);
+            }
+
+            card.appendChild(header);
+            card.appendChild(desc);
+            card.appendChild(footer);
+            gridContainer.appendChild(card);
+        });
+        content.appendChild(gridContainer);
 
         if (window.lucide) window.lucide.createIcons();
         setupStoreListeners();

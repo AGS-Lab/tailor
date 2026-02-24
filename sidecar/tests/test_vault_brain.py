@@ -176,6 +176,77 @@ class TestVaultBrain:
         await brain.publish(constants.CoreEvents.TICK)
         mock_plugin.on_tick.assert_called_once()
 
+    @patch("sidecar.vault_brain.importlib.invalidate_caches")
+    @patch("sidecar.vault_brain.importlib.util.spec_from_file_location")
+    @patch("sidecar.vault_brain.importlib.util.module_from_spec")
+    @pytest.mark.asyncio
+    async def test_unload_and_reload_plugin(
+        self, mock_module, mock_spec, mock_invalidate, valid_vault, mock_ws_server
+    ):
+        """Test unloading and reloading a plugin."""
+        # 1. Setup mock plugin
+        plugin_path = valid_vault / "plugins" / "test_hot_reload"
+        plugin_path.mkdir(parents=True, exist_ok=True)
+        (plugin_path / "main.py").touch()
+        (plugin_path / "settings.json").write_text('{"enabled": true}')
+        
+        mock_plugin_instance = Mock()
+        mock_plugin_instance.register_commands = Mock()
+        mock_plugin_instance.on_load = AsyncMock()
+        mock_plugin_instance.on_unload = AsyncMock()
+        
+        # We need a bound method mock to test unsubscribe
+        async def mock_tick(): pass
+        mock_plugin_instance.on_tick = mock_tick
+        
+        mock_plugin_class = Mock(return_value=mock_plugin_instance)
+        mock_mod = MagicMock()
+        setattr(mock_mod, "Plugin", mock_plugin_class)
+        mock_module.return_value = mock_mod
+        
+        mock_spec_obj = Mock()
+        mock_spec_obj.loader.exec_module = Mock()
+        mock_spec.return_value = mock_spec_obj
+
+        # Initialize Brain and load plugin
+        brain = VaultBrain(valid_vault, mock_ws_server)
+        await brain.initialize()
+
+        assert "test_hot_reload" in brain.plugins
+        
+        # Add a mock command for this plugin
+        async def dummy_cmd(): pass
+        brain.register_command("test.cmd", dummy_cmd, plugin_name="test_hot_reload")
+        assert "test.cmd" in brain.commands
+
+        # ==========================================
+        # Test Unload
+        # ==========================================
+        res_unload = await brain.unload_plugin(plugin_id="test_hot_reload")
+        
+        assert res_unload["status"] == "success"
+        assert "test_hot_reload" not in brain.plugins
+        assert "test.cmd" not in brain.commands
+        mock_plugin_instance.on_unload.assert_called_once()
+        
+        # Check event unsubscribe 
+        # (Though we used a bound method mock, we'd need to verify EventBus state cleanly)
+
+        # ==========================================
+        # Test Reload
+        # ==========================================
+        # Reset mocks
+        mock_plugin_instance.on_load.reset_mock()
+        mock_plugin_instance.register_commands.reset_mock()
+        mock_invalidate.reset_mock()
+        
+        res_reload = await brain.reload_plugin(plugin_id="test_hot_reload")
+        
+        assert res_reload["status"] == "success"
+        assert "test_hot_reload" in brain.plugins
+        mock_invalidate.assert_called_once()
+        mock_plugin_instance.on_load.assert_called_once()
+
 
 @pytest.mark.unit
 class TestCommandRegistry:

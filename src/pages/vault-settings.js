@@ -160,31 +160,69 @@ async function showSection(section, vaultPath, container) {
                     const result = await window.request('plugins.list', {});
 
                     if (result.plugins && result.plugins.length > 0) {
-                        listEl.innerHTML = result.plugins.map(plugin => `
-                            <div class="plugin-item" data-plugin-id="${plugin.id}">
-                                <div class="plugin-item-info">
-                                    <div class="plugin-item-header">
-                                        <h4>${plugin.name || plugin.id}</h4>
-                                        <span class="plugin-version">v${plugin.version || '0.0.0'}</span>
-                                    </div>
-                                    <p class="plugin-description">${plugin.description || ''}</p>
-                                </div>
-                                <div class="plugin-item-actions">
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" 
-                                               class="plugin-toggle" 
-                                               data-plugin-id="${plugin.id}"
-                                               ${plugin.enabled ? 'checked' : ''}>
-                                        <span class="toggle-slider"></span>
-                                    </label>
-                                    <button class="btn btn-icon btn-danger plugin-uninstall" 
-                                            data-plugin-id="${plugin.id}"
-                                            title="Uninstall plugin">
-                                        <i data-lucide="trash-2"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        `).join('');
+                        listEl.innerHTML = '';
+                        result.plugins.forEach(plugin => {
+                            const item = document.createElement('div');
+                            item.className = 'plugin-item';
+                            item.dataset.pluginId = plugin.id || '';
+
+                            const info = document.createElement('div');
+                            info.className = 'plugin-item-info';
+
+                            const header = document.createElement('div');
+                            header.className = 'plugin-item-header';
+
+                            const title = document.createElement('h4');
+                            title.textContent = plugin.name || plugin.id || '';
+
+                            const version = document.createElement('span');
+                            version.className = 'plugin-version';
+                            version.textContent = `v${plugin.version || '0.0.0'}`;
+
+                            header.appendChild(title);
+                            header.appendChild(version);
+
+                            const desc = document.createElement('p');
+                            desc.className = 'plugin-description';
+                            desc.textContent = plugin.description || '';
+
+                            info.appendChild(header);
+                            info.appendChild(desc);
+
+                            const actions = document.createElement('div');
+                            actions.className = 'plugin-item-actions';
+
+                            const label = document.createElement('label');
+                            label.className = 'toggle-switch';
+
+                            const input = document.createElement('input');
+                            input.type = 'checkbox';
+                            input.className = 'plugin-toggle';
+                            input.dataset.pluginId = plugin.id || '';
+                            input.checked = !!plugin.enabled;
+
+                            const slider = document.createElement('span');
+                            slider.className = 'toggle-slider';
+
+                            label.appendChild(input);
+                            label.appendChild(slider);
+
+                            const btn = document.createElement('button');
+                            btn.className = 'btn btn-icon btn-danger plugin-uninstall';
+                            btn.dataset.pluginId = plugin.id || '';
+                            btn.title = 'Uninstall plugin';
+
+                            const icon = document.createElement('i');
+                            icon.dataset.lucide = 'trash-2';
+                            btn.appendChild(icon);
+
+                            actions.appendChild(label);
+                            actions.appendChild(btn);
+
+                            item.appendChild(info);
+                            item.appendChild(actions);
+                            listEl.appendChild(item);
+                        });
                     } else {
                         listEl.innerHTML = `
                             <div class="empty-state" style="padding: 40px;">
@@ -216,10 +254,30 @@ async function showSection(section, vaultPath, container) {
                         // Update .vault.toml
                         try {
                             await vaultApi.updatePluginConfig(vaultPath, pluginId, { enabled });
-                            console.log(`Plugin ${pluginId} ${enabled ? 'enabled' : 'disabled'}`);
+                            console.log(`Plugin ${pluginId} config updated in TOML to ${enabled}`);
+
+                            // Immediately signal hot-reload to the backend if WebSocket is active
+                            if (typeof window.request === 'function') {
+                                if (enabled) {
+                                    const res = await window.request('system.reload_plugin', { plugin_id: pluginId });
+                                    if (res.status === 'success') {
+                                        console.log(`[Hot Reload] Plugin ${pluginId} forcefully reloaded into memory.`);
+                                    } else {
+                                        throw new Error(res.error || 'Failed to reload plugin');
+                                    }
+                                } else {
+                                    const res = await window.request('system.unload_plugin', { plugin_id: pluginId });
+                                    if (res.status === 'success') {
+                                        console.log(`[Hot Reload] Plugin ${pluginId} forcefully unloaded from memory.`);
+                                    } else {
+                                        throw new Error(res.error || 'Failed to unload plugin');
+                                    }
+                                }
+                            }
                         } catch (err) {
-                            console.error('Failed to update plugin config:', err);
-                            toggle.checked = !enabled; // Revert
+                            console.error('Failed to update plugin config/state:', err);
+                            toggle.checked = !enabled; // Revert visually
+                            alert(`Failed to ${enabled ? 'enable' : 'disable'} plugin: ${err.message || err}`);
                         }
                     });
                 });

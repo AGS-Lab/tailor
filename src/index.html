@@ -27,11 +27,12 @@
         import { initDashboard } from './pages/dashboard.js';
         import { initVaultSettings } from './pages/vault-settings.js';
         import { initSettings } from './pages/settings.js';
-        import { initThemes, loadSavedTheme } from './pages/themes.js';
+        import { initThemes, loadSavedTheme, setupGlobalThemeListener } from './pages/themes.js';
         import './utils/router.js';
 
-        // Load saved theme on startup
+        // Load saved theme on startup and setup IPC listener
         loadSavedTheme();
+        setupGlobalThemeListener();
 
         // Initialize navigation
         const navContainer = document.getElementById('main-nav-container');

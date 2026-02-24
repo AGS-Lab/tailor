@@ -123,22 +123,49 @@ export class ModelSelector {
         const displayName = this.currentSelection.displayName;
         const actualModel = this.getActualModelName();
 
-        this.container.innerHTML = `
-            <div class="model-selector-container">
-                <button class="model-selector-btn" id="model-selector-btn" title="Select model or category">
-                    <i data-lucide="${icon}" class="model-icon"></i>
-                    <span class="model-name">${displayName}</span>
-                    ${actualModel ? `<span class="model-detail">(${actualModel})</span>` : ''}
-                    <i data-lucide="chevron-down" class="dropdown-icon"></i>
-                </button>
-                <div class="model-selector-dropdown hidden" id="model-selector-dropdown">
-                    ${this.renderDropdownContent()}
-                </div>
-            </div>
-        `;
+        this.container.innerHTML = '';
+
+        const wrap = document.createElement('div');
+        wrap.className = 'model-selector-container';
+
+        const btn = document.createElement('button');
+        btn.className = 'model-selector-btn';
+        btn.id = 'model-selector-btn';
+        btn.title = 'Select model or category';
+
+        const iconEl = document.createElement('i');
+        iconEl.dataset.lucide = icon;
+        iconEl.className = 'model-icon';
+        btn.appendChild(iconEl);
+
+        const nameEl = document.createElement('span');
+        nameEl.className = 'model-name';
+        nameEl.textContent = displayName;
+        btn.appendChild(nameEl);
+
+        if (actualModel) {
+            const detailEl = document.createElement('span');
+            detailEl.className = 'model-detail';
+            detailEl.textContent = `(${actualModel})`;
+            btn.appendChild(detailEl);
+        }
+
+        const dropIcon = document.createElement('i');
+        dropIcon.dataset.lucide = 'chevron-down';
+        dropIcon.className = 'dropdown-icon';
+        btn.appendChild(dropIcon);
+
+        const dropdown = document.createElement('div');
+        dropdown.className = 'model-selector-dropdown hidden';
+        dropdown.id = 'model-selector-dropdown';
+        dropdown.appendChild(this.renderDropdownContent());
+
+        wrap.appendChild(btn);
+        wrap.appendChild(dropdown);
+        this.container.appendChild(wrap);
 
         // Store dropdown reference
-        this.dropdown = this.container.querySelector('#model-selector-dropdown');
+        this.dropdown = dropdown;
 
         // Render icons
         if (window.lucide) {
@@ -150,7 +177,8 @@ export class ModelSelector {
      * Render dropdown content with categories and "More models..." option
      */
     renderDropdownContent() {
-        let html = '<div class="model-options">';
+        const container = document.createElement('div');
+        container.className = 'model-options';
 
         // Render category options
         for (const [catId, catInfo] of Object.entries(this.categories)) {
@@ -159,36 +187,71 @@ export class ModelSelector {
             const configuredModel = this.categoryConfig[catId];
             const modelName = this.extractModelName(configuredModel);
 
-            html += `
-                <button class="model-option model-option-category ${isSelected ? 'selected' : ''}" data-category="${catId}">
-                    <div class="model-option-main">
-                        <i data-lucide="${icon}"></i>
-                        <div class="model-option-text">
-                            <span class="model-option-title">${catInfo.name || catId}</span>
-                            ${modelName ? `<span class="model-option-subtitle">${modelName}</span>` : ''}
-                        </div>
-                    </div>
-                    ${isSelected ? '<i data-lucide="check" class="model-option-check"></i>' : ''}
-                </button>
-            `;
+            const btn = document.createElement('button');
+            btn.className = `model-option model-option-category ${isSelected ? 'selected' : ''}`;
+            btn.dataset.category = catId;
+
+            const mainDiv = document.createElement('div');
+            mainDiv.className = 'model-option-main';
+
+            const iEl = document.createElement('i');
+            iEl.dataset.lucide = icon;
+            mainDiv.appendChild(iEl);
+
+            const textDiv = document.createElement('div');
+            textDiv.className = 'model-option-text';
+
+            const titleSpan = document.createElement('span');
+            titleSpan.className = 'model-option-title';
+            titleSpan.textContent = catInfo.name || catId;
+            textDiv.appendChild(titleSpan);
+
+            if (modelName) {
+                const subSpan = document.createElement('span');
+                subSpan.className = 'model-option-subtitle';
+                subSpan.textContent = modelName;
+                textDiv.appendChild(subSpan);
+            }
+            mainDiv.appendChild(textDiv);
+            btn.appendChild(mainDiv);
+
+            if (isSelected) {
+                const chk = document.createElement('i');
+                chk.dataset.lucide = 'check';
+                chk.className = 'model-option-check';
+                btn.appendChild(chk);
+            }
+            container.appendChild(btn);
         }
 
         // Add divider
-        html += '<div class="model-option-divider"></div>';
+        const div = document.createElement('div');
+        div.className = 'model-option-divider';
+        container.appendChild(div);
 
         // Add "More models..." option
-        html += `
-            <button class="model-option model-option-advanced" id="model-selector-advanced">
-                <div class="model-option-main">
-                    <i data-lucide="list"></i>
-                    <span class="model-option-title">More models...</span>
-                </div>
-                <i data-lucide="chevron-right"></i>
-            </button>
-        `;
+        const advBtn = document.createElement('button');
+        advBtn.className = 'model-option model-option-advanced';
+        advBtn.id = 'model-selector-advanced';
 
-        html += '</div>';
-        return html;
+        const advMain = document.createElement('div');
+        advMain.className = 'model-option-main';
+        const advI = document.createElement('i');
+        advI.dataset.lucide = 'list';
+        advMain.appendChild(advI);
+
+        const advText = document.createElement('span');
+        advText.className = 'model-option-title';
+        advText.textContent = 'More models...';
+        advMain.appendChild(advText);
+
+        advBtn.appendChild(advMain);
+        const rightI = document.createElement('i');
+        rightI.dataset.lucide = 'chevron-right';
+        advBtn.appendChild(rightI);
+
+        container.appendChild(advBtn);
+        return container;
     }
 
     /**
@@ -331,90 +394,133 @@ export class ModelSelector {
      * Render advanced model picker modal content
      */
     renderAdvancedPicker() {
-        let html = `
-            <div class="advanced-model-picker">
-                <input 
-                    type="text" 
-                    id="model-search" 
-                    class="model-search-input" 
-                    placeholder="Search models..." 
-                />
-                <div class="model-provider-groups" id="model-provider-groups">
-        `;
+        const container = document.createElement('div');
+        container.className = 'advanced-model-picker';
+
+        const searchInput = document.createElement('input');
+        searchInput.type = 'text';
+        searchInput.id = 'model-search';
+        searchInput.className = 'model-search-input';
+        searchInput.placeholder = 'Search models...';
+        container.appendChild(searchInput);
+
+        const groups = document.createElement('div');
+        groups.className = 'model-provider-groups';
+        groups.id = 'model-provider-groups';
 
         for (const [providerId, models] of Object.entries(this.availableModels)) {
-            html += `
-                <div class="model-provider-group">
-                    <div class="model-provider-header">
-                        <i data-lucide="chevron-down" class="provider-toggle"></i>
-                        <span class="provider-name">${this.formatProviderName(providerId)}</span>
-                        <span class="provider-count">${models.length} models</span>
-                    </div>
-                    <div class="model-cards">
-            `;
+            const groupDiv = document.createElement('div');
+            groupDiv.className = 'model-provider-group';
+
+            const headerDiv = document.createElement('div');
+            headerDiv.className = 'model-provider-header';
+
+            const chevron = document.createElement('i');
+            chevron.dataset.lucide = 'chevron-down';
+            chevron.className = 'provider-toggle';
+            headerDiv.appendChild(chevron);
+
+            const nameEl = document.createElement('span');
+            nameEl.className = 'provider-name';
+            nameEl.textContent = this.formatProviderName(providerId);
+            headerDiv.appendChild(nameEl);
+
+            const countEl = document.createElement('span');
+            countEl.className = 'provider-count';
+            countEl.textContent = `${models.length} models`;
+            headerDiv.appendChild(countEl);
+            groupDiv.appendChild(headerDiv);
+
+            const cardsContainer = document.createElement('div');
+            cardsContainer.className = 'model-cards';
 
             for (const model of models) {
                 const isSelected = this.currentSelection.actualModel === this.getFullModelId(providerId, model.id);
                 const isCategoryDefault = Object.values(this.categoryConfig).includes(this.getFullModelId(providerId, model.id));
 
-                html += `
-                    <div class="model-card ${isSelected ? 'selected' : ''}" data-model-id="${providerId}/${model.id}">
-                        <div class="model-card-header">
-                            <div class="model-card-radio">
-                                <input 
-                                    type="radio" 
-                                    name="model-selection" 
-                                    value="${providerId}/${model.id}"
-                                    ${isSelected ? 'checked' : ''}
-                                />
-                            </div>
-                            <div class="model-card-info">
-                                <div class="model-card-name">${model.name}</div>
-                                ${isCategoryDefault ? '<span class="model-badge">Category default</span>' : ''}
-                            </div>
-                        </div>
-                        <div class="model-card-details">
-                            ${model.context_window ? `<span>Context: ${this.formatNumber(model.context_window)} tokens</span>` : ''}
-                            ${model.is_local ? '<span class="model-local">Free (Local)</span>' : '<span class="model-pricing-placeholder">Loading pricing...</span>'}
-                        </div>
-                    </div>
-                `;
+                const card = document.createElement('div');
+                card.className = `model-card ${isSelected ? 'selected' : ''}`;
+                card.dataset.modelId = `${providerId}/${model.id}`;
+
+                const cardHeader = document.createElement('div');
+                cardHeader.className = 'model-card-header';
+
+                const radioDiv = document.createElement('div');
+                radioDiv.className = 'model-card-radio';
+                const radioInput = document.createElement('input');
+                radioInput.type = 'radio';
+                radioInput.name = 'model-selection';
+                radioInput.value = `${providerId}/${model.id}`;
+                if (isSelected) radioInput.checked = true;
+                radioDiv.appendChild(radioInput);
+                cardHeader.appendChild(radioDiv);
+
+                const cardInfo = document.createElement('div');
+                cardInfo.className = 'model-card-info';
+                const cardName = document.createElement('div');
+                cardName.className = 'model-card-name';
+                cardName.textContent = model.name;
+                cardInfo.appendChild(cardName);
+                if (isCategoryDefault) {
+                    const badge = document.createElement('span');
+                    badge.className = 'model-badge';
+                    badge.textContent = 'Category default';
+                    cardInfo.appendChild(badge);
+                }
+                cardHeader.appendChild(cardInfo);
+                card.appendChild(cardHeader);
+
+                const cardDetails = document.createElement('div');
+                cardDetails.className = 'model-card-details';
+                if (model.context_window) {
+                    const ctxSpan = document.createElement('span');
+                    ctxSpan.textContent = `Context: ${this.formatNumber(model.context_window)} tokens`;
+                    cardDetails.appendChild(ctxSpan);
+                }
+                const priceSpan = document.createElement('span');
+                if (model.is_local) {
+                    priceSpan.className = 'model-local';
+                    priceSpan.textContent = 'Free (Local)';
+                } else {
+                    priceSpan.className = 'model-pricing-placeholder';
+                    priceSpan.textContent = 'Loading pricing...';
+                }
+                cardDetails.appendChild(priceSpan);
+                card.appendChild(cardDetails);
+
+                cardsContainer.appendChild(card);
             }
-
-            html += `
-                    </div>
-                </div>
-            `;
+            groupDiv.appendChild(cardsContainer);
+            groups.appendChild(groupDiv);
         }
+        container.appendChild(groups);
 
-        html += `
-                </div>
-                
-                <!-- Custom Model Input -->
-                <div class="custom-model-section">
-                    <div class="model-provider-group">
-                         <div class="model-provider-header expanded">
-                            <i data-lucide="plus" class="provider-icon"></i>
-                            <span class="provider-name">Custom Model</span>
-                        </div>
-                        <div class="custom-model-input-container">
-                            <p class="text-sm text-gray-500 mb-2">Enter full model ID (e.g., <code>openrouter/anthropic/claude-3-opus</code> or <code>groq/llama3-70b-8192</code>)</p>
-                            <div class="flex gap-2">
-                                <input 
-                                    type="text" 
-                                    id="custom-model-input" 
-                                    class="model-search-input flex-1" 
-                                    placeholder="provider/model-id" 
-                                />
-                                <button id="btn-use-custom-model" class="btn btn-primary">Use</button>
-                            </div>
+        // Custom Model Input
+        const customWrapper = document.createElement('div');
+        customWrapper.innerHTML = `
+            <div class="custom-model-section">
+                <div class="model-provider-group">
+                        <div class="model-provider-header expanded">
+                        <i data-lucide="plus" class="provider-icon"></i>
+                        <span class="provider-name">Custom Model</span>
+                    </div>
+                    <div class="custom-model-input-container">
+                        <p class="text-sm text-gray-500 mb-2">Enter full model ID (e.g., <code>openrouter/anthropic/claude-3-opus</code> or <code>groq/llama3-70b-8192</code>)</p>
+                        <div class="flex gap-2" style="display:flex;gap:0.5rem">
+                            <input 
+                                type="text" 
+                                id="custom-model-input" 
+                                class="model-search-input flex-1" style="flex:1" 
+                                placeholder="provider/model-id" 
+                            />
+                            <button id="btn-use-custom-model" class="btn btn-primary">Use</button>
                         </div>
                     </div>
                 </div>
             </div>
         `;
-
-        return html;
+        container.appendChild(customWrapper.firstElementChild);
+        return container;
     }
 
     /**
@@ -542,7 +648,9 @@ export class ModelSelector {
         // Create tooltip
         const tooltip = document.createElement('div');
         tooltip.className = 'model-tooltip';
-        tooltip.innerHTML = this.renderTooltipContent(modelInfo);
+        const contentElem = this.renderTooltipContent(modelInfo);
+        tooltip.innerHTML = '';
+        tooltip.appendChild(contentElem);
 
         document.body.appendChild(tooltip);
 
@@ -568,47 +676,61 @@ export class ModelSelector {
      * Render tooltip content
      */
     renderTooltipContent(modelInfo) {
-        return `
-            <div class="model-tooltip-header">${modelInfo.name}</div>
-            <div class="model-tooltip-body">
-                <div class="tooltip-row">
-                    <span class="tooltip-label">Provider:</span>
-                    <span>${this.formatProviderName(modelInfo.provider)}</span>
-                </div>
-                ${modelInfo.context_window ? `
-                <div class="tooltip-row">
-                    <span class="tooltip-label">Context:</span>
-                    <span>${this.formatNumber(modelInfo.context_window)} tokens</span>
-                </div>
-                ` : ''}
-                ${!modelInfo.is_local && (modelInfo.pricing?.input || modelInfo.pricing?.output) ? `
-                <div class="tooltip-section">
-                    <div class="tooltip-section-title">Pricing (per 1M tokens):</div>
-                    <div class="tooltip-row">
-                        <span class="tooltip-label">Input:</span>
-                        <span>$${modelInfo.pricing.input?.toFixed(2) || 'N/A'}</span>
-                    </div>
-                    <div class="tooltip-row">
-                        <span class="tooltip-label">Output:</span>
-                        <span>$${modelInfo.pricing.output?.toFixed(2) || 'N/A'}</span>
-                    </div>
-                </div>
-                ` : ''}
-                ${modelInfo.is_local ? '<div class="tooltip-local">Free (Local)</div>' : ''}
-                ${modelInfo.capabilities?.length ? `
-                <div class="tooltip-row">
-                    <span class="tooltip-label">Capabilities:</span>
-                    <span>${modelInfo.capabilities.join(', ')}</span>
-                </div>
-                ` : ''}
-                ${modelInfo.categories?.length ? `
-                <div class="tooltip-row">
-                    <span class="tooltip-label">Categories:</span>
-                    <span>${modelInfo.categories.map(c => this.categories[c]?.name || c).join(', ')}</span>
-                </div>
-                ` : ''}
-            </div>
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = `
+            <div class="model-tooltip-header"></div>
+            <div class="model-tooltip-body"></div>
         `;
+        const header = wrapper.querySelector('.model-tooltip-header');
+        header.textContent = modelInfo.name || '';
+        const body = wrapper.querySelector('.model-tooltip-body');
+
+        const mkRow = (label, value) => {
+            const div = document.createElement('div');
+            div.className = 'tooltip-row';
+            const lab = document.createElement('span');
+            lab.className = 'tooltip-label';
+            lab.textContent = label;
+            const val = document.createElement('span');
+            val.textContent = value;
+            div.appendChild(lab);
+            div.appendChild(val);
+            return div;
+        };
+
+        body.appendChild(mkRow('Provider:', this.formatProviderName(modelInfo.provider)));
+        if (modelInfo.context_window) {
+            body.appendChild(mkRow('Context:', `${this.formatNumber(modelInfo.context_window)} tokens`));
+        }
+
+        if (!modelInfo.is_local && (modelInfo.pricing?.input || modelInfo.pricing?.output)) {
+            const pricingDiv = document.createElement('div');
+            pricingDiv.className = 'tooltip-section';
+            const pricingTitle = document.createElement('div');
+            pricingTitle.className = 'tooltip-section-title';
+            pricingTitle.textContent = 'Pricing (per 1M tokens):';
+            pricingDiv.appendChild(pricingTitle);
+            pricingDiv.appendChild(mkRow('Input:', `$${(modelInfo.pricing.input || 0).toFixed(2)}`));
+            pricingDiv.appendChild(mkRow('Output:', `$${(modelInfo.pricing.output || 0).toFixed(2)}`));
+            body.appendChild(pricingDiv);
+        }
+
+        if (modelInfo.is_local) {
+            const loc = document.createElement('div');
+            loc.className = 'tooltip-local';
+            loc.textContent = 'Free (Local)';
+            body.appendChild(loc);
+        }
+
+        if (modelInfo.capabilities?.length) {
+            body.appendChild(mkRow('Capabilities:', modelInfo.capabilities.join(', ')));
+        }
+
+        if (modelInfo.categories?.length) {
+            body.appendChild(mkRow('Categories:', modelInfo.categories.map(c => this.categories[c]?.name || c).join(', ')));
+        }
+
+        return wrapper;
     }
 
     /**

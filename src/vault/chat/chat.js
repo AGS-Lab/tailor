@@ -445,17 +445,36 @@ function addMessage(role, content, isLoading = false, id = null) {
 
     const iconName = role === 'user' ? 'user' : 'bot';
 
-    msgEl.innerHTML = `
-        <div class="message-avatar">
-            <i data-lucide="${iconName}"></i>
-        </div>
-        <div class="message-content-wrapper">
-            <div class="message-content">
-                ${isLoading ? '<div class="message-loading"><span></span><span></span><span></span></div>' : escapeHtml(content)}
-            </div>
-            <div class="message-toolbar-container"></div>
-        </div>
-    `;
+    const avatar = document.createElement('div');
+    avatar.className = 'message-avatar';
+    const icon = document.createElement('i');
+    icon.dataset.lucide = iconName;
+    avatar.appendChild(icon);
+    msgEl.appendChild(avatar);
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'message-content-wrapper';
+
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'message-content';
+
+    if (isLoading) {
+        const loading = document.createElement('div');
+        loading.className = 'message-loading';
+        loading.appendChild(document.createElement('span'));
+        loading.appendChild(document.createElement('span'));
+        loading.appendChild(document.createElement('span'));
+        contentDiv.appendChild(loading);
+    } else {
+        contentDiv.innerHTML = escapeHtml(content);
+    }
+
+    const tbContainer = document.createElement('div');
+    tbContainer.className = 'message-toolbar-container';
+
+    wrapper.appendChild(contentDiv);
+    wrapper.appendChild(tbContainer);
+    msgEl.appendChild(wrapper);
 
     // Add toolbar for assistant messages only (not user, not system, not loading)
     if (role === 'assistant' && !isLoading) {

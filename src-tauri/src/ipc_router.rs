@@ -1,5 +1,5 @@
 use crate::{AppState, dependency_checker::DependencyChecker};
-use tauri::{AppHandle, State, Manager};
+use tauri::{AppHandle, State, Manager, Emitter};
 use serde::{Deserialize, Serialize};
 use anyhow::Result;
 use std::path::PathBuf;
@@ -742,7 +742,8 @@ pub async fn save_global_settings(settings: serde_json::Value, app: AppHandle) -
          
     fs::write(&settings_path, content)
         .map_err(|e| format!("Failed to write settings: {}", e))?;
-        
+    let _ = app.emit("theme-changed", &settings);
+
     Ok(())
 }
 

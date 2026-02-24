@@ -102,11 +102,19 @@ async function showSection(section, container) {
                 // Better: Just update localStorage too for sync.
                 if (newTheme !== 'system') {
                     localStorage.setItem('tailor-theme', newTheme === 'dark' ? 'tokyo-night' : 'default');
-                    // Force reload to apply theme changes cross-module
-                    window.location.reload();
                 } else {
-                    window.location.reload();
+                    localStorage.removeItem('tailor-theme');
                 }
+
+                // Show a brief success message instead of reloading
+                const successMsg = document.createElement('div');
+                successMsg.className = 'settings-success-msg text-success mt-2 text-sm';
+                successMsg.textContent = 'Theme updated successfully.';
+
+                // Add to DOM temporarily
+                const labelParent = themeSelect.parentElement;
+                labelParent.appendChild(successMsg);
+                setTimeout(() => successMsg.remove(), 3000);
             });
             break;
 

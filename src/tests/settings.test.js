@@ -59,7 +59,11 @@ describe('settings.js', () => {
         await new Promise(resolve => setTimeout(resolve, 0));
 
         expect(settingsApi.saveGlobalSettings).toHaveBeenCalledWith({ theme: 'dark' });
-        expect(window.location.reload).toHaveBeenCalled();
+
+        // Assert success message appeared instead of reload
+        const successMsg = container.querySelector('.settings-success-msg');
+        expect(successMsg).not.toBeNull();
+        expect(successMsg.textContent).toBe('Theme updated successfully.');
     });
 
     it('navigates between sections', async () => {

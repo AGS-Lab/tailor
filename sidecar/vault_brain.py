@@ -1098,7 +1098,142 @@ class VaultBrain:
             logger.exception(f"Failed to toggle plugin: {e}")
             return {"status": "error", "error": str(e)}
 
-    @command("system.restart_vault", constants.CORE_PLUGIN_NAME)
+    @command("system.unload_plugin", constants.CORE_PLUGIN_NAME)
+    async def unload_plugin(self, plugin_id: str = "", **kwargs) -> Dict[str, Any]:
+        """Unload a specific plugin from memory."""
+        if not plugin_id:
+            p = kwargs.get("p") or kwargs.get("params")
+            if isinstance(p, dict):
+                plugin_id = p.get("plugin_id", plugin_id)
+
+        if not plugin_id:
+            return {"status": "error", "error": "plugin_id is required"}
+
+        if plugin_id not in self.plugins:
+            return {"status": "error", "error": f"Plugin '{plugin_id}' not loaded"}
+
+        plugin = self.plugins[plugin_id]
+        
+        try:
+            # 1. Call on_unload hook
+            await plugin.on_unload()
+            
+            # 2. Unregister ALL commands belonging to this plugin
+            # Need to iterate through a copy of keys since we modify the dict
+            command_ids_to_remove = [
+                cmd_id for cmd_id, meta in self.commands.items() 
+                if meta.get("plugin") == plugin_id
+            ]
+            for cmd_id in command_ids_to_remove:
+                self.unregister_command(cmd_id)
+            
+            # 3. Unsubscribe from events (TICK, etc)
+            # Find methods of this plugin instance registered in EventBus
+            for event_name, subscriber_list in list(self.events._subscribers.items()):
+                for priority, handler in list(subscriber_list):
+                    # If handler is a bound method, check if its __self__ is our plugin instance
+                    if hasattr(handler, "__self__") and handler.__self__ is plugin:
+                        self.unsubscribe(event_name, handler)
+                            
+            # 4. Remove from plugins dict
+            del self.plugins[plugin_id]
+            
+            logger.info(f"Unloaded plugin: {plugin_id}")
+            return {"status": "success", "message": f"Plugin {plugin_id} unloaded"}
+            
+        except Exception as e:
+            logger.exception(f"Error unloading plugin '{plugin_id}': {e}")
+            return {"status": "error", "error": str(e)}
+
+    @command("system.reload_plugin", constants.CORE_PLUGIN_NAME)
+    async def reload_plugin(self, plugin_id: str = "", **kwargs) -> Dict[str, Any]:
+        """Reload a specific plugin from disk."""
+        if not plugin_id:
+            p = kwargs.get("p") or kwargs.get("params")
+            if isinstance(p, dict):
+                plugin_id = p.get("plugin_id", plugin_id)
+
+        if not plugin_id:
+            return {"status": "error", "error": "plugin_id is required"}
+
+        try:
+            # 1. Unload if currently loaded
+            if plugin_id in self.plugins:
+                res = await self.unload_plugin(plugin_id)
+                if res.get("status") == "error":
+                    return res
+            
+            # 2. Refresh config
+            self.config = self._load_config()
+            
+            # 3. Target the specific plugin directory
+            plugins_dir = utils.get_plugins_dir(self.vault_path)
+            plugin_dir = plugins_dir / plugin_id
+            
+            if not plugin_dir.exists() or not plugin_dir.is_dir():
+                return {"status": "error", "error": f"Plugin directory not found: {plugin_dir}"}
+                
+            # 4. Check if enabled in config
+            vault_apps_config = self.config.get("plugins", {})
+            overrides = vault_apps_config.get(plugin_id, {})
+            if not isinstance(overrides, dict):
+                overrides = {}
+                
+            # Load defaults
+            defaults = {}
+            settings_path = plugin_dir / "settings.json"
+            if settings_path.exists():
+                try:
+                    defaults = json.loads(settings_path.read_text(encoding="utf-8"))
+                except Exception as e:
+                    pass
+                    
+            final_config = defaults.copy()
+            final_config.update(overrides)
+            
+            is_enabled = final_config.get("enabled", False)
+            if not is_enabled:
+                return {"status": "error", "error": f"Plugin '{plugin_id}' is disabled in config"}
+                
+            # 5. Load and initialize
+            importlib.invalidate_caches() # ensure we don't load stale cache
+            
+            main_file = plugin_dir / "main.py"
+            spec = importlib.util.spec_from_file_location(f"{plugin_id}_{int(time.time())}", main_file)
+            if not spec or not spec.loader:
+                return {"status": "error", "error": "Failed to create module spec"}
+
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+
+            if not hasattr(module, constants.PLUGIN_CLASS_NAME):
+                 return {"status": "error", "error": f"No Plugin class found"}
+
+            plugin_class = getattr(module, constants.PLUGIN_CLASS_NAME)
+            plugin = plugin_class(
+                plugin_dir=plugin_dir,
+                vault_path=self.vault_path,
+                config=final_config,
+            )
+
+            plugin.register_commands()
+            
+            if hasattr(plugin, "register_hooks"):
+                plugin.register_hooks()
+
+            self.plugins[plugin_id] = plugin
+            
+            # 6. Activate Phase
+            await plugin.on_load()
+            self.subscribe(constants.CoreEvents.TICK, plugin.on_tick)
+            await self.publish(constants.CoreEvents.PLUGIN_LOADED, plugin_name=plugin_id)
+            
+            logger.info(f"Successfully reloaded plugin '{plugin_id}'")
+            return {"status": "success", "message": f"Plugin {plugin_id} reloaded successfully"}
+            
+        except Exception as e:
+            logger.exception(f"Failed to reload plugin '{plugin_id}': {e}")
+            return {"status": "error", "error": str(e)}
     async def restart_vault(self, **kwargs) -> Dict[str, Any]:
         """
         Hot-reload the vault: unload all plugins, reload config, reload plugins.

@@ -9,6 +9,7 @@ let themes = [];
 let currentThemeId = localStorage.getItem('tailor-theme') || 'default';
 
 import { settingsApi } from '../services/api.js';
+import { listen } from '@tauri-apps/api/event';
 
 /**
  * Initialize the themes page
@@ -298,5 +299,30 @@ export async function loadSavedTheme() {
         }
     } catch (error) {
         console.error('[Themes] Failed to load saved theme:', error);
+    }
+}
+
+/**
+ * Setup global listener for theme changes across windows 
+ */
+export async function setupGlobalThemeListener() {
+    try {
+        await listen('theme-changed', (event) => {
+            const settings = event.payload;
+            if (settings && settings.theme) {
+                if (settings.theme !== currentThemeId) {
+                    if (settings.theme === 'system') {
+                        // system means clear localStorage and revert to default styling logic
+                        localStorage.removeItem('tailor-theme');
+                        applyTheme('default');
+                    } else {
+                        applyTheme(settings.theme);
+                    }
+                }
+            }
+        });
+        console.log('[Themes] Global theme listener initialized');
+    } catch (err) {
+        console.error('[Themes] Failed to setup global theme listener:', err);
     }
 }

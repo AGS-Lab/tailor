@@ -77,6 +77,6 @@ describe('ModelSelector.js', () => {
         const advancedBtn = container.querySelector('#model-selector-advanced');
         advancedBtn.click();
 
-        expect(window.ui.showModal).toHaveBeenCalledWith('Select Model', expect.any(String), '700px');
+        expect(window.ui.showModal).toHaveBeenCalledWith('Select Model', expect.any(HTMLElement), '700px');
     });
 });
