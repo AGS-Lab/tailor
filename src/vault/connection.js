@@ -24,10 +24,7 @@ function setConnected(isConnected, loadPluginsFn) {
     if (isConnected) {
         log('Connected to Sidecar', 'in');
         // Wait for GoldenLayout to fully initialize and sidecar to be ready
-        setTimeout(() => {
-            log('Starting plugin load after delay...', 'info');
-            if (loadPluginsFn) loadPluginsFn();
-        }, 2000);
+        if (loadPluginsFn) loadPluginsFn();
     } else {
         log('Disconnected', 'error');
     }
