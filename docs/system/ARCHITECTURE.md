@@ -42,7 +42,7 @@ Three singletons initialized in `main.rs`, stored in Tauri app state:
 
 ## Python Sidecar (`sidecar/`)
 
-Entry point: `python -m sidecar --vault <path> --ws-port <port>`
+Entry point: `python -m sidecar --vault <path> --ws-port <port>` (`main.py` — validates vault path, loads `.env`, configures logging to `.tailor/logs/sidecar.log`, adds `sidecar/` + `vault/lib/` to `PYTHONPATH`, then starts the WebSocket server and tick loop concurrently.)
 
 ### VaultBrain (`vault_brain.py`) — Singleton Orchestrator
 
