@@ -69,8 +69,7 @@ class VaultBrain:
         Note: Heavy initialization happens in self.initialize()
         """
         # Prevent re-initialization if already initialized
-        self._initialized: bool = False
-        if self._initialized:
+        if hasattr(self, "_initialized") and self._initialized:
             return
 
         self.vault_path = utils.validate_vault_path(vault_path)

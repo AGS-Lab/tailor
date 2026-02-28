@@ -75,6 +75,13 @@ def integration_vault(tmp_path):
 
 @pytest.mark.asyncio
 class TestIntegration:
+    @pytest.fixture(autouse=True)
+    def reset_singleton(self):
+        """Reset VaultBrain singleton before and after each test."""
+        VaultBrain._instance = None
+        yield
+        VaultBrain._instance = None
+
     async def test_plugin_lifecycle_and_execution(
         self, integration_vault, mock_ws_server
     ):

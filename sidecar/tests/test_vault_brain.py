@@ -266,6 +266,24 @@ class TestVaultBrain:
         assert parsed["plugins"]["demo_plugin"]["enabled"] is True
 
 
+    def test_singleton_reinit_is_guarded(self, valid_vault, mock_ws_server, tmp_path):
+        """Calling VaultBrain.__init__ a second time must be a no-op."""
+        brain = VaultBrain(valid_vault, mock_ws_server)
+        original_path = brain.vault_path
+
+        # Create a second distinct vault to pass to the re-init attempt
+        other_vault = tmp_path / "other_vault"
+        other_vault.mkdir()
+        (other_vault / ".vault.toml").write_text("")
+
+        # Simulate __init__ being called again on the same instance
+        brain.__init__(other_vault, mock_ws_server)
+
+        # vault_path must be unchanged — re-init was a no-op
+        assert brain.vault_path == original_path
+        assert brain._initialized is True
+
+
 @pytest.mark.unit
 class TestCommandRegistry:
     """Test command registry functionality."""
