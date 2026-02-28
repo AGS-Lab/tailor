@@ -8,6 +8,7 @@ Acts as the central Event/Command hub.
 import asyncio
 import json
 import tomllib
+import tomli_w
 import importlib.util
 import time
 import inspect
@@ -601,7 +602,6 @@ class VaultBrain:
 
         # Save to config
         try:
-            import tomli_w
 
             config_path = utils.get_vault_config_path(self.vault_path)
             config = self._load_config()
@@ -1080,7 +1080,6 @@ class VaultBrain:
                 config["plugins"][plugin_id] = {"enabled": enabled}
 
             # Write back
-            import tomli_w
             with open(config_path, "wb") as f:
                 tomli_w.dump(config, f)
 
