@@ -2,7 +2,7 @@ name: Deadline Reminders
 
 on:
   schedule:
-    - cron: "0 9 * * *"   # Runs daily at 09:00 UTC
+    - cron: "0 9 * * *"
   workflow_dispatch:
 
 jobs:
@@ -10,12 +10,21 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check Milestones and Send Reminders
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Send Milestone & Issue Reminders
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           WEBHOOK: ${{ secrets.DISCORD_DEADLINE_WEBHOOK }}
         run: |
           TODAY=$(date -u +%Y-%m-%d)
+
+          MAP_FILE=".github/github-discord-map.json"
+          if [ ! -f "$MAP_FILE" ]; then
+            echo "Mapping file missing"
+            exit 1
+          fi
 
           MILESTONES=$(curl -s \
             -H "Authorization: Bearer $GH_TOKEN" \
@@ -25,6 +34,7 @@ jobs:
 
           for ((i=0; i<$COUNT; i++)); do
             TITLE=$(echo "$MILESTONES" | jq -r ".[$i].title")
+            NUMBER=$(echo "$MILESTONES" | jq -r ".[$i].number")
             DUE=$(echo "$MILESTONES" | jq -r ".[$i].due_on")
 
             if [ "$DUE" = "null" ]; then
@@ -41,30 +51,54 @@ jobs:
 
               ISSUES=$(curl -s \
                 -H "Authorization: Bearer $GH_TOKEN" \
-                "https://api.github.com/repos/${{ github.repository }}/issues?milestone=$(echo "$MILESTONES" | jq -r ".[$i].number")&state=open")
+                "https://api.github.com/repos/${{ github.repository }}/issues?milestone=$NUMBER&state=open")
 
               ISSUE_COUNT=$(echo "$ISSUES" | jq length)
 
-              if [ "$DAYS_LEFT" -lt 0 ]; then
-                STATUS="🚨 OVERDUE by $((-DAYS_LEFT)) days"
-              else
-                STATUS="⏳ Due in $DAYS_LEFT days"
-              fi
+              for ((j=0; j<$ISSUE_COUNT; j++)); do
+                ISSUE_TITLE=$(echo "$ISSUES" | jq -r ".[$j].title")
+                ISSUE_URL=$(echo "$ISSUES" | jq -r ".[$j].html_url")
+                ASSIGNEE=$(echo "$ISSUES" | jq -r ".[$j].assignee.login")
 
-              PAYLOAD=$(jq -n \
-                --arg title "Milestone: $TITLE" \
-                --arg desc "$STATUS\nOpen issues: $ISSUE_COUNT" \
-                '{
-                  embeds: [{
-                    title: $title,
-                    description: $desc,
-                    color: 16753920
-                  }]
-                }')
+                if [ "$ASSIGNEE" = "null" ]; then
+                  continue
+                fi
 
-              curl -H "Content-Type: application/json" \
-                   -X POST \
-                   -d "$PAYLOAD" \
-                   "$WEBHOOK"
+                DISCORD_ID=$(jq -r --arg user "$ASSIGNEE" '.[$user]' $MAP_FILE)
+
+                if [ "$DISCORD_ID" = "null" ]; then
+                  continue
+                fi
+
+                if [ "$DAYS_LEFT" -lt 0 ]; then
+                  STATUS="🚨 OVERDUE by $((-DAYS_LEFT)) days"
+                  COLOR=15158332
+                else
+                  STATUS="⏳ Due in $DAYS_LEFT days"
+                  COLOR=16753920
+                fi
+
+                PAYLOAD=$(jq -n \
+                  --arg mention "<@$DISCORD_ID>" \
+                  --arg title "$ISSUE_TITLE" \
+                  --arg url "$ISSUE_URL" \
+                  --arg status "$STATUS" \
+                  --arg milestone "$TITLE" \
+                  --argjson color "$COLOR" \
+                  '{
+                    content: ($mention + " " + $status),
+                    embeds: [{
+                      title: $title,
+                      url: $url,
+                      description: ("Milestone: " + $milestone),
+                      color: $color
+                    }]
+                  }')
+
+                curl -H "Content-Type: application/json" \
+                     -X POST \
+                     -d "$PAYLOAD" \
+                     "$WEBHOOK"
+              done
             fi
           done
