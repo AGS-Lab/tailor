@@ -32,20 +32,27 @@ jobs:
           URL="${{ github.event.head_commit.url }}"
           BRANCH="${{ github.ref_name }}"
 
+          PAYLOAD=$(jq -n \
+            --arg title "🚀 Push to $BRANCH" \
+            --arg url "$URL" \
+            --arg desc "$COMMIT_MSG" \
+            --arg author "$AUTHOR" \
+            '{
+              embeds: [{
+                title: $title,
+                url: $url,
+                description: $desc,
+                color: 5814783,
+                fields: [
+                  {name: "Author", value: $author, inline: true}
+                ]
+              }]
+            }')
+
           curl -H "Content-Type: application/json" \
                -X POST \
-               -d "{
-                 \"embeds\": [{
-                   \"title\": \"🚀 Push to ${BRANCH}\",
-                   \"url\": \"${URL}\",
-                   \"description\": \"${COMMIT_MSG}\",
-                   \"color\": 5814783,
-                   \"fields\": [
-                     {\"name\": \"Author\", \"value\": \"${AUTHOR}\", \"inline\": true}
-                   ]
-                 }]
-               }" \
-               $WEBHOOK
+               -d "$PAYLOAD" \
+               "$WEBHOOK"
 
 
       # -------------------------
@@ -61,20 +68,27 @@ jobs:
           ACTION="${{ github.event.action }}"
           AUTHOR="${{ github.actor }}"
 
+          PAYLOAD=$(jq -n \
+            --arg title "🔀 PR $ACTION" \
+            --arg url "$URL" \
+            --arg desc "$TITLE" \
+            --arg author "$AUTHOR" \
+            '{
+              embeds: [{
+                title: $title,
+                url: $url,
+                description: $desc,
+                color: 3447003,
+                fields: [
+                  {name: "Author", value: $author, inline: true}
+                ]
+              }]
+            }')
+
           curl -H "Content-Type: application/json" \
                -X POST \
-               -d "{
-                 \"embeds\": [{
-                   \"title\": \"🔀 PR ${ACTION}\",
-                   \"url\": \"${URL}\",
-                   \"description\": \"${TITLE}\",
-                   \"color\": 3447003,
-                   \"fields\": [
-                     {\"name\": \"Author\", \"value\": \"${AUTHOR}\", \"inline\": true}
-                   ]
-                 }]
-               }" \
-               $WEBHOOK
+               -d "$PAYLOAD" \
+               "$WEBHOOK"
 
 
       # -------------------------
@@ -86,11 +100,24 @@ jobs:
           WEBHOOK: ${{ secrets.DISCORD_CI_WEBHOOK }}
         run: |
           NAME="${{ github.event.workflow_run.name }}"
+          URL="${{ github.event.workflow_run.html_url }}"
+
+          PAYLOAD=$(jq -n \
+            --arg name "$NAME" \
+            --arg url "$URL" \
+            '{
+              embeds: [{
+                title: "❌ Workflow Failed",
+                url: $url,
+                description: $name,
+                color: 15158332
+              }]
+            }')
 
           curl -H "Content-Type: application/json" \
                -X POST \
-               -d "{\"content\": \"❌ Workflow ${NAME} failed.\"}" \
-               $WEBHOOK
+               -d "$PAYLOAD" \
+               "$WEBHOOK"
 
 
       # -------------------------
@@ -106,17 +133,24 @@ jobs:
           ACTION="${{ github.event.action }}"
           AUTHOR="${{ github.actor }}"
 
+          PAYLOAD=$(jq -n \
+            --arg title "📌 Issue $ACTION" \
+            --arg url "$URL" \
+            --arg desc "$TITLE" \
+            --arg author "$AUTHOR" \
+            '{
+              embeds: [{
+                title: $title,
+                url: $url,
+                description: $desc,
+                color: 15844367,
+                fields: [
+                  {name: "Created by", value: $author, inline: true}
+                ]
+              }]
+            }')
+
           curl -H "Content-Type: application/json" \
                -X POST \
-               -d "{
-                 \"embeds\": [{
-                   \"title\": \"📌 Issue ${ACTION}\",
-                   \"url\": \"${URL}\",
-                   \"description\": \"${TITLE}\",
-                   \"color\": 15844367,
-                   \"fields\": [
-                     {\"name\": \"Created by\", \"value\": \"${AUTHOR}\", \"inline\": true}
-                   ]
-                 }]
-               }" \
-               $WEBHOOK
+               -d "$PAYLOAD" \
+               "$WEBHOOK"
