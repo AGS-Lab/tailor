@@ -316,6 +316,31 @@ class TestVaultBrain:
         assert brain.commands["test.cmd"]["handler"] is handler_b
 
 
+
+    @pytest.mark.asyncio
+    async def test_legacy_plugin_config_logs_warning(self, valid_vault, mock_ws_server):
+        """Non-dict plugin config entry must log a warning, not silently discard."""
+        (valid_vault / ".vault.toml").write_text(
+            '[plugins]\nexplorer = ["legacy", "list"]\n'
+        )
+        # Create a minimal plugin directory so the loader reaches the config check
+        plugin_dir = valid_vault / "plugins" / "explorer"
+        plugin_dir.mkdir(parents=True)
+        (plugin_dir / "main.py").write_text(
+            """from sidecar.api.plugin_base import PluginBase
+class Plugin(PluginBase):
+    def register_commands(self): pass
+"""
+        )
+        brain = VaultBrain(valid_vault, mock_ws_server)
+
+        with patch("sidecar.vault_brain.logger") as mock_logger:
+            await brain.initialize()
+            warning_calls = [str(c) for c in mock_logger.warning.call_args_list]
+            assert any("explorer" in w for w in warning_calls), (
+                "Expected a warning about malformed plugin config for 'explorer'"
+            )
+
 @pytest.mark.unit
 class TestCommandRegistry:
     """Test command registry functionality."""

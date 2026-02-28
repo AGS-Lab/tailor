@@ -273,7 +273,10 @@ class VaultBrain:
 
             overrides = vault_apps_config.get(plugin_name, {})
             if not isinstance(overrides, dict):
-                # Fallback if config is malformed or just a list
+                logger.warning(
+                    f"Plugin config for '{plugin_name}' in .vault.toml is not a dict "
+                    f"(got {type(overrides).__name__}). Ignoring overrides — update your .vault.toml."
+                )
                 overrides = {}
 
             # 3. Merge Configs (Override > Default)
