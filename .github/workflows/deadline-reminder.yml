@@ -13,18 +13,13 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Send Milestone & Issue Reminders
+      - name: Send Aggregated Reminders
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           WEBHOOK: ${{ secrets.DISCORD_DEADLINE_WEBHOOK }}
         run: |
           TODAY=$(date -u +%Y-%m-%d)
-
           MAP_FILE=".github/github-discord-map.json"
-          if [ ! -f "$MAP_FILE" ]; then
-            echo "Mapping file missing"
-            exit 1
-          fi
 
           MILESTONES=$(curl -s \
             -H "Authorization: Bearer $GH_TOKEN" \
@@ -37,68 +32,97 @@ jobs:
             NUMBER=$(echo "$MILESTONES" | jq -r ".[$i].number")
             DUE=$(echo "$MILESTONES" | jq -r ".[$i].due_on")
 
-            if [ "$DUE" = "null" ]; then
-              continue
-            fi
+            [ "$DUE" = "null" ] && continue
 
             DUE_DATE=$(date -d "$DUE" +%Y-%m-%d)
             DAYS_LEFT=$(( ( $(date -d "$DUE_DATE" +%s) - $(date -d "$TODAY" +%s) ) / 86400 ))
 
-            if [ "$DAYS_LEFT" -eq 7 ] || \
-               [ "$DAYS_LEFT" -eq 3 ] || \
-               [ "$DAYS_LEFT" -eq 1 ] || \
-               [ "$DAYS_LEFT" -lt 0 ]; then
-
-              ISSUES=$(curl -s \
-                -H "Authorization: Bearer $GH_TOKEN" \
-                "https://api.github.com/repos/${{ github.repository }}/issues?milestone=$NUMBER&state=open")
-
-              ISSUE_COUNT=$(echo "$ISSUES" | jq length)
-
-              for ((j=0; j<$ISSUE_COUNT; j++)); do
-                ISSUE_TITLE=$(echo "$ISSUES" | jq -r ".[$j].title")
-                ISSUE_URL=$(echo "$ISSUES" | jq -r ".[$j].html_url")
-                ASSIGNEE=$(echo "$ISSUES" | jq -r ".[$j].assignee.login")
-
-                if [ "$ASSIGNEE" = "null" ]; then
-                  continue
-                fi
-
-                DISCORD_ID=$(jq -r --arg user "$ASSIGNEE" '.[$user]' $MAP_FILE)
-
-                if [ "$DISCORD_ID" = "null" ]; then
-                  continue
-                fi
-
-                if [ "$DAYS_LEFT" -lt 0 ]; then
-                  STATUS="🚨 OVERDUE by $((-DAYS_LEFT)) days"
-                  COLOR=15158332
-                else
-                  STATUS="⏳ Due in $DAYS_LEFT days"
-                  COLOR=16753920
-                fi
-
-                PAYLOAD=$(jq -n \
-                  --arg mention "<@$DISCORD_ID>" \
-                  --arg title "$ISSUE_TITLE" \
-                  --arg url "$ISSUE_URL" \
-                  --arg status "$STATUS" \
-                  --arg milestone "$TITLE" \
-                  --argjson color "$COLOR" \
-                  '{
-                    content: ($mention + " " + $status),
-                    embeds: [{
-                      title: $title,
-                      url: $url,
-                      description: ("Milestone: " + $milestone),
-                      color: $color
-                    }]
-                  }')
-
-                curl -H "Content-Type: application/json" \
-                     -X POST \
-                     -d "$PAYLOAD" \
-                     "$WEBHOOK"
-              done
+            if [ "$DAYS_LEFT" -ne 7 ] && \
+               [ "$DAYS_LEFT" -ne 3 ] && \
+               [ "$DAYS_LEFT" -ne 1 ] && \
+               [ "$DAYS_LEFT" -ge 0 ]; then
+              continue
             fi
+
+            if [ "$DAYS_LEFT" -lt 0 ]; then
+              STATUS="🚨 OVERDUE by $((-DAYS_LEFT)) days"
+              COLOR=15158332
+            else
+              STATUS="⏳ Due in $DAYS_LEFT days"
+              COLOR=16753920
+            fi
+
+            ISSUES=$(curl -s \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              "https://api.github.com/repos/${{ github.repository }}/issues?milestone=$NUMBER&state=open")
+
+            ISSUE_COUNT=$(echo "$ISSUES" | jq length)
+
+            declare -A USER_ISSUES
+            UNASSIGNED=""
+
+            for ((j=0; j<$ISSUE_COUNT; j++)); do
+              ISSUE_TITLE=$(echo "$ISSUES" | jq -r ".[$j].title")
+              ISSUE_URL=$(echo "$ISSUES" | jq -r ".[$j].html_url")
+              ASSIGNEE=$(echo "$ISSUES" | jq -r ".[$j].assignee.login")
+
+              LINE="• [$ISSUE_TITLE]($ISSUE_URL)\n"
+
+              if [ "$ASSIGNEE" = "null" ]; then
+                UNASSIGNED+="$LINE"
+              else
+                USER_ISSUES["$ASSIGNEE"]+="$LINE"
+              fi
+            done
+
+            # Send assigned grouped messages
+            for USER in "${!USER_ISSUES[@]}"; do
+              DISCORD_ID=$(jq -r --arg user "$USER" '.[$user]' $MAP_FILE)
+              [ "$DISCORD_ID" = "null" ] && continue
+
+              ISSUE_LIST=${USER_ISSUES[$USER]}
+
+              PAYLOAD=$(jq -n \
+                --arg mention "<@$DISCORD_ID>" \
+                --arg milestone "$TITLE" \
+                --arg status "$STATUS" \
+                --arg issues "$ISSUE_LIST" \
+                --argjson color "$COLOR" \
+                '{
+                  content: ($mention + " " + $status),
+                  embeds: [{
+                    title: ("Milestone: " + $milestone),
+                    description: $issues,
+                    color: $color
+                  }]
+                }')
+
+              curl -H "Content-Type: application/json" \
+                   -X POST \
+                   -d "$PAYLOAD" \
+                   "$WEBHOOK"
+            done
+
+            # Send unassigned alert
+            if [ -n "$UNASSIGNED" ]; then
+              PAYLOAD=$(jq -n \
+                --arg milestone "$TITLE" \
+                --arg status "$STATUS" \
+                --arg issues "$UNASSIGNED" \
+                --argjson color 16776960 \
+                '{
+                  content: "⚠️ Unassigned issues approaching deadline",
+                  embeds: [{
+                    title: ("Milestone: " + $milestone),
+                    description: $issues,
+                    color: $color
+                  }]
+                }')
+
+              curl -H "Content-Type: application/json" \
+                   -X POST \
+                   -d "$PAYLOAD" \
+                   "$WEBHOOK"
+            fi
+
           done
