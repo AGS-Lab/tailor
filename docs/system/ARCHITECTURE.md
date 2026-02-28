@@ -105,6 +105,17 @@ input → context → prompt → llm → post_process → output
 
 LiteLLM handles multi-provider model access. Model selection is category-based (fast, thinking, vision, code, embedding) configured in `.vault.toml`.
 
+### Pipeline (`pipeline/`) — internals
+
+| File | Purpose |
+|------|---------|
+| `default.py` | `DefaultPipeline` — linear LangGraph StateGraph |
+| `graph.py` | `GraphPipeline` — placeholder for power-user LangGraph workflows; falls back to DefaultPipeline |
+| `types.py` | `PipelineConfig` (Pydantic: category, temperature, max_tokens, streaming) and `PipelineContext` (mutable state object passed through nodes) |
+| `nodes.py` | `PipelineNodes` — actual node implementations: input, context, prompt. Publishes to brain event bus at each phase. |
+| `events.py` | `PipelineEvents` constants: START, END, ERROR, INPUT, CONTEXT, PROMPT, LLM, POST_PROCESS, OUTPUT |
+| `studio_entrypoint.py` | Exports compiled graph for LangGraph Studio visualization (dev tool) |
+
 ### Services (`services/`)
 
 | Service | Purpose |
@@ -112,6 +123,16 @@ LiteLLM handles multi-provider model access. Model selection is category-based (
 | `llm_service.py` | LiteLLM wrapper, category-based model selection, Ollama auto-detection |
 | `keyring_service.py` | Secure API key storage, injects keys as env vars for LiteLLM |
 | `memory/` | Conversation memory, chat history |
+
+### Sidecar Infrastructure
+
+| File | Purpose |
+|------|---------|
+| `constants.py` | JSON-RPC error codes, timing constants (tick interval, WS timeout/ping), env var names, `EventType` + `Severity` enums |
+| `exceptions.py` | `TailorError` base with `.to_dict()` for JSON-RPC. Subclasses: `VaultError`, `PluginError`, `PipelineError`, `WebSocketError`, `ConfigError`, etc. |
+| `utils.py` | Loguru setup, JSON-RPC helpers, path utilities, `generate_id()`, env var handling |
+| `decorators.py` | `@command(name, plugin_name)` and `@on_event(event_type)` — declarative registration of methods as commands/handlers |
+| `plugin_installer.py` | Full plugin package manager: install from HTTP URL (zip) or git, validate, check deps, update, remove. `InstallStatus` enum + `InstallResult`/`ValidationResult` dataclasses. |
 
 ---
 
@@ -122,20 +143,38 @@ Vanilla JavaScript, bundled with Vite. Two entry points:
 - **Dashboard** (`src/index.html`) — vault launcher, settings, themes
 - **Vault window** (`src/vault/main.js`) — chat + plugin UI
 
+### Dashboard Pages (`src/pages/`)
+
+| Page | File | Purpose |
+|------|------|---------|
+| Dashboard | `dashboard.js` | Vault list with filter, quick actions, vault creation/opening |
+| Settings | `settings.js` | Global settings — theme toggle, API keys, appearance |
+| Themes | `themes.js` | Theme store; loads `/theme-registry.json`, applies CSS variables, persists to localStorage + backend |
+| Vault Settings | `vault-settings.js` | Per-vault config tabs: General, AI Models, API Keys, Plugins (with hot-reload signals) |
+
 ### Vault Window Architecture
 
 ```
 main.js
-  ├── connection.js      WebSocket client (JSON-RPC 2.0, auto-reconnect)
-  ├── chat/chat.js       Chat UI with streaming support
+  ├── connection.js        WebSocket client (JSON-RPC 2.0, auto-reconnect)
+  ├── layout.js            GoldenLayout workspace config (chat, toolbox, log, inspector, stage panels)
+  ├── plugins.js           Plugin event handler — translates backend events into UI actions
+  ├── settings.js          Dynamic settings UI generator (TOML → form elements)
+  ├── chat/chat.js         Chat UI with streaming support
   ├── managers/
   │   ├── SidebarManager.js   Activity bar + content panels
   │   ├── PanelManager.js     GoldenLayout panel management
   │   ├── ToolbarManager.js   Top toolbar buttons
   │   ├── ModalManager.js     Dialog overlays
   │   └── ToolboxManager.js   Stage/toolbox area
-  └── plugin-store.js    Plugin install/update UI
+  └── plugin-store.js      Plugin install/update UI
 ```
+
+**`plugins.js`** is the glue layer — it listens for `sidecar-event` notifications and dispatches them to the right manager (`registerSidebarView`, `registerPanel`, `setContent`, CSS/HTML injection). This is how backend plugins become frontend UI.
+
+**`layout.js`** defines the GoldenLayout workspace with five registered component types: `chat`, `toolbox`, `log`, `controls` (Inspector), and `stage`. Also handles the sidebar resize interaction.
+
+**`settings.js`** (vault window) auto-generates form UI from `.vault.toml` sections: booleans → toggles, numbers → number inputs, objects → nested subsections. Fixed tabs: API Keys, Model Categories, Themes.
 
 `window.request(method, params)` — global function for sending JSON-RPC commands to sidecar. Plugins call this to invoke commands.
 
@@ -153,6 +192,24 @@ main.js
 - Streaming: listens for `chat:token` events, appends tokens to active message
 - Chat ID per conversation (for memory integration)
 - Model selector reads from `settings.get_available_models`
+
+---
+
+## Example Vault Plugins (`example-vault/plugins/`)
+
+Working reference implementations. Read these before writing a new plugin.
+
+| Plugin | What it demonstrates |
+|--------|---------------------|
+| `demo_plugin` | Minimal PluginBase usage — commands, notify, basic lifecycle |
+| `demo_ui` | Full UI API showcase — sidebar, panels, toolbar, modal |
+| `explorer` | Sidebar with chat history list (reads from Memory plugin) |
+| `memory` | JSON persistence layer for chat history; shows cross-plugin data sharing |
+| `chat_branches` | Branch management for multi-path conversations |
+| `summarizer` | Runs LLM call inside a plugin, stores result, shows TL;DR in toolbar |
+| `prompt_refiner` | Intercepts user message, improves it via LLM before sending |
+| `event_test` | Exercises the event system for debugging |
+| `smart_context` | Early-stage context panel (shows wiring, not feature-complete) |
 
 ---
 
