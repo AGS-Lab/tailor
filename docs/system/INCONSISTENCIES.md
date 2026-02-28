@@ -53,12 +53,14 @@ Affected handlers: `handle_chat` (line 452), `store_api_key` (line 495), `chat_s
 
 `EventBus` is initialized and stored in app state but event routing happens directly via Tauri's `Emitter` trait in `ipc_router.rs`. Almost all methods in `event_bus.rs` are marked `#[allow(dead_code)]`. Either wire it up or remove it.
 
-### IC-005 — Plugin config legacy format fallback is incomplete
+### ~~IC-005 — Plugin config legacy format fallback is incomplete~~
 **Component**: Python Sidecar
 **File**: `sidecar/vault_brain.py:268-278`
 **Severity**: Medium — silent data loss
 
-Code comments mention "list style legacy" plugin config format, but if `plugins.plugin_name` is a list, it falls back to `{}` (empty dict) instead of migrating or logging. Old-format vaults silently lose plugin config.
+~~Code comments mention "list style legacy" plugin config format, but if `plugins.plugin_name` is a list, it falls back to `{}` (empty dict) instead of migrating or logging. Old-format vaults silently lose plugin config.~~
+
+**Resolved**: Non-dict plugin config now logs a `logger.warning` with the plugin name and actual type before falling back to `{}`. Commit: ae7fabd
 
 ### ~~IC-006 — `register_command` override logic is inverted~~
 **Component**: Python Sidecar
