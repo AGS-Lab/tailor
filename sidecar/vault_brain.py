@@ -1080,8 +1080,9 @@ class VaultBrain:
                 config["plugins"][plugin_id] = {"enabled": enabled}
 
             # Write back
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(config, f, indent=4)
+            import tomli_w
+            with open(config_path, "wb") as f:
+                tomli_w.dump(config, f)
 
             # Update in-memory config
             self.config = config

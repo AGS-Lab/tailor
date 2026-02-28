@@ -248,6 +248,24 @@ class TestVaultBrain:
         mock_plugin_instance.on_load.assert_called_once()
 
 
+    @pytest.mark.asyncio
+    async def test_toggle_plugin_writes_valid_toml(self, valid_vault, mock_ws_server):
+        """toggle_plugin must write TOML, not JSON, to .vault.toml."""
+        import tomllib
+
+        brain = VaultBrain(valid_vault, mock_ws_server)
+        await brain.initialize()
+
+        await brain.toggle_plugin(plugin_id="demo_plugin", enabled=True)
+
+        config_path = valid_vault / ".vault.toml"
+        # If this raises, the file was written as JSON (corruption bug)
+        with open(config_path, "rb") as f:
+            parsed = tomllib.load(f)
+
+        assert parsed["plugins"]["demo_plugin"]["enabled"] is True
+
+
 @pytest.mark.unit
 class TestCommandRegistry:
     """Test command registry functionality."""
