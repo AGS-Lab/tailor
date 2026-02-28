@@ -60,12 +60,14 @@ Affected handlers: `handle_chat` (line 452), `store_api_key` (line 495), `chat_s
 
 Code comments mention "list style legacy" plugin config format, but if `plugins.plugin_name` is a list, it falls back to `{}` (empty dict) instead of migrating or logging. Old-format vaults silently lose plugin config.
 
-### IC-006 — `register_command` override logic is inverted
+### ~~IC-006 — `register_command` override logic is inverted~~
 **Component**: Python Sidecar
 **File**: `sidecar/vault_brain.py:363-387`
 **Severity**: Medium — confusing API
 
-If a command already exists and `override=False`, the code logs a warning but still overwrites. The `override` flag only controls log level, not behavior. Should either raise on non-override collision or actually skip the overwrite.
+~~If a command already exists and `override=False`, the code logs a warning but still overwrites. The `override` flag only controls log level, not behavior. Should either raise on non-override collision or actually skip the overwrite.~~
+
+**Resolved**: `register_command` now raises `CommandRegistrationError` when `override=False` and the command already exists. Commit: eb1f297
 
 ### IC-007 — Frontend state is module-local, no centralized store
 **Component**: Frontend
