@@ -66,12 +66,12 @@ jobs:
               ISSUE_URL=$(echo "$ISSUES" | jq -r ".[$j].html_url")
               ASSIGNEE=$(echo "$ISSUES" | jq -r ".[$j].assignee.login")
 
-              LINE="• [$ISSUE_TITLE]($ISSUE_URL)\n"
+              LINE="• [$ISSUE_TITLE]($ISSUE_URL)"
 
               if [ "$ASSIGNEE" = "null" ]; then
-                UNASSIGNED+="$LINE"
+                UNASSIGNED+="$LINE"$'\n'
               else
-                USER_ISSUES["$ASSIGNEE"]+="$LINE"
+                USER_ISSUES["$ASSIGNEE"]+="$LINE"$'\n'
               fi
             done
 
