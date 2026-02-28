@@ -6,7 +6,8 @@ Surfaced during codebase audit (Feb 2026). Add new findings here; mark resolved 
 
 ## Critical
 
-### IC-001 — Config write uses JSON instead of TOML
+### ~~IC-001 — Config write uses JSON instead of TOML~~
+**Resolved:** `fix: toggle_plugin writes TOML not JSON (IC-001)` — commit 7d57020
 **Component**: Python Sidecar
 **File**: `sidecar/vault_brain.py:1084`
 **Severity**: Critical — causes data corruption
