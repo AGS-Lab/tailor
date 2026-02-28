@@ -111,12 +111,14 @@ No unified constant. Should centralize at least the cross-process names.
 
 Default settings are embedded as a `serde_json::json!` macro literal. A `settings.toml` exists at the project root but is not consistently used as the source of truth.
 
-### IC-011 — Unused Rust methods with dead_code suppression
-**Component**: Rust Backend
-**Files**: `sidecar_manager.rs:167`, `window_manager.rs:63`, `event_bus.rs` (pervasive)
-**Severity**: Low — noise
+### ~~IC-011 — Unused Rust methods with dead_code suppression~~
+~~**Component**: Rust Backend~~
+~~**Files**: `sidecar_manager.rs:167`, `window_manager.rs:63`, `event_bus.rs` (pervasive)~~
+~~**Severity**: Low — noise~~
 
-`is_running()`, `get_active_windows()`, and most of `EventBus` are suppressed with `#[allow(dead_code)]`. Either exercise them or remove them.
+~~`is_running()`, `get_active_windows()`, and most of `EventBus` are suppressed with `#[allow(dead_code)]`. Either exercise them or remove them.~~
+
+**Resolved**: Removed `is_running()` entirely; removed `#[allow(dead_code)]` from `get_active_windows()` (it is exercised by a unit test). Commit 77a1ba9.
 
 ### IC-012 — Missing error handling in chat history fetch
 **Component**: Frontend
