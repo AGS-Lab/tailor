@@ -120,12 +120,14 @@ Default settings are embedded as a `serde_json::json!` macro literal. A `setting
 
 **Resolved**: Removed `is_running()` entirely; removed `#[allow(dead_code)]` from `get_active_windows()` (it is exercised by a unit test). Commit 77a1ba9.
 
-### IC-012 — Missing error handling in chat history fetch
+### ~~IC-012 — Missing error handling in chat history fetch~~
 **Component**: Frontend
 **File**: `src/vault/chat/chat.js:117-150`
 **Severity**: Low
 
-`loadHistory()` accesses `res.result` without checking if the response is an error. Malformed or error responses will fail silently or throw uncaught exceptions.
+~~`loadHistory()` accesses `res.result` without checking if the response is an error. Malformed or error responses will fail silently or throw uncaught exceptions.~~
+
+**Resolved**: Added explicit guard (`if (!res || res.error || !res.result)`) before accessing `res.result` in `loadHistory()`; logs a warning and returns early on error responses. Commit 06ed8c4.
 
 ### IC-013 — Streaming stream_id contract is undocumented
 **Component**: Cross-layer
