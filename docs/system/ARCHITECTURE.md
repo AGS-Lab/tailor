@@ -152,23 +152,38 @@ Vanilla JavaScript, bundled with Vite. Two entry points:
 | Themes | `themes.js` | Theme store; loads `/theme-registry.json`, applies CSS variables, persists to localStorage + backend |
 | Vault Settings | `vault-settings.js` | Per-vault config tabs: General, AI Models, API Keys, Plugins (with hot-reload signals) |
 
+### Shared Frontend Utilities (`src/`)
+
+| File | Purpose |
+|------|---------|
+| `services/api.js` | Typed Tauri IPC wrapper — all `invoke()` calls go through here. Groups: `vaultApi`, `settingsApi`, `pluginApi`, `keyringApi`. This is the canonical frontend→Rust interface. |
+| `utils/router.js` | Client-side hash router. `Router` class maps `#route` → page module, handles browser back/forward, renders into `#app-content`. |
+| `components/navigation.js` | Dashboard nav sidebar — Tailor logo, route links (Dashboard, Settings, Themes). |
+
 ### Vault Window Architecture
 
 ```
 main.js
-  ├── connection.js        WebSocket client (JSON-RPC 2.0, auto-reconnect)
-  ├── layout.js            GoldenLayout workspace config (chat, toolbox, log, inspector, stage panels)
-  ├── plugins.js           Plugin event handler — translates backend events into UI actions
-  ├── settings.js          Dynamic settings UI generator (TOML → form elements)
-  ├── chat/chat.js         Chat UI with streaming support
+  ├── connection.js                  WebSocket client (JSON-RPC 2.0, auto-reconnect)
+  ├── layout.js                      GoldenLayout workspace (chat, toolbox, log, inspector, stage)
+  ├── plugins.js                     Plugin event handler — translates sidecar events into UI
+  ├── settings.js                    Dynamic TOML → form UI generator
+  ├── chat/
+  │   ├── chat.js                    Chat thread, streaming, history
+  │   ├── ModelSelector.js           Model picker — category or specific model, 831 lines
+  │   └── MessageActionToolbar.js    Per-message actions (copy, branch, regenerate) + plugin extension point
   ├── managers/
-  │   ├── SidebarManager.js   Activity bar + content panels
-  │   ├── PanelManager.js     GoldenLayout panel management
-  │   ├── ToolbarManager.js   Top toolbar buttons
-  │   ├── ModalManager.js     Dialog overlays
-  │   └── ToolboxManager.js   Stage/toolbox area
-  └── plugin-store.js      Plugin install/update UI
+  │   ├── SidebarManager.js          Activity bar + content panels
+  │   ├── PanelManager.js            GoldenLayout panel management
+  │   ├── ToolbarManager.js          Top toolbar buttons
+  │   ├── ModalManager.js            Dialog overlays
+  │   └── ToolboxManager.js          Stage/toolbox area
+  └── plugin-store.js                Plugin install/update UI
 ```
+
+**`ModelSelector.js`** — supports both category selection (`fast`, `thinking`, etc.) and specific model selection. Fetches available models from `settings.get_available_models`, caches results, shows category icons.
+
+**`MessageActionToolbar.js`** — plugin-extensible via `registerAction(id, icon, label, handler)`. Core actions: copy, export, bookmark, delete, branch, regenerate. Handles overflow into a `•••` menu for narrow widths.
 
 **`plugins.js`** is the glue layer — it listens for `sidecar-event` notifications and dispatches them to the right manager (`registerSidebarView`, `registerPanel`, `setContent`, CSS/HTML injection). This is how backend plugins become frontend UI.
 

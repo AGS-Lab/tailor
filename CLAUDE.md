@@ -56,7 +56,6 @@ Frontend (Vite/JS)  ←→  Rust/Tauri Backend  ←→  Python Sidecar
 - `websocket_server.py` — JSON-RPC 2.0 server; bridges Rust ↔ Python
 - `vault_brain.py` — Singleton orchestrator: loads plugins, manages command registry, event bus, LLM pipelines
 - `api/plugin_base.py` — Abstract base class all plugins must inherit from
-- `event_emitter.py` — Plugin API for emitting events to the UI
 - `pipeline/` — LLM processing (DefaultPipeline, GraphPipeline using LangGraph + LiteLLM)
 - `services/` — LLM service, keyring, memory
 

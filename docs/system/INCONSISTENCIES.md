@@ -120,3 +120,10 @@ Default settings are embedded as a `serde_json::json!` macro literal. A `setting
 **Severity**: Low
 
 Backend generates `stream_id` via `utils.generate_id("stream_")` and emits it. Frontend doesn't validate or match it. If multiple streams run concurrently, there's no deduplication logic on the frontend.
+
+### IC-014 — `event_emitter.py` referenced in docs but does not exist
+**Component**: Python Sidecar
+**File**: `CLAUDE.md` (stale reference), original docs
+**Severity**: Low — documentation error, no runtime impact
+
+The old `CLAUDE.md` listed `event_emitter.py` as "Plugin API for emitting events to the UI." This file does not exist. Event emission is handled via `PluginBase.emit()` / `brain.emit_to_frontend()` in `api/plugin_base.py` and `vault_brain.py`. Reference has been removed from CLAUDE.md.
