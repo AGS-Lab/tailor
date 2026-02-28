@@ -1,0 +1,70 @@
+name: Deadline Reminders
+
+on:
+  schedule:
+    - cron: "0 9 * * *"   # Runs daily at 09:00 UTC
+  workflow_dispatch:
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check Milestones and Send Reminders
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WEBHOOK: ${{ secrets.DISCORD_DEADLINE_WEBHOOK }}
+        run: |
+          TODAY=$(date -u +%Y-%m-%d)
+
+          MILESTONES=$(curl -s \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            https://api.github.com/repos/${{ github.repository }}/milestones?state=open)
+
+          COUNT=$(echo "$MILESTONES" | jq length)
+
+          for ((i=0; i<$COUNT; i++)); do
+            TITLE=$(echo "$MILESTONES" | jq -r ".[$i].title")
+            DUE=$(echo "$MILESTONES" | jq -r ".[$i].due_on")
+
+            if [ "$DUE" = "null" ]; then
+              continue
+            fi
+
+            DUE_DATE=$(date -d "$DUE" +%Y-%m-%d)
+            DAYS_LEFT=$(( ( $(date -d "$DUE_DATE" +%s) - $(date -d "$TODAY" +%s) ) / 86400 ))
+
+            if [ "$DAYS_LEFT" -eq 7 ] || \
+               [ "$DAYS_LEFT" -eq 3 ] || \
+               [ "$DAYS_LEFT" -eq 1 ] || \
+               [ "$DAYS_LEFT" -lt 0 ]; then
+
+              ISSUES=$(curl -s \
+                -H "Authorization: Bearer $GH_TOKEN" \
+                "https://api.github.com/repos/${{ github.repository }}/issues?milestone=$(echo "$MILESTONES" | jq -r ".[$i].number")&state=open")
+
+              ISSUE_COUNT=$(echo "$ISSUES" | jq length)
+
+              if [ "$DAYS_LEFT" -lt 0 ]; then
+                STATUS="🚨 OVERDUE by $((-DAYS_LEFT)) days"
+              else
+                STATUS="⏳ Due in $DAYS_LEFT days"
+              fi
+
+              PAYLOAD=$(jq -n \
+                --arg title "Milestone: $TITLE" \
+                --arg desc "$STATUS\nOpen issues: $ISSUE_COUNT" \
+                '{
+                  embeds: [{
+                    title: $title,
+                    description: $desc,
+                    color: 16753920
+                  }]
+                }')
+
+              curl -H "Content-Type: application/json" \
+                   -X POST \
+                   -d "$PAYLOAD" \
+                   "$WEBHOOK"
+            fi
+          done
