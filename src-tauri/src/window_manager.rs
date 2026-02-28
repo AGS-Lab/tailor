@@ -60,7 +60,6 @@ impl WindowManager {
     }
 
     /// Get all active window labels
-    #[allow(dead_code)]
     pub fn get_active_windows(&self) -> Vec<String> {
         self.windows.keys().cloned().collect()
     }
