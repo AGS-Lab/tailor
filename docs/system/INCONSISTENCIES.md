@@ -33,14 +33,16 @@ with open(config_path, "wb") as f:
 
 **Resolved**: commit `494c5a6` — replaced always-False pattern with `hasattr` check; added `reset_singleton` fixture to `TestIntegration` to prevent cross-test leakage.
 
-### IC-003 — Inconsistent parameter format between layers
+### ~~IC-003 — Inconsistent parameter format between layers~~
 **Component**: Cross-layer (Frontend → Sidecar)
 **Files**: `sidecar/vault_brain.py` (multiple), `src/vault/connection.js`
 **Severity**: High — implicit coupling, fragile
 
-Some command handlers look for params nested under `p` or `params` key (`kwargs.get("p") or kwargs.get("params")`), while others expect flat kwargs. The frontend sends flat params. Works via fallback, but the contract is implicit and breaks silently when a new command is added.
+~~Some command handlers look for params nested under `p` or `params` key (`kwargs.get("p") or kwargs.get("params")`), while others expect flat kwargs. The frontend sends flat params. Works via fallback, but the contract is implicit and breaks silently when a new command is added.~~
 
-Affected handlers: `handle_chat` (line 452), `store_api_key` (line 495), `chat_send` (line 686), `toggle_plugin` (line 1057).
+~~Affected handlers: `handle_chat` (line 452), `store_api_key` (line 495), `chat_send` (line 686), `toggle_plugin` (line 1057).~~
+
+**Resolved**: All 14 `kwargs.get("p") or kwargs.get("params")` fallback blocks removed from `vault_brain.py`. All handlers now require flat kwargs exclusively. Commit: 9593be9
 
 ---
 
