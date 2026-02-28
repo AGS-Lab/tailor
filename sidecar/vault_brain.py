@@ -375,9 +375,10 @@ class VaultBrain:
 
         if command_id in self.commands:
             if not override:
-                logger.warning(f"Overwriting command '{command_id}'")
-            else:
-                logger.debug(f"Overriding command '{command_id}'")
+                raise exceptions.CommandRegistrationError(
+                    command_id, "Command already registered. Use override=True to replace it."
+                )
+            logger.debug(f"Overriding command '{command_id}'")
 
         self.commands[command_id] = {
             "handler": handler,

@@ -284,6 +284,38 @@ class TestVaultBrain:
         assert brain._initialized is True
 
 
+
+    @pytest.mark.asyncio
+    async def test_register_command_no_override_raises(self, valid_vault, mock_ws_server):
+        """Registering a duplicate command with override=False must raise."""
+        brain = VaultBrain(valid_vault, mock_ws_server)
+        await brain.initialize()
+
+        async def handler_a(**kwargs): return {}
+        async def handler_b(**kwargs): return {}
+
+        brain.register_command("test.cmd", handler_a)
+
+        with pytest.raises(exceptions.CommandRegistrationError):
+            brain.register_command("test.cmd", handler_b, override=False)
+
+        assert brain.commands["test.cmd"]["handler"] is handler_a
+
+    @pytest.mark.asyncio
+    async def test_register_command_with_override_succeeds(self, valid_vault, mock_ws_server):
+        """Registering a duplicate command with override=True must succeed."""
+        brain = VaultBrain(valid_vault, mock_ws_server)
+        await brain.initialize()
+
+        async def handler_a(**kwargs): return {}
+        async def handler_b(**kwargs): return {}
+
+        brain.register_command("test.cmd", handler_a)
+        brain.register_command("test.cmd", handler_b, override=True)
+
+        assert brain.commands["test.cmd"]["handler"] is handler_b
+
+
 @pytest.mark.unit
 class TestCommandRegistry:
     """Test command registry functionality."""
