@@ -84,12 +84,14 @@ Each module holds its own state (`conversationHistory`, `isWaitingForResponse`, 
 
 ## Low
 
-### IC-008 — Stub commands not implemented
-**Component**: Rust Backend
-**File**: `src-tauri/src/ipc_router.rs:404-411`
-**Severity**: Low — misleading surface area
+### ~~IC-008 — Stub commands not implemented~~
+~~**Component**: Rust Backend~~
+~~**File**: `src-tauri/src/ipc_router.rs:404-411`~~
+~~**Severity**: Low — misleading surface area~~
 
-`search_plugins()` returns empty vec. `get_plugin_details()` returns `NotImplemented` error. Should be removed from the IPC surface until implemented.
+~~`search_plugins()` returns empty vec. `get_plugin_details()` returns `NotImplemented` error. Should be removed from the IPC surface until implemented.~~
+
+**Resolved**: Removed both stub commands in commit d5d5d6c.
 
 ### IC-009 — Event type names are inconsistent across layers
 **Component**: Cross-layer
