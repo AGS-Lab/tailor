@@ -124,7 +124,12 @@ async function loadHistory(chatId) {
             window.activeChatId = chatId;
         }
 
-        const result = res.result || {};
+        if (!res || res.error || !res.result) {
+            console.warn('[Chat] Failed to load history:', res?.error || 'No result');
+            setStatus('Ready');
+            return;
+        }
+        const result = res.result;
         if (result.status === 'success') {
             conversationHistory = result.history || [];
 

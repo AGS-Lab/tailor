@@ -46,3 +46,6 @@ htmlcov/
 # pixi environments
 .pixi/*
 !.pixi/config.toml
+
+# Git worktrees
+.worktrees/

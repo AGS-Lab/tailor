@@ -6,7 +6,8 @@ Surfaced during codebase audit (Feb 2026). Add new findings here; mark resolved 
 
 ## Critical
 
-### IC-001 — Config write uses JSON instead of TOML
+### ~~IC-001 — Config write uses JSON instead of TOML~~
+**Resolved:** `fix: toggle_plugin writes TOML not JSON (IC-001)` — commit 7d57020
 **Component**: Python Sidecar
 **File**: `sidecar/vault_brain.py:1084`
 **Severity**: Critical — causes data corruption
@@ -23,21 +24,25 @@ with open(config_path, "wb") as f:
 
 ## High
 
-### IC-002 — VaultBrain singleton init check is backwards
+### ~~IC-002 — VaultBrain singleton init check is backwards~~
 **Component**: Python Sidecar
 **File**: `sidecar/vault_brain.py:70-73`
 **Severity**: High — silent logic error
 
-`_initialized` is set to `False` immediately before the guard check, so the guard never fires. Should use `hasattr(self, '_initialized') and self._initialized`.
+~~`_initialized` is set to `False` immediately before the guard check, so the guard never fires. Should use `hasattr(self, '_initialized') and self._initialized`.~~
 
-### IC-003 — Inconsistent parameter format between layers
+**Resolved**: commit `494c5a6` — replaced always-False pattern with `hasattr` check; added `reset_singleton` fixture to `TestIntegration` to prevent cross-test leakage.
+
+### ~~IC-003 — Inconsistent parameter format between layers~~
 **Component**: Cross-layer (Frontend → Sidecar)
 **Files**: `sidecar/vault_brain.py` (multiple), `src/vault/connection.js`
 **Severity**: High — implicit coupling, fragile
 
-Some command handlers look for params nested under `p` or `params` key (`kwargs.get("p") or kwargs.get("params")`), while others expect flat kwargs. The frontend sends flat params. Works via fallback, but the contract is implicit and breaks silently when a new command is added.
+~~Some command handlers look for params nested under `p` or `params` key (`kwargs.get("p") or kwargs.get("params")`), while others expect flat kwargs. The frontend sends flat params. Works via fallback, but the contract is implicit and breaks silently when a new command is added.~~
 
-Affected handlers: `handle_chat` (line 452), `store_api_key` (line 495), `chat_send` (line 686), `toggle_plugin` (line 1057).
+~~Affected handlers: `handle_chat` (line 452), `store_api_key` (line 495), `chat_send` (line 686), `toggle_plugin` (line 1057).~~
+
+**Resolved**: All 14 `kwargs.get("p") or kwargs.get("params")` fallback blocks removed from `vault_brain.py`. All handlers now require flat kwargs exclusively. Commit: 9593be9
 
 ---
 
@@ -50,19 +55,23 @@ Affected handlers: `handle_chat` (line 452), `store_api_key` (line 495), `chat_s
 
 `EventBus` is initialized and stored in app state but event routing happens directly via Tauri's `Emitter` trait in `ipc_router.rs`. Almost all methods in `event_bus.rs` are marked `#[allow(dead_code)]`. Either wire it up or remove it.
 
-### IC-005 — Plugin config legacy format fallback is incomplete
+### ~~IC-005 — Plugin config legacy format fallback is incomplete~~
 **Component**: Python Sidecar
 **File**: `sidecar/vault_brain.py:268-278`
 **Severity**: Medium — silent data loss
 
-Code comments mention "list style legacy" plugin config format, but if `plugins.plugin_name` is a list, it falls back to `{}` (empty dict) instead of migrating or logging. Old-format vaults silently lose plugin config.
+~~Code comments mention "list style legacy" plugin config format, but if `plugins.plugin_name` is a list, it falls back to `{}` (empty dict) instead of migrating or logging. Old-format vaults silently lose plugin config.~~
 
-### IC-006 — `register_command` override logic is inverted
+**Resolved**: Non-dict plugin config now logs a `logger.warning` with the plugin name and actual type before falling back to `{}`. Commit: ae7fabd
+
+### ~~IC-006 — `register_command` override logic is inverted~~
 **Component**: Python Sidecar
 **File**: `sidecar/vault_brain.py:363-387`
 **Severity**: Medium — confusing API
 
-If a command already exists and `override=False`, the code logs a warning but still overwrites. The `override` flag only controls log level, not behavior. Should either raise on non-override collision or actually skip the overwrite.
+~~If a command already exists and `override=False`, the code logs a warning but still overwrites. The `override` flag only controls log level, not behavior. Should either raise on non-override collision or actually skip the overwrite.~~
+
+**Resolved**: `register_command` now raises `CommandRegistrationError` when `override=False` and the command already exists. Commit: eb1f297
 
 ### IC-007 — Frontend state is module-local, no centralized store
 **Component**: Frontend
@@ -75,12 +84,14 @@ Each module holds its own state (`conversationHistory`, `isWaitingForResponse`, 
 
 ## Low
 
-### IC-008 — Stub commands not implemented
-**Component**: Rust Backend
-**File**: `src-tauri/src/ipc_router.rs:404-411`
-**Severity**: Low — misleading surface area
+### ~~IC-008 — Stub commands not implemented~~
+~~**Component**: Rust Backend~~
+~~**File**: `src-tauri/src/ipc_router.rs:404-411`~~
+~~**Severity**: Low — misleading surface area~~
 
-`search_plugins()` returns empty vec. `get_plugin_details()` returns `NotImplemented` error. Should be removed from the IPC surface until implemented.
+~~`search_plugins()` returns empty vec. `get_plugin_details()` returns `NotImplemented` error. Should be removed from the IPC surface until implemented.~~
+
+**Resolved**: Removed both stub commands in commit d5d5d6c.
 
 ### IC-009 — Event type names are inconsistent across layers
 **Component**: Cross-layer
@@ -100,19 +111,23 @@ No unified constant. Should centralize at least the cross-process names.
 
 Default settings are embedded as a `serde_json::json!` macro literal. A `settings.toml` exists at the project root but is not consistently used as the source of truth.
 
-### IC-011 — Unused Rust methods with dead_code suppression
-**Component**: Rust Backend
-**Files**: `sidecar_manager.rs:167`, `window_manager.rs:63`, `event_bus.rs` (pervasive)
-**Severity**: Low — noise
+### ~~IC-011 — Unused Rust methods with dead_code suppression~~
+~~**Component**: Rust Backend~~
+~~**Files**: `sidecar_manager.rs:167`, `window_manager.rs:63`, `event_bus.rs` (pervasive)~~
+~~**Severity**: Low — noise~~
 
-`is_running()`, `get_active_windows()`, and most of `EventBus` are suppressed with `#[allow(dead_code)]`. Either exercise them or remove them.
+~~`is_running()`, `get_active_windows()`, and most of `EventBus` are suppressed with `#[allow(dead_code)]`. Either exercise them or remove them.~~
 
-### IC-012 — Missing error handling in chat history fetch
+**Resolved**: Removed `is_running()` entirely; removed `#[allow(dead_code)]` from `get_active_windows()` (it is exercised by a unit test). Commit 77a1ba9.
+
+### ~~IC-012 — Missing error handling in chat history fetch~~
 **Component**: Frontend
 **File**: `src/vault/chat/chat.js:117-150`
 **Severity**: Low
 
-`loadHistory()` accesses `res.result` without checking if the response is an error. Malformed or error responses will fail silently or throw uncaught exceptions.
+~~`loadHistory()` accesses `res.result` without checking if the response is an error. Malformed or error responses will fail silently or throw uncaught exceptions.~~
+
+**Resolved**: Added explicit guard (`if (!res || res.error || !res.result)`) before accessing `res.result` in `loadHistory()`; logs a warning and returns early on error responses. Commit 06ed8c4.
 
 ### IC-013 — Streaming stream_id contract is undocumented
 **Component**: Cross-layer

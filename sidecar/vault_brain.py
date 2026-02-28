@@ -8,6 +8,7 @@ Acts as the central Event/Command hub.
 import asyncio
 import json
 import tomllib
+import tomli_w
 import importlib.util
 import time
 import inspect
@@ -68,8 +69,7 @@ class VaultBrain:
         Note: Heavy initialization happens in self.initialize()
         """
         # Prevent re-initialization if already initialized
-        self._initialized: bool = False
-        if self._initialized:
+        if hasattr(self, "_initialized") and self._initialized:
             return
 
         self.vault_path = utils.validate_vault_path(vault_path)
@@ -273,7 +273,10 @@ class VaultBrain:
 
             overrides = vault_apps_config.get(plugin_name, {})
             if not isinstance(overrides, dict):
-                # Fallback if config is malformed or just a list
+                logger.warning(
+                    f"Plugin config for '{plugin_name}' in .vault.toml is not a dict "
+                    f"(got {type(overrides).__name__}). Ignoring overrides — update your .vault.toml."
+                )
                 overrides = {}
 
             # 3. Merge Configs (Override > Default)
@@ -375,9 +378,10 @@ class VaultBrain:
 
         if command_id in self.commands:
             if not override:
-                logger.warning(f"Overwriting command '{command_id}'")
-            else:
-                logger.debug(f"Overriding command '{command_id}'")
+                raise exceptions.CommandRegistrationError(
+                    command_id, "Command already registered. Use override=True to replace it."
+                )
+            logger.debug(f"Overriding command '{command_id}'")
 
         self.commands[command_id] = {
             "handler": handler,
@@ -457,11 +461,6 @@ class VaultBrain:
         **kwargs,
     ) -> Dict[str, Any]:
         if self.pipeline:
-            # Check kwargs for chat_id if not passed directly (legacy frontend support)
-            if chat_id == "default":
-                p = kwargs.get("p") or kwargs.get("params")
-                if isinstance(p, dict):
-                    chat_id = p.get("chat_id", chat_id)
 
             ctx = await self.pipeline.run(
                 message=message, history=history or [], metadata={"chat_id": chat_id}
@@ -491,12 +490,6 @@ class VaultBrain:
         self, provider: str = "", api_key: str = "", **kwargs
     ) -> Dict[str, Any]:
         """Store an API key in secure OS storage."""
-        # Handle nested params
-        if not provider:
-            p = kwargs.get("p") or kwargs.get("params")
-            if isinstance(p, dict):
-                provider = p.get("provider", provider)
-                api_key = p.get("api_key", api_key)
 
         if not provider or not api_key:
             return {"status": "error", "error": "provider and api_key are required"}
@@ -518,11 +511,6 @@ class VaultBrain:
     async def delete_api_key(self, provider: str = "", **kwargs) -> Dict[str, Any]:
         """Delete an API key from secure storage."""
         if not provider:
-            p = kwargs.get("p") or kwargs.get("params")
-            if isinstance(p, dict):
-                provider = p.get("provider", provider)
-
-        if not provider:
             return {"status": "error", "error": "provider is required"}
 
         success = self._keyring.delete_api_key(provider)
@@ -536,11 +524,6 @@ class VaultBrain:
     @command("settings.verify_api_key", constants.CORE_PLUGIN_NAME)
     async def verify_api_key(self, provider: str = "", **kwargs) -> Dict[str, Any]:
         """Verify an API key by making a test request."""
-        if not provider:
-            p = kwargs.get("p") or kwargs.get("params")
-            if isinstance(p, dict):
-                provider = p.get("provider", provider)
-
         if not provider:
             return {"status": "error", "error": "provider is required"}
 
@@ -586,12 +569,6 @@ class VaultBrain:
         self, category: str = "", model: str = "", **kwargs
     ) -> Dict[str, Any]:
         """Set the model for a category and save to .vault.toml."""
-        # Handle nested params
-        if not category:
-            p = kwargs.get("p") or kwargs.get("params")
-            if isinstance(p, dict):
-                category = p.get("category", category)
-                model = p.get("model", model)
 
         if not category or not model:
             return {"status": "error", "error": "category and model are required"}
@@ -601,7 +578,6 @@ class VaultBrain:
 
         # Save to config
         try:
-            import tomli_w
 
             config_path = utils.get_vault_config_path(self.vault_path)
             config = self._load_config()
@@ -646,11 +622,6 @@ class VaultBrain:
     @command("settings.get_model_info", constants.CORE_PLUGIN_NAME)
     async def get_model_info(self, model_id: str = "", **kwargs) -> Dict[str, Any]:
         """Get detailed information about a specific model including pricing and specs."""
-        # Handle nested params
-        if not model_id:
-            p = kwargs.get("p") or kwargs.get("params")
-            if isinstance(p, dict):
-                model_id = p.get("model_id", model_id)
 
         if not model_id:
             return {"status": "error", "error": "model_id is required"}
@@ -678,13 +649,6 @@ class VaultBrain:
             model_id: Specific model ID (e.g., 'openai/gpt-4o') - takes precedence
             category: Category name (e.g., 'thinking') - used if model_id not provided
         """
-        # Handle nested params
-        if not chat_id:
-            p = kwargs.get("p") or kwargs.get("params")
-            if isinstance(p, dict):
-                chat_id = p.get("chat_id", chat_id)
-                model_id = p.get("model_id", model_id)
-                category = p.get("category", category)
 
         if not chat_id:
             return {"status": "error", "error": "chat_id is required"}
@@ -758,16 +722,6 @@ class VaultBrain:
             stream_id: Optional ID to identify this stream (for multiple concurrent streams)
             chat_id: Optional chat ID for memory persistence
         """
-        # Handle nested params
-        if not message:
-            p = kwargs.get("p") or kwargs.get("params")
-            if isinstance(p, dict):
-                message = p.get("message", message)
-                history = p.get("history", history)
-                category = p.get("category", category)
-                stream = p.get("stream", stream)
-                stream_id = p.get("stream_id", stream_id)
-                chat_id = p.get("chat_id", chat_id)
 
         if not message:
             return {"status": "error", "error": "message is required"}
@@ -960,15 +914,6 @@ class VaultBrain:
     async def install_plugin(
         self, download_url: str = "", repo_url: str = "", plugin_id: str = "", **kwargs
     ) -> Dict[str, Any]:
-        # Backward compatibility: Check if args are inside 'p' or 'params' dict in kwargs
-        # This handles cases where frontend sends { "p": { ... } }
-        if not plugin_id:
-            # Try to find in 'p'
-            p = kwargs.get("p") or kwargs.get("params")
-            if isinstance(p, dict):
-                download_url = p.get("download_url", download_url)
-                repo_url = p.get("repo_url", repo_url)
-                plugin_id = p.get("plugin_id", plugin_id)
 
         if not plugin_id:
             return {"status": "error", "error": "plugin_id is required"}
@@ -993,12 +938,6 @@ class VaultBrain:
     @command("plugins.update", constants.CORE_PLUGIN_NAME)
     async def update_plugin(self, plugin_id: str = "", **kwargs) -> Dict[str, Any]:
         if not plugin_id:
-            # check 'p'
-            p = kwargs.get("p") or kwargs.get("params")
-            if isinstance(p, dict):
-                plugin_id = p.get("plugin_id", plugin_id)
-
-        if not plugin_id:
             return {"status": "error", "error": "plugin_id is required"}
 
         result = await self.plugin_installer.update(plugin_id)
@@ -1010,12 +949,6 @@ class VaultBrain:
 
     @command("plugins.uninstall", constants.CORE_PLUGIN_NAME)
     async def uninstall_plugin(self, plugin_id: str = "", **kwargs) -> Dict[str, Any]:
-        if not plugin_id:
-            # check 'p'
-            p = kwargs.get("p") or kwargs.get("params")
-            if isinstance(p, dict):
-                plugin_id = p.get("plugin_id", plugin_id)
-
         if not plugin_id:
             return {"status": "error", "error": "plugin_id is required"}
 
@@ -1050,12 +983,6 @@ class VaultBrain:
         self, plugin_id: str = "", enabled: bool = True, **kwargs
     ) -> Dict[str, Any]:
         """Toggle plugin enabled state in .vault.toml."""
-        # Handle nested params
-        if not plugin_id:
-            p = kwargs.get("p") or kwargs.get("params")
-            if isinstance(p, dict):
-                plugin_id = p.get("plugin_id", plugin_id)
-                enabled = p.get("enabled", enabled)
 
         if not plugin_id:
             return {"status": "error", "error": "plugin_id is required"}
@@ -1080,8 +1007,8 @@ class VaultBrain:
                 config["plugins"][plugin_id] = {"enabled": enabled}
 
             # Write back
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(config, f, indent=4)
+            with open(config_path, "wb") as f:
+                tomli_w.dump(config, f)
 
             # Update in-memory config
             self.config = config
@@ -1101,11 +1028,6 @@ class VaultBrain:
     @command("system.unload_plugin", constants.CORE_PLUGIN_NAME)
     async def unload_plugin(self, plugin_id: str = "", **kwargs) -> Dict[str, Any]:
         """Unload a specific plugin from memory."""
-        if not plugin_id:
-            p = kwargs.get("p") or kwargs.get("params")
-            if isinstance(p, dict):
-                plugin_id = p.get("plugin_id", plugin_id)
-
         if not plugin_id:
             return {"status": "error", "error": "plugin_id is required"}
 
@@ -1148,11 +1070,6 @@ class VaultBrain:
     @command("system.reload_plugin", constants.CORE_PLUGIN_NAME)
     async def reload_plugin(self, plugin_id: str = "", **kwargs) -> Dict[str, Any]:
         """Reload a specific plugin from disk."""
-        if not plugin_id:
-            p = kwargs.get("p") or kwargs.get("params")
-            if isinstance(p, dict):
-                plugin_id = p.get("plugin_id", plugin_id)
-
         if not plugin_id:
             return {"status": "error", "error": "plugin_id is required"}
 
