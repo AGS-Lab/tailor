@@ -24,12 +24,14 @@ with open(config_path, "wb") as f:
 
 ## High
 
-### IC-002 — VaultBrain singleton init check is backwards
+### ~~IC-002 — VaultBrain singleton init check is backwards~~
 **Component**: Python Sidecar
 **File**: `sidecar/vault_brain.py:70-73`
 **Severity**: High — silent logic error
 
-`_initialized` is set to `False` immediately before the guard check, so the guard never fires. Should use `hasattr(self, '_initialized') and self._initialized`.
+~~`_initialized` is set to `False` immediately before the guard check, so the guard never fires. Should use `hasattr(self, '_initialized') and self._initialized`.~~
+
+**Resolved**: commit `494c5a6` — replaced always-False pattern with `hasattr` check; added `reset_singleton` fixture to `TestIntegration` to prevent cross-test leakage.
 
 ### IC-003 — Inconsistent parameter format between layers
 **Component**: Cross-layer (Frontend → Sidecar)
