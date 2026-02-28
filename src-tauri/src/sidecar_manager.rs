@@ -163,7 +163,6 @@ impl SidecarManager {
             .map(|p| p.ws_port)
     }
 
-    /// Check if sidecar is still running
     /// Allocate next available port by actually checking port availability
     async fn allocate_port(&self) -> u16 {
         let mut port = self.next_port.lock().await;
