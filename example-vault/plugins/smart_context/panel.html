@@ -95,23 +95,32 @@ function scRender() {
 
   var regular = scTopics.filter(function(t){ return !t.sticky; });
   if (!regular.length) {
-    bubblesEl.innerHTML = '<span class="sc-no-topics">No topics yet\u2026</span>';
+    bubblesEl.textContent = '';
+    var placeholder = document.createElement('span');
+    placeholder.className = 'sc-no-topics';
+    placeholder.textContent = 'No topics yet\u2026';
+    bubblesEl.appendChild(placeholder);
     statusEl.textContent = 'All messages in context';
     return;
   }
 
   var maxCount = Math.max.apply(null, regular.map(function(t){ return t.count; }));
+  maxCount = maxCount || 1;  // guard against all-zero counts
   var hasFilter = scSimilarity && scActive.size > 0;
 
-  bubblesEl.innerHTML = regular.map(function(t) {
+  bubblesEl.textContent = '';
+  regular.forEach(function(t) {
     var scale = (0.85 + 0.3 * (t.count / maxCount)).toFixed(2);
-    var cls = 'sc-bubble';
-    if (hasFilter) cls += scActive.has(t.label) ? ' sc-active' : ' sc-dim';
-    var safeLbl = t.label.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    return '<div class="' + cls + '" style="font-size:' + scale + 'em" ' +
-           'onclick="window.scToggleTopic(\'' + safeLbl + '\')">' +
-           t.label + '</div>';
-  }).join('');
+    var div = document.createElement('div');
+    div.className = 'sc-bubble' +
+      (hasFilter ? (scActive.has(t.label) ? ' sc-active' : ' sc-dim') : '');
+    div.style.fontSize = scale + 'em';
+    div.textContent = t.label;  // safe: textContent never interprets HTML
+    div.addEventListener('click', function() {
+      window.scToggleTopic(t.label);  // closure captures label directly
+    });
+    bubblesEl.appendChild(div);
+  });
 
   statusEl.textContent = hasFilter
     ? scActive.size + ' topic(s) selected \u2014 context filtered'
@@ -133,10 +142,6 @@ window.scToggleSimilarity = function(enabled) {
   scSimilarity = enabled;
   if (!enabled) {
     scActive.clear();
-    window.request('execute_command', {
-      command: 'smart_context.set_filter',
-      args: { topics: [] }
-    }).catch(console.error);
   }
   window.request('execute_command', {
     command: 'smart_context.set_similarity_mode',
@@ -150,7 +155,13 @@ window.addEventListener('smart_context.topics_updated', function(e) {
   var d = e.detail || {};
   if (d.topics) {
     scTopics = d.topics;
-    scActive.clear();
+    if (scActive.size > 0) {
+      scActive.clear();
+      window.request('execute_command', {
+        command: 'smart_context.set_filter',
+        args: { topics: [] }
+      }).catch(function(e){ console.error('[SmartContext] clear filter:', e); });
+    }
     scRender();
   }
 });
