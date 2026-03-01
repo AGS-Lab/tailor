@@ -134,9 +134,8 @@ window.scToggleTopic = function(label) {
   if (scActive.has(label)) scActive.delete(label);
   else scActive.add(label);
   scRender();
-  window.request('execute_command', {
-    command: 'smart_context.set_filter',
-    args: { topics: Array.from(scActive) }
+  window.request('smart_context.set_filter', {
+    topics: Array.from(scActive)
   }).catch(function(err){ console.error('[SmartContext] set_filter:', err); });
 };
 
@@ -145,9 +144,8 @@ window.scToggleSimilarity = function(enabled) {
   if (!enabled) {
     scActive.clear();
   }
-  window.request('execute_command', {
-    command: 'smart_context.set_similarity_mode',
-    args: { enabled: enabled }
+  window.request('smart_context.set_similarity_mode', {
+    enabled: enabled
   }).catch(console.error);
   scRender();
 };
@@ -160,9 +158,8 @@ window.addEventListener('smart_context.topics_updated', function(e) {
     scTotalMessages = d.total_messages || 0;
     if (scActive.size > 0) {
       scActive.clear();
-      window.request('execute_command', {
-        command: 'smart_context.set_filter',
-        args: { topics: [] }
+      window.request('smart_context.set_filter', {
+        topics: []
       }).catch(function(err){ console.error('[SmartContext] clear filter:', err); });
     }
     scRender();
