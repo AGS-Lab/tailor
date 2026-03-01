@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from loguru import logger
 
 import litellm
-from litellm import acompletion
+from litellm import acompletion, aembedding
 
 # Suppress debug info (e.g. "Provider List" link) but keep errors
 litellm.suppress_debug_info = True
@@ -520,8 +520,6 @@ class LLMService:
         category: str = "embedding",
     ) -> List[List[float]]:
         """Generate embeddings for a list of texts via LiteLLM."""
-        from litellm import aembedding
-
         model_id = self.get_model_for_category(category)
         if not model_id:
             raise ValueError(f"No model configured for category: {category}")

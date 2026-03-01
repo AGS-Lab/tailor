@@ -142,7 +142,7 @@ async def test_guardrails_o1(llm_service):
 
 @pytest.mark.asyncio
 async def test_embed_returns_list_of_vectors():
-    with patch("litellm.aembedding") as mock_embed:
+    with patch("sidecar.services.llm_service.aembedding") as mock_embed:
         mock_embed.return_value = MagicMock(
             data=[
                 {"embedding": [0.1, 0.2, 0.3]},
@@ -158,6 +158,12 @@ async def test_embed_returns_list_of_vectors():
     assert len(result) == 2
     assert result[0] == [0.1, 0.2, 0.3]
     assert result[1] == [0.4, 0.5, 0.6]
+
+
+@pytest.mark.asyncio
+async def test_embed_raises_when_no_embedding_model(llm_service):
+    with pytest.raises(ValueError, match="No model configured for category: embedding"):
+        await llm_service.embed(["hello"])
 
 
 @pytest.mark.asyncio
