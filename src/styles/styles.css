@@ -3996,3 +3996,14 @@ input:checked+.slider:before {
         grid-template-columns: 1fr;
     }
 }
+
+/* ========================================
+   SMART CONTEXT — CHAT MESSAGE HIGHLIGHTING
+   ======================================== */
+
+/* Applied to chat messages included in the current Smart Context filter */
+.sc-highlight {
+    border-left: 3px solid rgba(99, 179, 237, 0.7) !important;
+    background: rgba(99, 179, 237, 0.05) !important;
+    transition: background 0.2s, border-left 0.2s;
+}

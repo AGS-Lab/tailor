@@ -160,7 +160,7 @@ window.addEventListener('smart_context.topics_updated', function(e) {
       window.request('execute_command', {
         command: 'smart_context.set_filter',
         args: { topics: [] }
-      }).catch(function(e){ console.error('[SmartContext] clear filter:', e); });
+      }).catch(function(err){ console.error('[SmartContext] clear filter:', err); });
     }
     scRender();
   }

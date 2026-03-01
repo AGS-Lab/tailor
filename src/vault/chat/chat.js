@@ -35,6 +35,9 @@ export function initChatGlobals() {
     // Setup streaming event listeners
     setupStreamEventListeners();
 
+    // Setup Smart Context highlight event listeners
+    setupSmartContextEventListeners();
+
     window.__chatGlobalsInitialized = true;
     console.log('[Chat] Global listeners initialized');
 }
@@ -858,6 +861,35 @@ function setupStreamEventListeners() {
         isWaitingForResponse = false;
         activeStreamId = null;
         activeStreamElement = null;
+    });
+}
+
+/**
+ * Setup event listeners for Smart Context chat highlighting
+ */
+function setupSmartContextEventListeners() {
+    // Highlight messages included in the current Smart Context filter
+    window.addEventListener('smart_context.highlight_applied', function(e) {
+        var messageIds = (e.detail && e.detail.message_ids) ? e.detail.message_ids : [];
+
+        // Remove all existing highlights
+        document.querySelectorAll('[data-message-id].sc-highlight')
+            .forEach(function(el) { el.classList.remove('sc-highlight'); });
+
+        // Apply to matching elements
+        messageIds.forEach(function(id) {
+            var el = document.querySelector('[data-message-id="' + id + '"]');
+            if (el) el.classList.add('sc-highlight');
+        });
+    });
+
+    // Clear all highlights when filter is cleared
+    window.addEventListener('smart_context.filter_changed', function(e) {
+        var active = (e.detail && e.detail.active_topics) ? e.detail.active_topics : [];
+        if (active.length === 0) {
+            document.querySelectorAll('[data-message-id].sc-highlight')
+                .forEach(function(el) { el.classList.remove('sc-highlight'); });
+        }
     });
 }
 
