@@ -869,26 +869,26 @@ function setupStreamEventListeners() {
  */
 function setupSmartContextEventListeners() {
     // Highlight messages included in the current Smart Context filter
-    window.addEventListener('smart_context.highlight_applied', function(e) {
-        var messageIds = (e.detail && e.detail.message_ids) ? e.detail.message_ids : [];
+    window.addEventListener('smart_context.highlight_applied', (e) => {
+        const messageIds = e.detail?.message_ids ?? [];
 
         // Remove all existing highlights
         document.querySelectorAll('[data-message-id].sc-highlight')
-            .forEach(function(el) { el.classList.remove('sc-highlight'); });
+            .forEach((el) => el.classList.remove('sc-highlight'));
 
         // Apply to matching elements
-        messageIds.forEach(function(id) {
-            var el = document.querySelector('[data-message-id="' + id + '"]');
+        messageIds.forEach((id) => {
+            const el = document.querySelector(`[data-message-id="${id}"]`);
             if (el) el.classList.add('sc-highlight');
         });
     });
 
     // Clear all highlights when filter is cleared
-    window.addEventListener('smart_context.filter_changed', function(e) {
-        var active = (e.detail && e.detail.active_topics) ? e.detail.active_topics : [];
+    window.addEventListener('smart_context.filter_changed', (e) => {
+        const active = e.detail?.active_topics ?? [];
         if (active.length === 0) {
             document.querySelectorAll('[data-message-id].sc-highlight')
-                .forEach(function(el) { el.classList.remove('sc-highlight'); });
+                .forEach((el) => el.classList.remove('sc-highlight'));
         }
     });
 }
