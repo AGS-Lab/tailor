@@ -2,6 +2,7 @@
 Tests for Smart Context Plugin.
 """
 
+import json
 import pytest
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -123,6 +124,34 @@ class TestSmartContextPlugin:
         subscribed = [c[0][0] for c in mock_brain.subscribe.call_args_list]
         assert "pipeline.output" in subscribed
         assert "pipeline.context" in subscribed
+
+    @pytest.mark.asyncio
+    async def test_extract_topics_parses_llm_response(self, plugin_instance, mock_brain):
+        messages = [
+            {"id": "a1b2", "role": "user", "content": "be concise"},
+            {"id": "c3d4", "role": "user", "content": "How does async work in Python?"},
+            {"id": "e5f6", "role": "assistant", "content": "Async uses coroutines..."},
+        ]
+
+        mock_response = MagicMock()
+        mock_response.content = json.dumps({
+            "topics": [{"label": "Python Async", "count": 2}],
+            "sticky_message_ids": ["a1b2"]
+        })
+
+        with patch("sidecar.vault_brain.VaultBrain.get", return_value=mock_brain):
+            with patch("sidecar.services.llm_service.get_llm_service") as mock_get_llm:
+                mock_llm = MagicMock()
+                mock_llm.complete = AsyncMock(return_value=mock_response)
+                mock_get_llm.return_value = mock_llm
+                result = await plugin_instance._extract_topics(messages)
+
+        labels = [t["label"] for t in result]
+        assert "Python Async" in labels
+        assert "Instructions & Preferences" in labels
+        sticky = next(t for t in result if t.get("sticky"))
+        assert sticky["message_ids"] == ["a1b2"]
+        assert sticky["count"] == 1
 
 
 def _load_embedding_cache():

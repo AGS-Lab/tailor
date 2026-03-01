@@ -92,7 +92,82 @@ class Plugin(PluginBase):
     # =========================================================================
 
     async def _on_pipeline_output(self, ctx: PipelineContext) -> None:
-        pass
+        """After each LLM response: extract topics in background."""
+        if not ctx.response:
+            return
+        chat_id = ctx.metadata.get("chat_id")
+        if not chat_id:
+            return
+        asyncio.create_task(self._run_topic_extraction(chat_id))
+
+    async def _extract_topics(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Call LLM to extract topics and identify sticky messages."""
+        from sidecar.services.llm_service import get_llm_service
+
+        conversation = "\n".join(
+            f"[{m.get('id', '?')}] {m.get('role', 'user')}: "
+            f"{str(m.get('content', ''))[:200]}"
+            for m in messages
+        )
+
+        llm_messages = [
+            {"role": "system", "content": TOPIC_EXTRACTION_PROMPT},
+            {"role": "user", "content": conversation},
+        ]
+
+        llm = get_llm_service()
+        category = self.config.get("extraction_category", "fast")
+        response = await llm.complete(
+            messages=llm_messages,
+            category=category,
+            max_tokens=512,
+            temperature=0.2,
+        )
+
+        raw = response.content.strip()
+        if raw.startswith("```"):
+            raw = "\n".join(raw.split("\n")[1:])
+            if raw.endswith("```"):
+                raw = raw[:-3]
+
+        data = json.loads(raw)
+        topics: List[Dict[str, Any]] = data.get("topics", [])
+        sticky_ids: List[str] = data.get("sticky_message_ids", [])
+
+        if sticky_ids:
+            topics.append({
+                "label": "Instructions & Preferences",
+                "sticky": True,
+                "message_ids": sticky_ids,
+                "count": len(sticky_ids),
+            })
+
+        return topics
+
+    async def _run_topic_extraction(self, chat_id: str) -> None:
+        """Background: extract topics from chat and save + notify panel."""
+        try:
+            result = await self.brain.execute_command("memory.load_chat", chat_id=chat_id)
+            if result.get("status") != "success":
+                return
+            data = result.get("data", {})
+            messages = data.get("messages", [])
+            if not messages:
+                return
+
+            topics = await self._extract_topics(messages)
+            data["topics"] = topics
+            await self.brain.execute_command("memory.save_chat", chat_id=chat_id, data=data)
+
+            self.current_chat_id = chat_id
+            self.emit("smart_context.topics_updated", {
+                "chat_id": chat_id,
+                "topics": topics,
+                "total_messages": len(messages),
+            })
+            self.logger.info(f"Topics extracted for {chat_id}: {[t['label'] for t in topics]}")
+        except Exception as e:
+            self.logger.error(f"Topic extraction failed for {chat_id}: {e}")
 
     async def _on_pipeline_context(self, ctx: PipelineContext) -> None:
         pass
