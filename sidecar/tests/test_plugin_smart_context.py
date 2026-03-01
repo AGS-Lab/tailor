@@ -365,10 +365,13 @@ class TestSmartContextPlugin:
     @pytest.mark.asyncio
     async def test_set_similarity_mode_toggles(self, plugin_instance, mock_brain):
         plugin_instance.embedding_search = True
+        plugin_instance.active_topics = {"Python Async"}
         with patch("sidecar.vault_brain.VaultBrain.get", return_value=mock_brain):
             result = await plugin_instance.set_similarity_mode(enabled=False)
         assert plugin_instance.embedding_search is False
+        assert plugin_instance.active_topics == set()  # cleared on disable
         assert result["status"] == "success"
+        mock_brain.emit_to_frontend.assert_called()  # filter_changed emitted
 
 
 def _load_embedding_cache():
