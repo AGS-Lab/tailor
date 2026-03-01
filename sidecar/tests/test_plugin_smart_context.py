@@ -268,14 +268,16 @@ class TestSmartContextPlugin:
 
     @pytest.mark.asyncio
     async def test_context_injection_always_includes_sticky(self, plugin_instance, mock_brain):
+        """Sticky messages are kept even when their own cosine similarity is below threshold."""
         plugin_instance.active_topics = {"Python Async"}
         plugin_instance.embedding_search = True
-        plugin_instance.similarity_threshold = 0.99  # impossibly high
+        plugin_instance.similarity_threshold = 0.7
 
         ctx = PipelineContext(message="q", original_message="q", metadata={"chat_id": "c1"})
         ctx.history = [
             {"id": "sticky1", "role": "user", "content": "be concise"},
-            {"id": "m1", "role": "user", "content": "something about python async"},
+            {"id": "m1", "role": "user", "content": "How does async work in Python?"},
+            {"id": "m2", "role": "user", "content": "What is the capital of France?"},
         ]
 
         topics_data = {"messages": ctx.history, "topics": [
@@ -290,14 +292,21 @@ class TestSmartContextPlugin:
             )
             with patch("sidecar.services.llm_service.get_llm_service") as mock_get_llm:
                 mock_llm = MagicMock()
+                # Topic embedding: [0.9, 0.1]
+                # sticky1 embedding: [0.0, 1.0] — orthogonal to topic, cosine ≈ 0.0 (below 0.7)
+                # m1 embedding: [0.85, 0.15] — similar to topic, cosine ≈ 0.99 (above 0.7)
+                # m2 embedding: [0.1, 0.95] — dissimilar to topic, cosine ≈ 0.15 (below 0.7)
                 mock_llm.embed = AsyncMock(side_effect=[
-                    [[1.0, 0.0]],             # topic
-                    [[0.1, 0.9], [0.0, 1.0]] # both below 0.99 threshold
+                    [[0.9, 0.1]],                        # topic embedding
+                    [[0.0, 1.0], [0.85, 0.15], [0.1, 0.95]]  # sticky1, m1, m2
                 ])
                 mock_get_llm.return_value = mock_llm
                 await plugin_instance._on_pipeline_context(ctx)
 
-        assert any(m["id"] == "sticky1" for m in ctx.history)
+        ids_in_history = {m["id"] for m in ctx.history}
+        assert "sticky1" in ids_in_history  # kept via sticky logic despite low cosine
+        assert "m1" in ids_in_history       # kept via similarity (cosine ≈ 0.99 >= 0.7)
+        assert "m2" not in ids_in_history   # filtered out (cosine ≈ 0.15 < 0.7)
 
     @pytest.mark.asyncio
     async def test_context_injection_fallback_when_threshold_met_by_nothing(self, plugin_instance, mock_brain):
