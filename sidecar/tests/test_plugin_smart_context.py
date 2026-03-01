@@ -373,6 +373,17 @@ class TestSmartContextPlugin:
         assert result["status"] == "success"
         mock_brain.emit_to_frontend.assert_called()  # filter_changed emitted
 
+    @pytest.mark.asyncio
+    async def test_on_client_connected_loads_panel_html_when_exists(self, plugin_instance, mock_brain):
+        (plugin_instance.plugin_dir / "panel.html").write_text("<div id='sc-panel'>test</div>")
+        with patch("sidecar.vault_brain.VaultBrain.get", return_value=mock_brain):
+            await plugin_instance.on_client_connected()
+        set_calls = [
+            c for c in mock_brain.emit_to_frontend.call_args_list
+            if c.kwargs.get("data", {}).get("action") == "set_panel"
+        ]
+        assert any("sc-panel" in c.kwargs["data"]["html"] for c in set_calls)
+
 
 def _load_embedding_cache():
     base = Path(__file__).resolve().parent.parent.parent

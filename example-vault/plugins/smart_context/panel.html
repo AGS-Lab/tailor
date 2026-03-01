@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: transparent; }
+#sc-panel {
+  padding: 12px;
+  font-family: var(--font-sans, system-ui, sans-serif);
+  font-size: 13px;
+  color: var(--text-primary, #e0e0e0);
+  height: 100%;
+}
+.sc-sticky-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 6px;
+  font-size: 12px;
+  margin-bottom: 12px;
+  color: var(--text-muted, #aaa);
+}
+.sc-sticky-bar strong { margin-left: auto; color: var(--text-primary, #e0e0e0); }
+.sc-mode-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.sc-mode-row input { cursor: pointer; }
+#sc-bubbles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+  min-height: 36px;
+}
+.sc-bubble {
+  cursor: pointer;
+  border-radius: 20px;
+  padding: 4px 12px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  transition: all 0.15s ease;
+  user-select: none;
+  white-space: nowrap;
+}
+.sc-bubble:hover { background: rgba(255,255,255,0.15); }
+.sc-bubble.sc-active {
+  background: rgba(99,179,237,0.25);
+  border-color: rgba(99,179,237,0.6);
+  box-shadow: 0 0 8px rgba(99,179,237,0.3);
+}
+.sc-bubble.sc-dim { opacity: 0.35; }
+.sc-no-topics { opacity: 0.4; font-size: 12px; font-style: italic; }
+#sc-status { font-size: 12px; color: var(--text-muted, #888); }
+</style>
+</head>
+<body>
+<div id="sc-panel">
+
+  <div class="sc-sticky-bar">
+    <span>🔒</span>
+    <span>Instructions always in context</span>
+    <strong id="sc-sticky-count">0</strong>
+  </div>
+
+  <div class="sc-mode-row">
+    <input type="checkbox" id="sc-toggle" checked
+           onchange="window.scToggleSimilarity(this.checked)">
+    <label for="sc-toggle">Similarity filter</label>
+  </div>
+
+  <div id="sc-bubbles">
+    <span class="sc-no-topics">Waiting for context…</span>
+  </div>
+
+  <div id="sc-status">All messages in context</div>
+
+</div>
+<script>
+var scTopics = [];
+var scActive = new Set();
+var scSimilarity = true;
+
+function scRender() {
+  var bubblesEl = document.getElementById('sc-bubbles');
+  var statusEl  = document.getElementById('sc-status');
+  var stickyEl  = document.getElementById('sc-sticky-count');
+
+  var sticky = scTopics.find(function(t){ return t.sticky; });
+  stickyEl.textContent = sticky ? sticky.count : 0;
+
+  var regular = scTopics.filter(function(t){ return !t.sticky; });
+  if (!regular.length) {
+    bubblesEl.innerHTML = '<span class="sc-no-topics">No topics yet\u2026</span>';
+    statusEl.textContent = 'All messages in context';
+    return;
+  }
+
+  var maxCount = Math.max.apply(null, regular.map(function(t){ return t.count; }));
+  var hasFilter = scSimilarity && scActive.size > 0;
+
+  bubblesEl.innerHTML = regular.map(function(t) {
+    var scale = (0.85 + 0.3 * (t.count / maxCount)).toFixed(2);
+    var cls = 'sc-bubble';
+    if (hasFilter) cls += scActive.has(t.label) ? ' sc-active' : ' sc-dim';
+    var safeLbl = t.label.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    return '<div class="' + cls + '" style="font-size:' + scale + 'em" ' +
+           'onclick="window.scToggleTopic(\'' + safeLbl + '\')">' +
+           t.label + '</div>';
+  }).join('');
+
+  statusEl.textContent = hasFilter
+    ? scActive.size + ' topic(s) selected \u2014 context filtered'
+    : 'All messages in context';
+}
+
+window.scToggleTopic = function(label) {
+  if (!scSimilarity) return;
+  if (scActive.has(label)) scActive.delete(label);
+  else scActive.add(label);
+  scRender();
+  window.request('execute_command', {
+    command: 'smart_context.set_filter',
+    args: { topics: Array.from(scActive) }
+  }).catch(function(e){ console.error('[SmartContext] set_filter:', e); });
+};
+
+window.scToggleSimilarity = function(enabled) {
+  scSimilarity = enabled;
+  if (!enabled) {
+    scActive.clear();
+    window.request('execute_command', {
+      command: 'smart_context.set_filter',
+      args: { topics: [] }
+    }).catch(console.error);
+  }
+  window.request('execute_command', {
+    command: 'smart_context.set_similarity_mode',
+    args: { enabled: enabled }
+  }).catch(console.error);
+  scRender();
+};
+
+// Backend pushes new topics after each response
+window.addEventListener('smart_context.topics_updated', function(e) {
+  var d = e.detail || {};
+  if (d.topics) {
+    scTopics = d.topics;
+    scActive.clear();
+    scRender();
+  }
+});
+
+// Relay filter_changed -> chat highlighting
+window.addEventListener('smart_context.filter_changed', function(e) {
+  window.dispatchEvent(new CustomEvent('smart_context.highlight_request', {
+    detail: e.detail || {}
+  }));
+});
+</script>
+</body>
+</html>
