@@ -135,7 +135,7 @@ window.scToggleTopic = function(label) {
   window.request('execute_command', {
     command: 'smart_context.set_filter',
     args: { topics: Array.from(scActive) }
-  }).catch(function(e){ console.error('[SmartContext] set_filter:', e); });
+  }).catch(function(err){ console.error('[SmartContext] set_filter:', err); });
 };
 
 window.scToggleSimilarity = function(enabled) {
