@@ -213,8 +213,11 @@ class TestSmartContextPlugin:
 
         # execute_command called at least twice: load_chat and save_chat
         assert mock_brain.execute_command.call_count >= 2
-        calls_str = str(mock_brain.execute_command.call_args_list)
-        assert "memory.save_chat" in calls_str
+        save_calls = [
+            c for c in mock_brain.execute_command.call_args_list
+            if c.args and c.args[0] == "memory.save_chat"
+        ]
+        assert len(save_calls) == 1
 
         # smart_context.topics_updated event emitted with correct payload
         assert any(event == "smart_context.topics_updated" for event, _ in emitted)

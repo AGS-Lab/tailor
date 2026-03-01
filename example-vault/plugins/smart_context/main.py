@@ -57,6 +57,7 @@ class Plugin(PluginBase):
 
         self.active_topics: Set[str] = set()
         self.current_chat_id: str = ""
+        self._background_tasks: Set[asyncio.Task] = set()
 
         self.logger.info("Smart Context plugin initialized")
 
@@ -98,7 +99,9 @@ class Plugin(PluginBase):
         chat_id = ctx.metadata.get("chat_id")
         if not chat_id:
             return
-        asyncio.create_task(self._run_topic_extraction(chat_id))
+        task = asyncio.create_task(self._run_topic_extraction(chat_id))
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
 
     async def _extract_topics(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Call LLM to extract topics and identify sticky messages."""
