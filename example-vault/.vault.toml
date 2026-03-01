@@ -47,3 +47,5 @@ enabled = true
 
 [plugins.smart_context]
 enabled = true
+similarity_threshold = 0.4
+embedding_search = true
