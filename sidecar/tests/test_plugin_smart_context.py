@@ -109,3 +109,36 @@ class TestSmartContextPlugin:
 
             assert remove_call is not None
             assert remove_call["id"] == "smart-context-panel"
+
+
+def _load_embedding_cache():
+    base = Path(__file__).resolve().parent.parent.parent
+    spec = importlib.util.spec_from_file_location(
+        "embedding_cache",
+        base / "example-vault/plugins/smart_context/embedding_cache.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.EmbeddingCache
+
+def test_embedding_cache_miss_returns_none(tmp_path):
+    EmbeddingCache = _load_embedding_cache()
+    cache = EmbeddingCache(tmp_path, "chat_abc")
+    assert cache.get("msg1", "hello world") is None
+
+def test_embedding_cache_stores_and_retrieves(tmp_path):
+    EmbeddingCache = _load_embedding_cache()
+    cache = EmbeddingCache(tmp_path, "chat_abc")
+    cache.set("msg1", "hello world", [0.1, 0.2, 0.3])
+    assert cache.get("msg1", "hello world") == [0.1, 0.2, 0.3]
+
+def test_embedding_cache_persists_across_instances(tmp_path):
+    EmbeddingCache = _load_embedding_cache()
+    EmbeddingCache(tmp_path, "chat_abc").set("msg1", "text", [1.0, 2.0])
+    assert EmbeddingCache(tmp_path, "chat_abc").get("msg1", "text") == [1.0, 2.0]
+
+def test_embedding_cache_content_change_is_cache_miss(tmp_path):
+    EmbeddingCache = _load_embedding_cache()
+    cache = EmbeddingCache(tmp_path, "chat_abc")
+    cache.set("msg1", "original", [0.1, 0.2])
+    assert cache.get("msg1", "modified") is None
