@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from loguru import logger
 
 import litellm
-from litellm import acompletion
+from litellm import acompletion, aembedding
 
 # Suppress debug info (e.g. "Provider List" link) but keep errors
 litellm.suppress_debug_info = True
@@ -513,6 +513,21 @@ class LLMService:
         except Exception as e:
             self._logger.error(f"Stream completion failed: {e}")
             raise
+
+    async def embed(
+        self,
+        texts: List[str],
+        category: str = "embedding",
+    ) -> List[List[float]]:
+        """Generate embeddings for a list of texts via LiteLLM."""
+        model_id = self.get_model_for_category(category)
+        if not model_id:
+            raise ValueError(f"No model configured for category: {category}")
+
+        litellm_model = self._format_model_for_litellm(model_id)
+        self._logger.debug(f"Embedding {len(texts)} texts with {litellm_model}")
+        response = await aembedding(model=litellm_model, input=texts)
+        return [item["embedding"] for item in response.data]
 
     def _format_model_for_litellm(self, model_id: str) -> str:
         """
