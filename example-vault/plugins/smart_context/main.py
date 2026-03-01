@@ -132,6 +132,7 @@ class Plugin(PluginBase):
             raw = "\n".join(raw.split("\n")[1:])
             if raw.endswith("```"):
                 raw = raw[:-3]
+            raw = raw.strip()  # remove any leftover whitespace/newlines after fence removal
 
         data = json.loads(raw)
         topics: List[Dict[str, Any]] = data.get("topics", [])
@@ -206,6 +207,7 @@ class Plugin(PluginBase):
                 content = str(msg.get("content", ""))
                 cache.set(msg_id, content, emb)
                 cached[msg_id] = emb
+            cache.save()  # flush all new embeddings in one write
 
         included: List[str] = []
         for msg in messages:

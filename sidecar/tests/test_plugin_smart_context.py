@@ -408,7 +408,9 @@ def test_embedding_cache_stores_and_retrieves(tmp_path):
 
 def test_embedding_cache_persists_across_instances(tmp_path):
     EmbeddingCache = _load_embedding_cache()
-    EmbeddingCache(tmp_path, "chat_abc").set("msg1", "text", [1.0, 2.0])
+    cache = EmbeddingCache(tmp_path, "chat_abc")
+    cache.set("msg1", "text", [1.0, 2.0])
+    cache.save()
     assert EmbeddingCache(tmp_path, "chat_abc").get("msg1", "text") == [1.0, 2.0]
 
 def test_embedding_cache_content_change_is_cache_miss(tmp_path):

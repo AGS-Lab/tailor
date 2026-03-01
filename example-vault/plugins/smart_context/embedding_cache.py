@@ -36,5 +36,9 @@ class EmbeddingCache:
         return self._data.get(self._key(message_id, content))
 
     def set(self, message_id: str, content: str, embedding: List[float]) -> None:
+        """Store an embedding. Call save() to persist."""
         self._data[self._key(message_id, content)] = embedding
+
+    def save(self) -> None:
+        """Flush all cached embeddings to disk."""
         self._save()

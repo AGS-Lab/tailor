@@ -84,6 +84,7 @@ body { background: transparent; }
 var scTopics = [];
 var scActive = new Set();
 var scSimilarity = true;
+var scTotalMessages = 0;
 
 function scRender() {
   var bubblesEl = document.getElementById('sc-bubbles');
@@ -122,9 +123,10 @@ function scRender() {
     bubblesEl.appendChild(div);
   });
 
-  statusEl.textContent = hasFilter
-    ? scActive.size + ' topic(s) selected \u2014 context filtered'
-    : 'All messages in context';
+  if (!hasFilter) {
+    statusEl.textContent = 'All messages in context';
+  }
+  // When hasFilter is true, status is updated by smart_context.highlight_applied listener
 }
 
 window.scToggleTopic = function(label) {
@@ -155,6 +157,7 @@ window.addEventListener('smart_context.topics_updated', function(e) {
   var d = e.detail || {};
   if (d.topics) {
     scTopics = d.topics;
+    scTotalMessages = d.total_messages || 0;
     if (scActive.size > 0) {
       scActive.clear();
       window.request('execute_command', {
@@ -163,6 +166,16 @@ window.addEventListener('smart_context.topics_updated', function(e) {
       }).catch(function(err){ console.error('[SmartContext] clear filter:', err); });
     }
     scRender();
+  }
+});
+
+// Update status line with message count when highlighting is applied
+window.addEventListener('smart_context.highlight_applied', function(e) {
+  var d = e.detail || {};
+  var ids = d.message_ids || [];
+  var statusEl = document.getElementById('sc-status');
+  if (statusEl && scTotalMessages > 0) {
+    statusEl.textContent = ids.length + ' of ' + scTotalMessages + ' messages in context';
   }
 });
 
