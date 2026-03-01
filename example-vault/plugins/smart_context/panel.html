@@ -185,13 +185,20 @@ function scStartSim(topics) {
     };
   });
 
+  if (!window.d3Force) {
+    console.error('[SmartContext] window.d3Force not available');
+    return;
+  }
+
   var df = window.d3Force;
   scSim = df.forceSimulation(scNodes)
+    .stop()
     .force('x', df.forceX(cx).strength(0.06))
     .force('y', df.forceY(cy).strength(0.06))
-    .force('collide', df.forceCollide(function(n) { return n.r + 4; }).strength(0.85))
-    .alphaDecay(0.02)
-    .on('tick', scDrawBubbles);
+    .force('collide', df.forceCollide(function(n) { return n.r + 4; }).strength(0.85));
+
+  scSim.tick(300);
+  scDrawBubbles();
 }
 
 function scRender() {
