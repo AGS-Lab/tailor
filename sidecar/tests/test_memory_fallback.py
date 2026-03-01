@@ -49,6 +49,13 @@ async def test_memory_fallback_linear_chat(example_vault_path):
 
         # Verify Keyring/others if needed, but mostly we care about LLM being mocked
 
+        # Prevent smart_context from making extra LLM calls during topic extraction.
+        # _run_topic_extraction is a background asyncio task that fires after each
+        # pipeline output. It calls memory.load_chat then LLMService.complete, which
+        # consumes mock calls and corrupts call_args assertions later in this test.
+        if "smart_context" in brain.plugins:
+            brain.plugins["smart_context"]._run_topic_extraction = AsyncMock(return_value=None)
+
         # SIMULATE MISSING PLUGIN
         # Manually remove chat_branches from the loaded plugins
         if "chat_branches" in brain.plugins:
