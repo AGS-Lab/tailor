@@ -248,6 +248,99 @@ class TestVaultBrain:
         mock_plugin_instance.on_load.assert_called_once()
 
 
+    @pytest.mark.asyncio
+    async def test_toggle_plugin_writes_valid_toml(self, valid_vault, mock_ws_server):
+        """toggle_plugin must write TOML, not JSON, to .vault.toml."""
+        import tomllib
+
+        brain = VaultBrain(valid_vault, mock_ws_server)
+        await brain.initialize()
+
+        await brain.toggle_plugin(plugin_id="demo_plugin", enabled=True)
+
+        config_path = valid_vault / ".vault.toml"
+        # If this raises, the file was written as JSON (corruption bug)
+        with open(config_path, "rb") as f:
+            parsed = tomllib.load(f)
+
+        assert parsed["plugins"]["demo_plugin"]["enabled"] is True
+
+
+    def test_singleton_reinit_is_guarded(self, valid_vault, mock_ws_server, tmp_path):
+        """Calling VaultBrain.__init__ a second time must be a no-op."""
+        brain = VaultBrain(valid_vault, mock_ws_server)
+        original_path = brain.vault_path
+
+        # Create a second distinct vault to pass to the re-init attempt
+        other_vault = tmp_path / "other_vault"
+        other_vault.mkdir()
+        (other_vault / ".vault.toml").write_text("")
+
+        # Simulate __init__ being called again on the same instance
+        brain.__init__(other_vault, mock_ws_server)
+
+        # vault_path must be unchanged — re-init was a no-op
+        assert brain.vault_path == original_path
+        assert brain._initialized is True
+
+
+
+    @pytest.mark.asyncio
+    async def test_register_command_no_override_raises(self, valid_vault, mock_ws_server):
+        """Registering a duplicate command with override=False must raise."""
+        brain = VaultBrain(valid_vault, mock_ws_server)
+        await brain.initialize()
+
+        async def handler_a(**kwargs): return {}
+        async def handler_b(**kwargs): return {}
+
+        brain.register_command("test.cmd", handler_a)
+
+        with pytest.raises(exceptions.CommandRegistrationError):
+            brain.register_command("test.cmd", handler_b, override=False)
+
+        assert brain.commands["test.cmd"]["handler"] is handler_a
+
+    @pytest.mark.asyncio
+    async def test_register_command_with_override_succeeds(self, valid_vault, mock_ws_server):
+        """Registering a duplicate command with override=True must succeed."""
+        brain = VaultBrain(valid_vault, mock_ws_server)
+        await brain.initialize()
+
+        async def handler_a(**kwargs): return {}
+        async def handler_b(**kwargs): return {}
+
+        brain.register_command("test.cmd", handler_a)
+        brain.register_command("test.cmd", handler_b, override=True)
+
+        assert brain.commands["test.cmd"]["handler"] is handler_b
+
+
+
+    @pytest.mark.asyncio
+    async def test_legacy_plugin_config_logs_warning(self, valid_vault, mock_ws_server):
+        """Non-dict plugin config entry must log a warning, not silently discard."""
+        (valid_vault / ".vault.toml").write_text(
+            '[plugins]\nexplorer = ["legacy", "list"]\n'
+        )
+        # Create a minimal plugin directory so the loader reaches the config check
+        plugin_dir = valid_vault / "plugins" / "explorer"
+        plugin_dir.mkdir(parents=True)
+        (plugin_dir / "main.py").write_text(
+            """from sidecar.api.plugin_base import PluginBase
+class Plugin(PluginBase):
+    def register_commands(self): pass
+"""
+        )
+        brain = VaultBrain(valid_vault, mock_ws_server)
+
+        with patch("sidecar.vault_brain.logger") as mock_logger:
+            await brain.initialize()
+            warning_calls = [str(c) for c in mock_logger.warning.call_args_list]
+            assert any("explorer" in w for w in warning_calls), (
+                "Expected a warning about malformed plugin config for 'explorer'"
+            )
+
 @pytest.mark.unit
 class TestCommandRegistry:
     """Test command registry functionality."""

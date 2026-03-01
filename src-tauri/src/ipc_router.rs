@@ -399,18 +399,6 @@ async fn register_vault_in_registry(
     Ok(())
 }
 
-/// Search plugins in the community store
-#[tauri::command]
-pub async fn search_plugins(_query: String, _category: Option<String>) -> Result<Vec<serde_json::Value>, String> {
-    Ok(vec![])
-}
-
-/// Get plugin details
-#[tauri::command]
-pub async fn get_plugin_details(_plugin_id: String) -> Result<serde_json::Value, String> {
-    Err("Plugin details not yet implemented".to_string())
-}
-
 /// Install plugin to vault
 #[tauri::command]
 pub async fn install_plugin(
