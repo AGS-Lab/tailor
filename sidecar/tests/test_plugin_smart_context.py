@@ -226,6 +226,103 @@ class TestSmartContextPlugin:
         assert topics_event["total_messages"] == 1
         assert topics_event["topics"] == extracted_topics
 
+    @pytest.mark.asyncio
+    async def test_context_injection_passthrough_when_no_active_topics(self, plugin_instance, mock_brain):
+        plugin_instance.active_topics = set()
+        ctx = PipelineContext(message="hi", original_message="hi", metadata={})
+        ctx.history = [{"id": "1", "role": "user", "content": "hello"}]
+        await plugin_instance._on_pipeline_context(ctx)
+        assert len(ctx.history) == 1  # unchanged
+
+    @pytest.mark.asyncio
+    async def test_context_injection_filters_by_similarity(self, plugin_instance, mock_brain):
+        plugin_instance.active_topics = {"Python Async"}
+        plugin_instance.embedding_search = True
+        plugin_instance.similarity_threshold = 0.7
+
+        ctx = PipelineContext(
+            message="more?", original_message="more?",
+            metadata={"chat_id": "chat_test"},
+        )
+        ctx.history = [
+            {"id": "m1", "role": "user", "content": "How does async work in Python?"},
+            {"id": "m2", "role": "user", "content": "What is the capital of France?"},
+        ]
+
+        with patch("sidecar.vault_brain.VaultBrain.get", return_value=mock_brain):
+            mock_brain.execute_command = AsyncMock(return_value={
+                "status": "success",
+                "data": {"messages": ctx.history, "topics": [{"label": "Python Async", "count": 1}]}
+            })
+            with patch("sidecar.services.llm_service.get_llm_service") as mock_get_llm:
+                mock_llm = MagicMock()
+                mock_llm.embed = AsyncMock(side_effect=[
+                    [[0.9, 0.1]],               # topic embedding
+                    [[0.85, 0.15], [0.1, 0.95]] # m1=similar, m2=dissimilar
+                ])
+                mock_get_llm.return_value = mock_llm
+                await plugin_instance._on_pipeline_context(ctx)
+
+        assert len(ctx.history) == 1
+        assert ctx.history[0]["id"] == "m1"
+
+    @pytest.mark.asyncio
+    async def test_context_injection_always_includes_sticky(self, plugin_instance, mock_brain):
+        plugin_instance.active_topics = {"Python Async"}
+        plugin_instance.embedding_search = True
+        plugin_instance.similarity_threshold = 0.99  # impossibly high
+
+        ctx = PipelineContext(message="q", original_message="q", metadata={"chat_id": "c1"})
+        ctx.history = [
+            {"id": "sticky1", "role": "user", "content": "be concise"},
+            {"id": "m1", "role": "user", "content": "something about python async"},
+        ]
+
+        topics_data = {"messages": ctx.history, "topics": [
+            {"label": "Python Async", "count": 1},
+            {"label": "Instructions & Preferences", "sticky": True,
+             "message_ids": ["sticky1"], "count": 1},
+        ]}
+
+        with patch("sidecar.vault_brain.VaultBrain.get", return_value=mock_brain):
+            mock_brain.execute_command = AsyncMock(
+                return_value={"status": "success", "data": topics_data}
+            )
+            with patch("sidecar.services.llm_service.get_llm_service") as mock_get_llm:
+                mock_llm = MagicMock()
+                mock_llm.embed = AsyncMock(side_effect=[
+                    [[1.0, 0.0]],             # topic
+                    [[0.1, 0.9], [0.0, 1.0]] # both below 0.99 threshold
+                ])
+                mock_get_llm.return_value = mock_llm
+                await plugin_instance._on_pipeline_context(ctx)
+
+        assert any(m["id"] == "sticky1" for m in ctx.history)
+
+    @pytest.mark.asyncio
+    async def test_context_injection_fallback_when_threshold_met_by_nothing(self, plugin_instance, mock_brain):
+        """If nothing passes threshold (excluding sticky), return full history."""
+        plugin_instance.active_topics = {"Exotic Topic"}
+        plugin_instance.embedding_search = True
+        plugin_instance.similarity_threshold = 0.99
+
+        ctx = PipelineContext(message="q", original_message="q", metadata={"chat_id": "c1"})
+        original_history = [{"id": "m1", "role": "user", "content": "hello"}]
+        ctx.history = original_history.copy()
+
+        with patch("sidecar.vault_brain.VaultBrain.get", return_value=mock_brain):
+            mock_brain.execute_command = AsyncMock(return_value={
+                "status": "success",
+                "data": {"messages": original_history, "topics": []}
+            })
+            with patch("sidecar.services.llm_service.get_llm_service") as mock_get_llm:
+                mock_llm = MagicMock()
+                mock_llm.embed = AsyncMock(side_effect=[[[1.0, 0.0]], [[0.1, 0.9]]])
+                mock_get_llm.return_value = mock_llm
+                await plugin_instance._on_pipeline_context(ctx)
+
+        assert len(ctx.history) == 1  # full history preserved
+
 
 def _load_embedding_cache():
     base = Path(__file__).resolve().parent.parent.parent

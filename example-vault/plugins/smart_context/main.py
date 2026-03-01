@@ -172,8 +172,86 @@ class Plugin(PluginBase):
         except Exception as e:
             self.logger.error(f"Topic extraction failed for {chat_id}: {e}")
 
+    async def _compute_relevant_ids(
+        self, chat_id: str, messages: List[Dict[str, Any]], sticky_ids: Set[str]
+    ) -> List[str]:
+        """
+        Return IDs of messages relevant to active_topics via cosine similarity.
+        Sticky IDs are always included. Returns empty list if nothing passes threshold
+        (caller should fall back to full history).
+        """
+        from sidecar.services.llm_service import get_llm_service
+
+        llm = get_llm_service()
+        topic_embeddings = await llm.embed(list(self.active_topics))
+
+        cache = EmbeddingCache(self.vault_path / ".memory", chat_id)
+        need_embed: List[Dict[str, Any]] = []
+        cached: Dict[str, List[float]] = {}
+
+        for msg in messages:
+            msg_id = msg.get("id", "")
+            content = str(msg.get("content", ""))
+            emb = cache.get(msg_id, content)
+            if emb is not None:
+                cached[msg_id] = emb
+            else:
+                need_embed.append(msg)
+
+        if need_embed:
+            texts = [str(m.get("content", "")) for m in need_embed]
+            new_embeddings = await llm.embed(texts)
+            for msg, emb in zip(need_embed, new_embeddings):
+                msg_id = msg.get("id", "")
+                content = str(msg.get("content", ""))
+                cache.set(msg_id, content, emb)
+                cached[msg_id] = emb
+
+        included: List[str] = []
+        for msg in messages:
+            msg_id = msg.get("id", "")
+            if msg_id in sticky_ids:
+                included.append(msg_id)
+                continue
+            emb = cached.get(msg_id)
+            if emb is None:
+                continue
+            max_sim = max(_cosine_similarity(emb, t_emb) for t_emb in topic_embeddings)
+            if max_sim >= self.similarity_threshold:
+                included.append(msg_id)
+
+        return included
+
     async def _on_pipeline_context(self, ctx: PipelineContext) -> None:
-        pass
+        """Filter ctx.history using embedding similarity to active topics."""
+        if not self.active_topics or not self.embedding_search:
+            return
+
+        chat_id = ctx.metadata.get("chat_id")
+        if not chat_id or not ctx.history:
+            return
+
+        try:
+            result = await self.brain.execute_command("memory.load_chat", chat_id=chat_id)
+            data = result.get("data", {})
+            topics_list = data.get("topics", [])
+
+            sticky_ids: Set[str] = set()
+            for t in topics_list:
+                if t.get("sticky"):
+                    sticky_ids.update(t.get("message_ids", []))
+
+            included = await self._compute_relevant_ids(chat_id, ctx.history, sticky_ids)
+
+            non_sticky_included = [i for i in included if i not in sticky_ids]
+            if not non_sticky_included:
+                return  # nothing passed threshold — keep full history
+
+            included_set = set(included)
+            ctx.history = [m for m in ctx.history if m.get("id", "") in included_set]
+
+        except Exception as e:
+            self.logger.error(f"Context injection failed: {e}")
 
     # =========================================================================
     # Commands (stubs — filled in Task 6)
