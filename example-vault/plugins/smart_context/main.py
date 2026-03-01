@@ -89,7 +89,7 @@ class Plugin(PluginBase):
         await super().on_unload()
 
     # =========================================================================
-    # Pipeline Subscribers (stubs — filled in Tasks 4 & 5)
+    # Pipeline Subscribers
     # =========================================================================
 
     async def _on_pipeline_output(self, ctx: PipelineContext) -> None:
@@ -254,14 +254,76 @@ class Plugin(PluginBase):
             self.logger.error(f"Context injection failed: {e}")
 
     # =========================================================================
-    # Commands (stubs — filled in Task 6)
+    # Commands
     # =========================================================================
 
     async def set_filter(self, topics: List[str] = None, **kwargs) -> Dict[str, Any]:
-        return {"status": "success"}
+        """Set active topic filter. Empty list clears it."""
+        if topics is None:
+            p = kwargs.get("p") or kwargs.get("params", {})
+            topics = p.get("topics", [])
+
+        self.active_topics = set(topics)
+        self.emit("smart_context.filter_changed", {
+            "active_topics": list(self.active_topics),
+            "chat_id": self.current_chat_id,
+        })
+
+        if self.current_chat_id and self.active_topics and self.embedding_search:
+            task = asyncio.create_task(self._emit_highlight_ids(self.current_chat_id))
+            self._background_tasks.add(task)
+            task.add_done_callback(self._background_tasks.discard)
+
+        return {"status": "success", "active_topics": list(self.active_topics)}
 
     async def get_topics(self, chat_id: str = "", **kwargs) -> Dict[str, Any]:
-        return {"status": "success", "topics": []}
+        """Return topics for the given chat."""
+        if not chat_id:
+            p = kwargs.get("p") or kwargs.get("params", {})
+            chat_id = p.get("chat_id", self.current_chat_id)
+
+        if not chat_id:
+            return {"status": "success", "topics": [], "total_messages": 0}
+
+        result = await self.brain.execute_command("memory.load_chat", chat_id=chat_id)
+        if result.get("status") != "success":
+            return {"status": "success", "topics": [], "total_messages": 0}
+
+        data = result.get("data", {})
+        return {
+            "status": "success",
+            "topics": data.get("topics", []),
+            "total_messages": len(data.get("messages", [])),
+        }
 
     async def set_similarity_mode(self, enabled: bool = True, **kwargs) -> Dict[str, Any]:
-        return {"status": "success"}
+        """Toggle embedding-based context filtering."""
+        if not isinstance(enabled, bool):
+            p = kwargs.get("p") or kwargs.get("params", {})
+            enabled = bool(p.get("enabled", True))
+        self.embedding_search = enabled
+        if not enabled:
+            self.active_topics.clear()
+            self.emit("smart_context.filter_changed", {
+                "active_topics": [],
+                "chat_id": self.current_chat_id,
+            })
+        return {"status": "success", "embedding_search": self.embedding_search}
+
+    async def _emit_highlight_ids(self, chat_id: str) -> None:
+        """Background: compute filtered message IDs and emit for chat highlighting."""
+        try:
+            result = await self.brain.execute_command("memory.load_chat", chat_id=chat_id)
+            data = result.get("data", {})
+            messages = data.get("messages", [])
+            topics_list = data.get("topics", [])
+
+            sticky_ids: Set[str] = set()
+            for t in topics_list:
+                if t.get("sticky"):
+                    sticky_ids.update(t.get("message_ids", []))
+
+            included = await self._compute_relevant_ids(chat_id, messages, sticky_ids)
+            self.emit("smart_context.highlight_applied", {"message_ids": included})
+        except Exception as e:
+            self.logger.error(f"Highlight computation failed: {e}")

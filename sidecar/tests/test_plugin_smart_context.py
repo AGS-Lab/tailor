@@ -332,6 +332,44 @@ class TestSmartContextPlugin:
 
         assert len(ctx.history) == 1  # full history preserved
 
+    @pytest.mark.asyncio
+    async def test_set_filter_updates_active_topics_and_emits(self, plugin_instance, mock_brain):
+        with patch("sidecar.vault_brain.VaultBrain.get", return_value=mock_brain):
+            result = await plugin_instance.set_filter(topics=["Python Async", "LangGraph"])
+        assert plugin_instance.active_topics == {"Python Async", "LangGraph"}
+        assert result["status"] == "success"
+        mock_brain.emit_to_frontend.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_set_filter_empty_clears(self, plugin_instance, mock_brain):
+        plugin_instance.active_topics = {"Python Async"}
+        with patch("sidecar.vault_brain.VaultBrain.get", return_value=mock_brain):
+            await plugin_instance.set_filter(topics=[])
+        assert plugin_instance.active_topics == set()
+
+    @pytest.mark.asyncio
+    async def test_get_topics_reads_from_chat_file(self, plugin_instance, mock_brain):
+        mock_brain.execute_command = AsyncMock(return_value={
+            "status": "success",
+            "data": {
+                "messages": [{"id": "1"}],
+                "topics": [{"label": "Python", "count": 3}]
+            }
+        })
+        with patch("sidecar.vault_brain.VaultBrain.get", return_value=mock_brain):
+            result = await plugin_instance.get_topics(chat_id="chat_123")
+        assert result["status"] == "success"
+        assert result["topics"][0]["label"] == "Python"
+        assert result["total_messages"] == 1
+
+    @pytest.mark.asyncio
+    async def test_set_similarity_mode_toggles(self, plugin_instance, mock_brain):
+        plugin_instance.embedding_search = True
+        with patch("sidecar.vault_brain.VaultBrain.get", return_value=mock_brain):
+            result = await plugin_instance.set_similarity_mode(enabled=False)
+        assert plugin_instance.embedding_search is False
+        assert result["status"] == "success"
+
 
 def _load_embedding_cache():
     base = Path(__file__).resolve().parent.parent.parent
