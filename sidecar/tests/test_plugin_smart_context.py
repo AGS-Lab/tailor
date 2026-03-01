@@ -2,11 +2,13 @@
 Tests for Smart Context Plugin.
 """
 
+import asyncio
 import json
 import pytest
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 from sidecar import constants
+from sidecar.pipeline.types import PipelineContext
 
 # Import the plugin module dynamically since it's not in the main package
 import importlib.util
@@ -152,6 +154,74 @@ class TestSmartContextPlugin:
         sticky = next(t for t in result if t.get("sticky"))
         assert sticky["message_ids"] == ["a1b2"]
         assert sticky["count"] == 1
+
+    @pytest.mark.asyncio
+    async def test_on_pipeline_output_creates_extraction_task(self, plugin_instance, mock_brain):
+        """_on_pipeline_output should fire _run_topic_extraction as background task."""
+        ctx = PipelineContext(
+            message="hi", original_message="hi",
+            metadata={"chat_id": "chat_abc"},
+            response="Some LLM response",
+        )
+        extraction_calls = []
+
+        async def fake_extraction(chat_id):
+            extraction_calls.append(chat_id)
+
+        plugin_instance._run_topic_extraction = fake_extraction
+        await plugin_instance._on_pipeline_output(ctx)
+        # Let the event loop run the created task
+        await asyncio.sleep(0)
+        assert extraction_calls == ["chat_abc"]
+
+    @pytest.mark.asyncio
+    async def test_on_pipeline_output_skips_when_no_response(self, plugin_instance):
+        """_on_pipeline_output should do nothing when ctx.response is falsy."""
+        ctx = PipelineContext(
+            message="hi", original_message="hi",
+            metadata={"chat_id": "chat_abc"},
+        )
+        called = []
+
+        async def fake_extraction(chat_id):
+            called.append(chat_id)
+
+        plugin_instance._run_topic_extraction = fake_extraction
+        await plugin_instance._on_pipeline_output(ctx)
+        await asyncio.sleep(0)
+        assert called == []
+
+    @pytest.mark.asyncio
+    async def test_run_topic_extraction_saves_and_emits(self, plugin_instance, mock_brain):
+        """_run_topic_extraction should load chat, extract topics, save, and emit."""
+        messages = [{"id": "m1", "role": "user", "content": "How does async work?"}]
+        extracted_topics = [{"label": "Python Async", "count": 1}]
+
+        mock_brain.execute_command = AsyncMock(return_value={
+            "status": "success",
+            "data": {"messages": messages, "topics": []},
+        })
+        plugin_instance._extract_topics = AsyncMock(return_value=extracted_topics)
+
+        emitted = []
+        plugin_instance.emit = lambda event, data: emitted.append((event, data))
+
+        with patch("sidecar.vault_brain.VaultBrain.get", return_value=mock_brain):
+            await plugin_instance._run_topic_extraction("chat_xyz")
+
+        assert plugin_instance.current_chat_id == "chat_xyz"
+
+        # execute_command called at least twice: load_chat and save_chat
+        assert mock_brain.execute_command.call_count >= 2
+        calls_str = str(mock_brain.execute_command.call_args_list)
+        assert "memory.save_chat" in calls_str
+
+        # smart_context.topics_updated event emitted with correct payload
+        assert any(event == "smart_context.topics_updated" for event, _ in emitted)
+        topics_event = next(d for ev, d in emitted if ev == "smart_context.topics_updated")
+        assert topics_event["chat_id"] == "chat_xyz"
+        assert topics_event["total_messages"] == 1
+        assert topics_event["topics"] == extracted_topics
 
 
 def _load_embedding_cache():
