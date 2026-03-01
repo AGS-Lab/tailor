@@ -4,7 +4,7 @@ Tests for Smart Context Plugin.
 
 import pytest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from sidecar import constants
 
 # Import the plugin module dynamically since it's not in the main package
@@ -109,6 +109,20 @@ class TestSmartContextPlugin:
 
             assert remove_call is not None
             assert remove_call["id"] == "smart-context-panel"
+
+    @pytest.mark.asyncio
+    async def test_plugin_loads_config_defaults(self, plugin_instance):
+        assert plugin_instance.similarity_threshold == 0.4
+        assert plugin_instance.embedding_search is True
+        assert plugin_instance.active_topics == set()
+
+    @pytest.mark.asyncio
+    async def test_on_load_subscribes_to_pipeline_events(self, plugin_instance, mock_brain):
+        with patch("sidecar.vault_brain.VaultBrain.get", return_value=mock_brain):
+            await plugin_instance.on_load()
+        subscribed = [c[0][0] for c in mock_brain.subscribe.call_args_list]
+        assert "pipeline.output" in subscribed
+        assert "pipeline.context" in subscribed
 
 
 def _load_embedding_cache():
