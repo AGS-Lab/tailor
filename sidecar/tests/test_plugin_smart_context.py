@@ -156,6 +156,35 @@ class TestSmartContextPlugin:
         assert sticky["count"] == 1
 
     @pytest.mark.asyncio
+    async def test_extract_topics_includes_existing_labels_in_user_message(self, plugin_instance, mock_brain):
+        """When existing_topics are provided, their labels appear in the user content sent to the LLM."""
+        messages = [
+            {"id": "m1", "role": "user", "content": "Tell me more about Wimbledon."},
+        ]
+        existing = [{"label": "Wimbledon", "count": 1}]
+
+        mock_response = MagicMock()
+        mock_response.content = json.dumps({
+            "topics": [{"label": "Wimbledon", "count": 1}],
+            "sticky_message_ids": []
+        })
+
+        with patch("sidecar.vault_brain.VaultBrain.get", return_value=mock_brain):
+            with patch("sidecar.services.llm_service.get_llm_service") as mock_get_llm:
+                mock_llm = MagicMock()
+                mock_llm.complete = AsyncMock(return_value=mock_response)
+                mock_get_llm.return_value = mock_llm
+                await plugin_instance._extract_topics(messages, existing_topics=existing)
+
+                call_args = mock_llm.complete.call_args
+                user_msg = next(
+                    m["content"] for m in call_args.kwargs["messages"]
+                    if m["role"] == "user"
+                )
+                assert "Wimbledon" in user_msg
+                assert user_msg.startswith("Existing topics:")
+
+    @pytest.mark.asyncio
     async def test_on_pipeline_output_creates_extraction_task(self, plugin_instance, mock_brain):
         """_on_pipeline_output should fire _run_topic_extraction as background task."""
         ctx = PipelineContext(
@@ -256,6 +285,16 @@ class TestSmartContextPlugin:
         stickies = [t for t in merged if t.get("sticky")]
         assert len(stickies) == 1
         assert stickies[0]["message_ids"] == ["m1"]
+
+    def test_merge_topics_llm_reuses_existing_label(self, plugin_instance):
+        """When the LLM returns a label that exactly matches an existing one, count increments."""
+        existing = [{"label": "Wimbledon", "count": 1}]
+        # LLM correctly reused the existing label
+        new = [{"label": "Wimbledon", "count": 1}]
+        merged = plugin_instance._merge_topics(existing, new)
+        by_label = {t["label"]: t for t in merged}
+        assert by_label["Wimbledon"]["count"] == 2
+        assert len([t for t in merged if not t.get("sticky")]) == 1
 
     @pytest.mark.asyncio
     async def test_context_injection_passthrough_when_no_active_topics(self, plugin_instance, mock_brain):

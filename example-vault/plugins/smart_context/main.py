@@ -42,6 +42,9 @@ Rules:
 - count = approximate number of messages related to this topic
 - sticky_message_ids: IDs of SHORT instructional/preference messages
   (e.g. "be concise", "respond in French", "use Python 3")
+- If existing topics are provided, REUSE their exact labels whenever a new topic
+  is the same or very similar concept. Only introduce a new label when the topic
+  is genuinely distinct.
 - Return ONLY valid JSON"""
 
 
@@ -113,7 +116,11 @@ class Plugin(PluginBase):
         self._background_tasks.add(task)
         task.add_done_callback(self._background_tasks.discard)
 
-    async def _extract_topics(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    async def _extract_topics(
+        self,
+        messages: List[Dict[str, Any]],
+        existing_topics: List[Dict[str, Any]] | None = None,
+    ) -> List[Dict[str, Any]]:
         """Call LLM to extract topics and identify sticky messages."""
         from sidecar.services.llm_service import get_llm_service
 
@@ -123,9 +130,16 @@ class Plugin(PluginBase):
             for m in messages
         )
 
+        if existing_topics:
+            regular = [t for t in existing_topics if not t.get("sticky")]
+            labels = ", ".join(f'"{t["label"]}"' for t in regular)
+            user_content = f"Existing topics: {labels}\n\nConversation:\n{conversation}"
+        else:
+            user_content = conversation
+
         llm_messages = [
             {"role": "system", "content": TOPIC_EXTRACTION_PROMPT},
-            {"role": "user", "content": conversation},
+            {"role": "user", "content": user_content},
         ]
 
         llm = get_llm_service()
@@ -171,7 +185,7 @@ class Plugin(PluginBase):
 
             # Only analyse the latest exchange (last 2 messages: user + assistant)
             latest = messages[-2:] if len(messages) >= 2 else messages
-            new_topics = await self._extract_topics(latest)
+            new_topics = await self._extract_topics(latest, existing_topics=self._current_topics)
 
             # Merge into running accumulation — topics grow over time, never fully reset
             if chat_id != self.current_chat_id:
