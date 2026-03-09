@@ -98,6 +98,10 @@ async def test_id_propagation():
         message="Hello Stream", chat_id="test_chat", stream=True
     )
 
+    # Allow the background streaming task to complete
+    # (chat_send launches _stream_chat_response as asyncio.create_task)
+    await asyncio.sleep(0.1)
+
     # Check if CHAT_STREAM_END event was emitted with message_ids
     calls = brain.emit_to_frontend.call_args_list
     stream_end_call = None
