@@ -150,3 +150,28 @@ class TestDefaultPipeline:
         assert PipelineEvents.INPUT in event_names
         # LLM event should NOT be present
         assert PipelineEvents.LLM not in event_names
+
+
+# =============================================================================
+# Test Graph Visualization (Mermaid)
+# =============================================================================
+
+
+@pytest.mark.unit
+def test_default_pipeline_has_mermaid():
+    """Pipeline graph can be serialized to Mermaid."""
+    with patch("sidecar.vault_brain.VaultBrain.get") as mock_get:
+        mock_brain = MagicMock()
+        mock_brain.publish = AsyncMock()
+        mock_get.return_value = mock_brain
+
+        config = PipelineConfig()
+        pipeline = DefaultPipeline(config)
+
+        mermaid = pipeline.graph.get_graph().draw_mermaid()
+
+        assert "graph TD" in mermaid
+        assert "input" in mermaid
+        assert "llm" in mermaid
+        assert "output" in mermaid
+

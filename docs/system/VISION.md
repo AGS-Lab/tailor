@@ -24,9 +24,12 @@ The closest analogy: if Obsidian is a modular note-taking tool, Tailor is a modu
 
 ## Direction
 
-Active development areas (as of Feb 2026):
+Active development areas (as of Mar 2026):
 
-- **Time management / scheduling** — in progress (see `pre time management commit`)
+- **LangGraph Tool Registry** — `@tool` decorator + `ToolRegistry` class enabling LLM-callable plugin tools (landed)
+- **Pipeline visualization** — Mermaid.js graph rendering in-app via `system.get_graph` (landed)
+- **Plugin architecture taxonomy** — four types: User-Callable, LLM-Callable, Pipeline, Hybrid (documented in `docs/system/PLUGIN-ARCHITECTURE.md`)
+- **Time management / scheduling** — in progress
 - **Model selector UX** — recently overhauled (`src/vault/chat/ModelSelector.js`)
 - **Plugin store** — install/update/search flow partially implemented (`src/vault/plugin-store.js`)
 - **Settings merge** — global defaults + vault overrides working, schema-driven
@@ -42,6 +45,7 @@ These are not up for debate. Don't propose alternatives without a strong reason.
 | Ports allocated from 9000+ | Simple, predictable, no registry needed |
 | TOML for vault config (`.vault.toml`) | Human-readable, structured, standard in Rust ecosystem |
 | LangGraph for LLM pipelines | Stateful graph execution, supports streaming and branching |
+| Separate ToolRegistry layer | Independent from VaultBrain; plugins register LLM tools via `@tool` decorator, registry handles schema gen + safe execution |
 | Pixi for environment management | Reproducible Python + Node + Rust in one tool |
 | PluginBase abstract class | Forces explicit lifecycle implementation, prevents footguns |
 

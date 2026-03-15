@@ -330,23 +330,26 @@ except Exception as e:
 
 ## **Future Enhancements**
 
-### **Command Metadata** (Planned)
+### **Command Metadata** (Implemented via `@tool`)
+
+The `@tool` decorator in `sidecar/decorators.py` now supports rich metadata for LLM-callable tools:
 ```python
-brain.register_command(
-    "database.query",
-    self.query,
-    plugin_name="database",
-    metadata={
-        "description": "Query database table",
-        "args": {
-            "table": {"type": "string", "required": True},
-            "where": {"type": "dict", "required": False}
-        },
-        "returns": "List of rows",
-        "category": "Database"
-    }
+from sidecar.decorators import tool
+
+@tool(
+    name="search_web",
+    description="Search the web for current information",
+    category="information",
+    visible_to_ui=True,
 )
+def search_web(query: str) -> str:
+    """Search the web and return results."""
+    ...
 ```
+
+The `ToolRegistry` class (in `sidecar/pipeline/tool_registry.py`) auto-generates OpenAI-compatible JSON schemas from function signatures and docstrings. Use `system.list_tools` to query registered tools and `system.get_graph` to visualize the pipeline.
+
+See `docs/system/PLUGIN-ARCHITECTURE.md` for the complete plugin taxonomy (User-Callable, LLM-Callable, Pipeline, Hybrid).
 
 ### **Keyboard Shortcuts** (Planned)
 ```toml

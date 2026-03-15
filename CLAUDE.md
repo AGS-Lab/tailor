@@ -54,18 +54,22 @@ Frontend (Vite/JS)  ←→  Rust/Tauri Backend  ←→  Python Sidecar
 
 - `main.py` — CLI entry point, logging setup
 - `websocket_server.py` — JSON-RPC 2.0 server; bridges Rust ↔ Python
-- `vault_brain.py` — Singleton orchestrator: loads plugins, manages command registry, event bus, LLM pipelines
+- `vault_brain.py` — Singleton orchestrator: loads plugins, manages command registry, event bus, LLM pipelines, tool registry
 - `api/plugin_base.py` — Abstract base class all plugins must inherit from
+- `decorators.py` — `@command` (RPC endpoints), `@on_event` (event handlers), `@tool` (LLM-callable tools)
 - `pipeline/` — LLM processing (DefaultPipeline, GraphPipeline using LangGraph + LiteLLM)
+- `pipeline/tool_registry.py` — `ToolRegistry` class + `generate_tool_schema()` for LLM tool management
 - `services/` — LLM service, keyring, memory
 
 ### Plugin System
 
 Plugins live at `vault/plugins/<name>/main.py`. The Plugin class inherits `PluginBase` and implements:
-- `register_commands()` — register callable commands (VSCode-style command palette)
+- `register_commands()` — register callable commands (VSCode-style command palette) and LLM tools via `@tool` + `tool_registry`
 - `on_load()`, `on_tick()`, `on_unload()` — lifecycle hooks
 
-See `example-vault/plugins/` for working examples and `docs/PLUGIN_GUIDE.md` for the full API.
+Four plugin types: **User-Callable** (UI buttons), **LLM-Callable** (`@tool` decorator), **Pipeline** (automatic event hooks), **Hybrid** (any combination). See `docs/system/PLUGIN-ARCHITECTURE.md` for the full taxonomy.
+
+See `example-vault/plugins/` for working examples and `docs/PLUGIN_GUIDE.md` for the API.
 
 ### Frontend (`src/`)
 
@@ -81,6 +85,7 @@ Each vault has a `.vault.toml` defining LLM providers, model categories (thinkin
 |-----|---------|
 | `docs/system/VISION.md` | What Tailor is, core principles, direction, settled decisions |
 | `docs/system/ARCHITECTURE.md` | Accurate current state of all three layers and their interactions |
+| `docs/system/PLUGIN-ARCHITECTURE.md` | Plugin type taxonomy, UI locations, LLM tool categories, hybrid patterns |
 | `docs/system/INCONSISTENCIES.md` | Known issues surfaced during audit, prioritized |
 
 **Update protocol:**

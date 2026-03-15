@@ -218,6 +218,91 @@ async def handler_method(self, param1: str = "", **kwargs) -> Dict[str, Any]:
     }
 ```
 
+## LLM-Callable Tools (`@tool` Decorator)
+
+Plugins can expose functions as LLM-callable tools via the `@tool` decorator. These are registered in the `ToolRegistry` and the LLM can autonomously decide to call them during pipeline execution.
+
+```python
+from sidecar.decorators import tool
+
+@tool(
+    name="search_web",
+    description="Search the web for current information",
+    category="information",     # "information" (read-only) or "action" (side effects)
+    visible_to_ui=True,         # Whether to show in the tools panel
+)
+def search_web(query: str) -> str:
+    """Search the web and return results."""
+    # Implementation
+    return results_text
+```
+
+### Registering Tools in a Plugin
+
+```python
+class Plugin(PluginBase):
+    def register_commands(self):
+        # Regular user-callable command
+        self.brain.register_command("web.search", self.search, self.name)
+        
+        # LLM-callable tool — register with tool_registry
+        self.brain.tool_registry.register(self.llm_search)
+    
+    @tool(name="web_search", category="information",
+          description="Search the web for a query")
+    def llm_search(self, query: str) -> str:
+        return self._do_search(query)
+```
+
+### Tool Metadata
+
+The `@tool` decorator supports:
+- `name` — tool name (defaults to function name)
+- `description` — what the tool does (defaults to docstring)
+- `category` — `"information"` (read-only) or `"action"` (side effects, may need confirmation)
+- `visible_to_ui` — whether the tool appears in the Pipeline panel
+- `**kwargs` — arbitrary extra metadata
+
+### Execution Safety
+
+All tool calls go through `ToolRegistry.execute()`, which:
+- Wraps exceptions so the LLM gets an error string, not a crash
+- Handles both sync and async functions
+- Always returns a string (for LLM consumption)
+
+See `docs/system/PLUGIN-ARCHITECTURE.md` for the complete plugin type taxonomy.
+
+### Command Handler Pattern
+
+```python
+async def handler_method(self, param1: str = "", **kwargs) -> Dict[str, Any]:
+    """
+    Handle command.
+    
+    Args:
+        param1: Description
+        **kwargs: Additional parameters from UI
+    
+    Returns:
+        Result dictionary with status
+    """
+    # Validate input
+    if not param1:
+        return {"status": "error", "error": "param1 required"}
+    
+    # Do work
+    result = do_something(param1)
+    
+    # Emit event to UI
+    self.emitter.notify(f"Processed {param1}", severity="success")
+    
+    # Return result
+    return {
+        "status": "success",
+        "result": result
+    }
+```
+
 ## Best Practices
 
 ### 1. Always Use Type Hints
@@ -269,8 +354,15 @@ def __init__(self, emitter, brain, plugin_dir, vault_path):
 
 ## Example Plugins
 
-- **demo_plugin** - Shows all PluginBase features
-- **llm** - Chat interface with conversation history
+- **demo_plugin** - Shows all PluginBase features (commands, lifecycle, notify)
+- **demo_ui** - Full UI API showcase (sidebar, panels, toolbar, modal)
+- **explorer** - Sidebar with ChatGPT-style chat history (reads from Memory plugin)
+- **memory** - JSON persistence layer for chat history; cross-plugin data sharing
+- **chat_branches** - Branch management for multi-path conversations
+- **summarizer** - Runs LLM call inside a plugin, stores result, shows TL;DR in message toolbar
+- **prompt_refiner** - Intercepts user message, refines via LLM before sending
+- **smart_context** - Topic extraction + embedding-based context filtering (Panel + Pipeline hybrid)
+- **event_test** - Exercises the event system for debugging
 
 ## Testing Your Plugin
 

@@ -21,6 +21,7 @@ from . import exceptions
 from .decorators import command
 
 from .pipeline import DefaultPipeline, GraphPipeline, PipelineConfig
+from .pipeline.tool_registry import ToolRegistry
 from .plugin_installer import PluginInstaller
 from .services.keyring_service import get_keyring_service, PROVIDERS
 from .services.llm_service import LLMService
@@ -95,6 +96,9 @@ class VaultBrain:
 
         # Active stream tracking for cancellation
         self._active_streams: Dict[str, bool] = {}  # stream_id -> should_cancel
+
+        # LangGraph Tool Registry (Independent Layer)
+        self.tool_registry = ToolRegistry()
 
         self._initialized = True
         logger.info(f"VaultBrain Singleton created for: {self.vault_path}")
@@ -483,6 +487,36 @@ class VaultBrain:
     async def list_commands(self) -> Dict[str, Any]:
         """List all registered commands."""
         return {"status": "success", "commands": list(self.commands.keys())}
+
+    @command("system.list_tools", constants.CORE_PLUGIN_NAME)
+    async def list_tools(self) -> Dict[str, Any]:
+        """List all registered LangGraph tools and their schemas."""
+        schemas = self.tool_registry.get_all_schemas()
+        metadata = self.tool_registry.get_all_metadata()
+        return {
+            "status": "success",
+            "tools": schemas,
+            "metadata": metadata,
+        }
+
+    @command("system.get_graph", constants.CORE_PLUGIN_NAME)
+    async def get_graph(self) -> Dict[str, Any]:
+        """Get the current pipeline graph as Mermaid markup for visualization."""
+        if not self.pipeline or not hasattr(self.pipeline, "graph"):
+            return {"status": "error", "error": "No pipeline graph available"}
+
+        try:
+            mermaid = self.pipeline.graph.get_graph().draw_mermaid()
+            tools = self.tool_registry.get_all_schemas()
+
+            return {
+                "status": "success",
+                "mermaid": mermaid,
+                "tools": tools,
+            }
+        except Exception as e:
+            logger.error(f"Failed to serialize pipeline graph: {e}")
+            return {"status": "error", "error": str(e)}
 
     # =========================================================================
     # Settings API Commands

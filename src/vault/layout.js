@@ -6,6 +6,7 @@
 
 import { GoldenLayout } from 'golden-layout';
 import 'golden-layout/dist/css/goldenlayout-base.css';
+import { registerPipelinePanel } from './pipeline-graph.js';
 
 /**
  * Default layout configuration
@@ -40,6 +41,11 @@ const config = {
                                 type: 'component',
                                 componentName: 'toolbox',
                                 title: 'Toolbox'
+                            },
+                            {
+                                type: 'component',
+                                componentName: 'pipeline',
+                                title: 'Pipeline'
                             },
                             {
                                 type: 'component',
@@ -179,6 +185,9 @@ export function initLayout() {
             };
         }
     });
+
+    // Register pipeline visualization panel
+    registerPipelinePanel(myLayout);
 
     myLayout.init();
     window.myLayout = myLayout;

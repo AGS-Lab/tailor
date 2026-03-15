@@ -49,6 +49,7 @@ Entry point: `python -m sidecar --vault <path> --ws-port <port>` (`main.py` — 
 The central object. Holds:
 - **Command registry** — maps `command_id → handler function`
 - **Plugin registry** — maps `plugin_name → Plugin instance`
+- **Tool registry** — `ToolRegistry` instance for LLM-callable tools (independent layer, see `pipeline/tool_registry.py`)
 - **Internal EventBus** (`event_bus.py`) — pub/sub with priority, for plugin↔plugin events
 - **Pipeline** — `DefaultPipeline` (linear LangGraph) or `GraphPipeline`, chosen via vault config
 - **LLMService** — set as module-level singleton in `services/llm_service.py`
@@ -58,7 +59,7 @@ Two-phase plugin initialization:
 2. **Phase 2**: Call `on_load()` → subscribe plugin to TICK event
 
 Built-in commands (registered by VaultBrain itself, not plugins):
-`system.info`, `system.chat`, `settings.*`, `chat.send`, `chat.set_model`, `chat.get_history`, `plugins.install`, `plugins.toggle`, `plugins.reload`, `keyring.*`, and others.
+`system.info`, `system.list_commands`, `system.list_tools`, `system.get_graph`, `system.chat`, `settings.*`, `chat.send`, `chat.set_model`, `chat.get_history`, `plugins.install`, `plugins.toggle`, `plugins.reload`, `keyring.*`, and others.
 
 ### WebSocket Server (`websocket_server.py`)
 
@@ -114,6 +115,7 @@ LiteLLM handles multi-provider model access. Model selection is category-based (
 | `types.py` | `PipelineConfig` (Pydantic: category, temperature, max_tokens, streaming) and `PipelineContext` (mutable state object passed through nodes) |
 | `nodes.py` | `PipelineNodes` — actual node implementations: input, context, prompt. Publishes to brain event bus at each phase. |
 | `events.py` | `PipelineEvents` constants: START, END, ERROR, INPUT, CONTEXT, PROMPT, LLM, POST_PROCESS, OUTPUT |
+| `tool_registry.py` | `ToolRegistry` class (register, schema gen, safe execute) + `generate_tool_schema()` for OpenAI-compatible tool definitions. Independent from VaultBrain. |
 | `studio_entrypoint.py` | Exports compiled graph for LangGraph Studio visualization (dev tool) |
 
 ### Services (`services/`)
@@ -131,7 +133,7 @@ LiteLLM handles multi-provider model access. Model selection is category-based (
 | `constants.py` | JSON-RPC error codes, timing constants (tick interval, WS timeout/ping), env var names, `EventType` + `Severity` enums |
 | `exceptions.py` | `TailorError` base with `.to_dict()` for JSON-RPC. Subclasses: `VaultError`, `PluginError`, `PipelineError`, `WebSocketError`, `ConfigError`, etc. |
 | `utils.py` | Loguru setup, JSON-RPC helpers, path utilities, `generate_id()`, env var handling |
-| `decorators.py` | `@command(name, plugin_name)` and `@on_event(event_type)` — declarative registration of methods as commands/handlers |
+| `decorators.py` | `@command(name, plugin_name)`, `@on_event(event_type)`, and `@tool(name, description, category, visible_to_ui, **meta)` — declarative registration of methods as commands, event handlers, or LLM tools |
 | `plugin_installer.py` | Full plugin package manager: install from HTTP URL (zip) or git, validate, check deps, update, remove. `InstallStatus` enum + `InstallResult`/`ValidationResult` dataclasses. |
 
 ---
@@ -165,7 +167,8 @@ Vanilla JavaScript, bundled with Vite. Two entry points:
 ```
 main.js
   ├── connection.js                  WebSocket client (JSON-RPC 2.0, auto-reconnect)
-  ├── layout.js                      GoldenLayout workspace (chat, toolbox, log, inspector, stage)
+  ├── layout.js                      GoldenLayout workspace (chat, toolbox, pipeline, log, inspector, stage)
+  ├── pipeline-graph.js              Pipeline visualization panel (Mermaid.js CDN, system.get_graph RPC)
   ├── plugins.js                     Plugin event handler — translates sidecar events into UI
   ├── settings.js                    Dynamic TOML → form UI generator
   ├── chat/
@@ -187,7 +190,7 @@ main.js
 
 **`plugins.js`** is the glue layer — it listens for `sidecar-event` notifications and dispatches them to the right manager (`registerSidebarView`, `registerPanel`, `setContent`, CSS/HTML injection). This is how backend plugins become frontend UI.
 
-**`layout.js`** defines the GoldenLayout workspace with five registered component types: `chat`, `toolbox`, `log`, `controls` (Inspector), and `stage`. Also handles the sidebar resize interaction.
+**`layout.js`** defines the GoldenLayout workspace with six registered component types: `chat`, `toolbox`, `pipeline` (Mermaid graph visualization), `log`, `controls` (Inspector), and `stage`. Also handles the sidebar resize interaction.
 
 **`settings.js`** (vault window) auto-generates form UI from `.vault.toml` sections: booleans → toggles, numbers → number inputs, objects → nested subsections. Fixed tabs: API Keys, Model Categories, Themes.
 
