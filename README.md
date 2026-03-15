@@ -1,250 +1,278 @@
-> [!IMPORTANT]
-> **WORK IN PROGRESS**: This project is currently in early development. The codebase is unstable, requires major reworks, and is NOT representative of a final or stable product. Use with caution.
+<div align="center">
 
-# Tailor - AI Chat Client
+#  Tailor
 
-A modular AI framework that lets you stitch together models and tools into an assistant that fits you perfectly.
+### The AI assistant that fits *you*.
 
-## Features
+**Build your own AI workspace with plugins, any model, and complete control.**
 
-- **Multi-Window Vaults**: Open multiple independent vaults simultaneously
-- **Isolated Sidecars**: Each vault runs its own Python process for complete isolation
-- **Plugin System**: Create and share custom plugins with the community
-- **Bi-Directional Events**: Plugins can emit events back to the UI
-- **Portable Vaults**: Vault folders are self-contained and can be shared easily
+[Getting Started](#-getting-started) · [Plugins](#-plugins) · [Architecture](#-architecture) · [Contributing](#-contributing)
 
-## Architecture
 
-- **Rust/Tauri**: Window management, process orchestration, event routing
-- **Python Sidecar**: Plugin system, command registry, event emission
-  - **Type-safe**: Full type hints with mypy validation
-  - **Professional logging**: Rotating file handlers and console output
-  - **Plugin system**: Extensible PluginBase class with lifecycle hooks
-- **WebSocket**: Bi-directional JSON-RPC 2.0 communication
-- **Plugins**: Vault-specific extensions with command registration
+</div> 
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed design
+> **🚧 Work in Progress:** Tailor is in active, early-stage development. The codebase is changing rapidly and feature implementation is ongoing. We welcome your ideas, feedback, and pull requests to help shape the future of modular AI!
 
-## Prerequisites
+## 🧠 What is Tailor?
 
-- **Pixi**: Install from [prefix.dev](https://prefix.dev/)
-- **Rust**: Install from [rustup.rs](https://rustup.rs/) (Required for Tauri)
+Tailor is an **open-source desktop framework** for building personal AI assistants. Instead of one-size-fits-all chatbots, Tailor lets you assemble a workspace from plugins, models, and tools — all running locally on your machine.
 
-## Installation
+**Core ideas:**
 
-### 1. Install Dependencies
+- **Vaults** — Each workspace is a self-contained folder. Open multiple vaults, each with its own plugins, models, and conversations. Nothing bleeds between them.
+- **Plugins** — Small Python scripts that extend everything. Add UI panels, inject context, call APIs, process responses, or give the LLM new tools. The plugin system *is* the product.
+- **Any model** — Use OpenAI, Gemini, Claude, Ollama, or any LiteLLM-supported provider. Assign different models to different tasks (thinking, fast, vision, code, embedding).
+- **Local-first** — Your data stays on your machine. No cloud accounts required. Configs are TOML, settings are JSON — everything is readable and portable.
+
+<br>
+
+## ✨ Features
+
+<table>
+<tr>
+<td width="50%">
+
+### 🔌 Plugin Ecosystem
+Four types of plugins that can be mixed freely:
+- **User-callable** — buttons in toolbars, sidebars or golden-layout panels
+- **LLM-callable** — tools the AI can use autonomously
+- **Pipeline** — automatic hooks on every message
+- **Hybrid** — any combination of the above
+
+</td>
+<td width="50%">
+
+### 🤖 Model Agnostic
+Works with every major LLM provider:
+- OpenAI (GPT-4o, GPT-4, GPT-3.5)
+- Google (Gemini Pro, Gemini Flash)
+- Anthropic (Claude 3.5, Claude 3)
+- Ollama (Llama, Mistral, any local model)
+- Any LiteLLM-compatible provider
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### 🏗️ Vault Isolation
+Each vault runs its own process:
+- Separate plugins, settings, and state
+- Crash-contained — one vault can't affect another
+- Portable — share vault folders with anyone
+- Multi-window — use different vaults side by side
+
+</td>
+<td width="50%">
+
+### 📊 Pipeline Visualization
+See your AI's brain in real time:
+- LangGraph pipeline rendered as interactive Mermaid diagrams
+- View registered tools and their metadata
+- Understand exactly how your assistant processes each message
+
+</td>
+</tr>
+</table>
+
+<br>
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+| Tool | Purpose | Install |
+|------|---------|---------|
+| **Pixi** | Manages Python, Node.js, and Rust environments | [prefix.dev](https://prefix.dev/) |
+| **Rust** | Required for the Tauri desktop shell | [rustup.rs](https://rustup.rs/) |
+
+### Install & Run
 
 ```bash
+# Clone
+git clone https://github.com/AGS-Lab/tailor.git
+cd tailor
+
+# Install everything (Python, Node.js, Rust deps — all automatic)
 pixi install
-```
 
-This will automatically set up the isolated Python and Node.js environments with all dependencies.
-
-## Development
-
-### Run in Development Mode
-
-```bash
-# Start Tauri development server
+# Launch
 pixi run dev
 ```
 
-This will:
-1. Start Vite dev server for frontend
-2. Compile Rust backend
-3. Launch the Tauri application
+### Open Your First Vault
 
-### Testing the Example Vault
+1. Click **Open Vault** in the launcher
+2. Select the included `example-vault/` folder
+3. Start chatting — plugins load automatically
 
-1. Click "Open Vault" in the app
-2. Select the `example-vault` directory
-3. Watch the console for sidecar initialization
-4. Observe the example plugin emit events every 15 seconds
+That's it. Your AI workspace is running. 🎉
 
-## Project Structure
+<br>
+
+## 🧩 Plugins
+
+Plugins are the heart of Tailor. Everything beyond the core chat is a plugin.
+
+### Included Plugins
+
+| Plugin | Type | What it does |
+|--------|------|-------------|
+| **Summarizer** | User-callable | One-click TL;DR of long AI responses |
+| **Prompt Refiner** | Hybrid | Refines your prompts before sending (manual or auto) |
+| **Smart Context** | Hybrid | Topic extraction + embedding-based context filtering |
+| **Explorer** | User-callable | ChatGPT-style chat history sidebar |
+| **Memory** | Pipeline | Auto-saves conversations to disk |
+| **Chat Branches** | User-callable | Fork conversations to explore different paths |
+
+### Write Your Own (It's Simple)
+
+```python
+# plugins/greeter/main.py
+from sidecar.api.plugin_base import PluginBase
+
+class Plugin(PluginBase):
+    """A greeting plugin in 15 lines."""
+
+    def register_commands(self):
+        self.brain.register_command("greeter.hello", self.hello, self.name)
+
+    async def hello(self, name="World", **kwargs):
+        self.notify(f"Hello, {name}! 👋", severity="success")
+        return {"status": "success", "message": f"Hello, {name}!"}
+```
+
+### Make Tools the LLM Can Call
+
+```python
+from sidecar.decorators import tool
+
+@tool(name="search_web", category="information",
+      description="Search the web for current information")
+def search_web(query: str) -> str:
+    """The LLM will call this autonomously when it needs web data."""
+    return fetch_results(query)
+```
+
+> 📖 **Full guide:** [Plugin Development Guide](docs/PLUGIN_GUIDE.md) · [Plugin Architecture](docs/system/PLUGIN-ARCHITECTURE.md)
+
+<br>
+
+## 🏛️ Architecture
+
+Three processes, communicating over WebSocket (JSON-RPC 2.0):
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Frontend (Vite/JS)                    │
+│          Chat UI · Panels · Toolbars · Plugin UIs       │
+├─────────────────────────────────────────────────────────┤
+│                   Rust/Tauri Backend                     │
+│        Window management · Process orchestration        │
+├─────────────────────────────────────────────────────────┤
+│              Python Sidecar (per vault)                  │
+│   Plugins · LLM Pipeline · Tool Registry · Commands     │
+└─────────────────────────────────────────────────────────┘
+              ↕ WebSocket (JSON-RPC 2.0) ↕
+```
+
+**Why this design?**
+- **Vault isolation**: Each vault gets its own Python process. No shared state. Crash containment.
+- **Language best-of-breed**: Rust for performance + system access, Python for AI/ML ecosystem, JS for UI.
+- **Plugin safety**: Plugins run in their own process, can't crash the desktop shell.
+
+> 📖 **Deep dive:** [Architecture](docs/system/ARCHITECTURE.md) · [Vision](docs/system/VISION.md)
+
+<br>
+
+## 🗂️ Project Structure
 
 ```
 tailor/
-├── src/                          # Frontend code
-│   └── index.html
-├── src-tauri/                    # Rust backend
-│   ├── src/
-│   │   ├── main.rs               # Entry point
-│   │   ├── window_manager.rs    # Window lifecycle
-│   │   ├── sidecar_manager.rs   # Process orchestration
-│   │   ├── dependency_checker.rs # Auto install dependencies
-│   │   ├── ipc_router.rs        # Command routing
-│   │   └── event_bus.rs         # Event routing
-│   ├── Cargo.toml
-│   └── tauri.conf.json
-├── sidecar/                      # Python sidecar (✨ refactored)
-│   ├── __main__.py               # Module entry point
-│   ├── main.py                   # CLI logic
-│   ├── websocket_server.py       # JSON-RPC 2.0 WebSocket server
-│   ├── vault_brain.py            # Plugin orchestrator
-│   ├── event_emitter.py          # Event emission API
-│   ├── constants.py              # Centralized constants & enums
-│   ├── exceptions.py             # Custom exception hierarchy
-│   ├── api/                      # Plugin API
-│   │   ├── plugin_base.py        # Abstract base class with lifecycle
-│   │   └── __init__.py
-│   ├── utils/                    # Utility modules
-│   │   ├── logging_config.py     # Professional logging system
-│   │   ├── json_rpc.py           # JSON-RPC utilities
-│   │   ├── path_utils.py         # Safe path operations
-│   │   └── __init__.py
-│   └── requirements.txt
-└── example-vault/                # Example vault
-    ├── .vault.toml               # Vault configuration
-    └── plugins/                  # Vault-specific plugins
-        ├── llm/                  # LLM chat plugin
-        │   └── main.py           # (inherits from PluginBase)
-        └── demo_plugin/          # Demo plugin
-            └── main.py           # (inherits from PluginBase)
+├── src/                    Frontend (Vanilla JS + Vite)
+│   ├── vault/              Vault window UI (chat, layout, panels)
+│   ├── pages/              Dashboard pages (settings, themes, vault config)
+│   └── services/           Tauri IPC wrappers
+├── src-tauri/src/          Rust backend
+│   ├── sidecar_manager.rs  Python process lifecycle
+│   ├── window_manager.rs   Window tracking
+│   ├── ipc_router.rs       Tauri command handlers
+│   └── event_bus.rs        Event routing
+├── sidecar/                Python sidecar
+│   ├── vault_brain.py      Singleton orchestrator
+│   ├── pipeline/           LangGraph pipeline + Tool Registry
+│   ├── api/                Plugin base class
+│   ├── services/           LLM, keyring, memory
+│   └── decorators.py       @command, @tool, @on_event
+├── example-vault/          Working example with 9 plugins
+│   ├── .vault.toml         Vault configuration
+│   └── plugins/            Plugin collection
+└── docs/                   Documentation
+    ├── system/             Architecture, vision, plugin taxonomy
+    └── plans/              Implementation plans and TODOs
 ```
 
-See [PLUGIN_GUIDE.md](PLUGIN_GUIDE.md) for plugin development.
+<br>
 
-## Creating a Vault
-
-A vault is a self-contained directory with the following structure:
-
-```
-my-vault/
-├── .vault.toml              # Vault metadata
-├── plugins/                 # Plugin directory
-│   ├── requirements.txt     # Shared dependencies
-│   ├── my_plugin/          # Individual plugin
-│   │   ├── main.py         # Entry point (required)
-│   │   └── settings.json   # Plugin configuration
-│   └── another_plugin/
-│       ├── main.py
-│       └── settings.json
-├── lib/                     # Auto-managed dependencies
-├── .memory/                 # Conversation history
-└── config/                  # User preferences
-```
-
-### Example Plugin
-
-Each plugin is a directory with `main.py` that inherits from `PluginBase`:
-
-```python
-# plugins/my_plugin/main.py
-import sys
-from pathlib import Path
-
-# Add sidecar to path
-sidecar_path = Path(__file__).parent.parent.parent.parent / "sidecar"
-sys.path.insert(0, str(sidecar_path))
-
-from api.plugin_base import PluginBase
-
-class Plugin(PluginBase):
-    """My custom plugin."""
-    
-    def __init__(self, emitter, brain, plugin_dir, vault_path):
-        """Initialize plugin - automatically sets up logging."""
-        super().__init__(emitter, brain, plugin_dir, vault_path)
-        
-        # Load settings (helper method from PluginBase)
-        settings = self.load_settings()
-        self.my_setting = settings.get("key", "default")
-        
-        # Register commands
-        self.register_commands()
-        
-        self.logger.info("My plugin initialized")
-    
-    def register_commands(self) -> None:
-        """Register plugin commands."""
-        self.brain.register_command(
-            "myPlugin.action",
-            self.custom_action,
-            self.name
-        )
-    
-    async def custom_action(self, **kwargs):
-        """Custom action callable via execute_command."""
-        self.emitter.notify("Action executed!", severity="success")
-        return {"status": "ok"}
-    
-    async def on_tick(self, emitter):
-        """Called every 5 seconds - optional lifecycle hook."""
-        self.logger.debug("Tick from my plugin")
-```
-
-See [PLUGIN_GUIDE.md](PLUGIN_GUIDE.md) for complete plugin development guide.
-
-## Event Emission
-
-Plugins can emit events using the EventEmitter API or command registry:
-
-```python
-# Via EventEmitter (convenient)
-emitter.notify("Task complete!")
-emitter.progress(75, "Processing...")
-emitter.update_state("task_count", 42)
-
-# Via Command Registry (discoverable)
-await brain.execute_command("ui.notify", message="Task complete!", severity="success")
-await brain.execute_command("ui.progress", percent=75, status="Processing...")
-
-# Scoped events
-emitter.global_event("SYSTEM_ALERT", {"msg": "Important!"})  # All windows
-emitter.vault_event("STATE_CHANGED", {"key": "value"})        # Same vault
-```
-
-## Building for Production
+## 🧪 Development
 
 ```bash
-# Build application bundle
-pixi run build
+pixi run dev              # Start dev server + Tauri window
+pixi run test             # Run Python tests
+pixi run test-rust        # Run Rust tests
+pixi run lint             # Check Python with ruff
+pixi run format           # Format Python with ruff
+pixi run build            # Production build
 ```
 
-The compiled app will be in `src-tauri/target/release/bundle/`.
+Run a single test:
+```bash
+pixi run pytest sidecar/tests/test_vault_brain.py::test_function_name
+```
 
-## Contributing
+<br>
+
+## 📚 Documentation
+
+| Document | What it covers |
+|----------|---------------|
+| [**Plugin Guide**](docs/PLUGIN_GUIDE.md) | Building plugins — commands, tools, lifecycle, UI |
+| [**Plugin Architecture**](docs/system/PLUGIN-ARCHITECTURE.md) | Plugin type taxonomy, UI locations, hybrid patterns |
+| [**Architecture**](docs/system/ARCHITECTURE.md) | Full technical architecture of all three layers |
+| [**Vision**](docs/system/VISION.md) | Core principles, settled decisions, project direction |
+| [**Plugin Commands**](docs/PLUGIN_COMMANDS.md) | Command registry pattern and examples |
+| [**FAQ**](docs/FAQ.md) | Common questions answered simply |
+| [**Setup Guide**](docs/SETUP.md) | Detailed installation instructions |
+| [**UI Style Guide**](docs/UI_STYLE_GUIDE.md) | Design guidelines for plugin UIs |
+| [**Contributing**](docs/CONTRIBUTING.md) | How to contribute |
+
+<br>
+
+## 🤝 Contributing
+
+We are actively looking for contributors! Whether you want to build a new plugin, fix a bug, or improve the core framework, Tailor is a great place to hack on AI tooling.
 
 1. Fork the repository
-2. Create your feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
+2. Create a feature branch (`git checkout -b feat/my-feature`)
+3. Write your code and verify with `pixi run test`
+4. Submit a Pull Request
 
-## License
+Not sure where to start? Check the [Issue tracker](https://github.com/AGS-Lab/tailor/issues) or read our [Contributing Guide](docs/CONTRIBUTING.md).
 
-MIT
+<br>
 
-## Testing & Quality
+## ⚖️ License
 
-### Running Tests
+MIT — see [LICENSE](LICENSE) for details.
 
-Run the full test suite (backend + frontend):
+<br>
 
-```bash
-# Run backend tests
-pixi run test
+---
 
-# Run frontend tests
-npm run test
-```
+<div align="center">
 
-### Linting
+**Tailor** — *Your AI, your rules.*
 
-We use `ruff` for Python linting and formatting.
+Built with [Tauri](https://tauri.app/) · [LangGraph](https://github.com/langchain-ai/langgraph) · [LiteLLM](https://github.com/BerriAI/litellm) · [Pixi](https://prefix.dev/)
 
-```bash
-# Check for lint errors
-pixi run lint
-
-# Auto-format code
-pixi run format
-```
-
-## Continuous Integration
-
-A GitHub Actions workflow is set up in `.github/workflows/test.yml` to run tests on every push and PR to `main`.
-
-[![Test Status](https://github.com/ARC345/tailor/actions/workflows/test.yml/badge.svg)](https://github.com/ARC345/tailor/actions/workflows/test.yml)
-
+</div>
